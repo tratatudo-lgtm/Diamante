@@ -1,0 +1,6 @@
+{
+  "name": "Diamante OS v2",
+  "description": "Sistema de gestão e sala de guerra para compra de ouro em rede de lojas com pagamentos por transferência.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
