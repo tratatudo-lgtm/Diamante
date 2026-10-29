@@ -1,3 +1,5 @@
+// PATH: src/context/AuthContext.tsx
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { UserSessionData, Funcionario } from '../types/database';
