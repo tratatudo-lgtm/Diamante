@@ -6,23 +6,30 @@
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { LandingPage } from './components/landing/LandingPage';
 import { LoginPage } from './components/auth/LoginPage';
+import { RegisterPage } from './components/auth/RegisterPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { StoreOperatorView } from './components/store/StoreOperatorView';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
   const { isAuthenticated, role, isLoading } = useAuth();
-  
-  // Track path from window.location or internal state
+
+  // Rotas suportadas: '/', '/login', '/register', '/dashboard-admin', '/loja-atual'
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
-      if (p === '/dashboard-admin' || p === '/loja-atual' || p === '/login') {
+      if (
+        p === '/dashboard-admin' ||
+        p === '/loja-atual' ||
+        p === '/login' ||
+        p === '/register'
+      ) {
         return p;
       }
     }
-    return '/login';
+    return '/';
   });
 
   const navigate = (path: string) => {
@@ -40,17 +47,13 @@ function AppRouter() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Intelligent redirection after auth state resolution
+  // Redirecionamento inteligente após resolução de autenticação
   useEffect(() => {
     if (!isLoading) {
       if (isAuthenticated) {
-        if (currentPath === '/login' || currentPath === '/') {
-          const target = role === 'admin' ? '/dashboard-admin' : '/loja-atual';
+        if (currentPath === '/login' || currentPath === '/register' || currentPath === '/') {
+          const target = role === 'admin' || role === 'master' ? '/dashboard-admin' : '/loja-atual';
           navigate(target);
-        }
-      } else {
-        if (currentPath !== '/login') {
-          navigate('/login');
         }
       }
     }
@@ -58,24 +61,41 @@ function AppRouter() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#111827] flex flex-col items-center justify-center text-[#D4AF37]">
+      <div className="min-h-screen bg-[#0b0f19] flex flex-col items-center justify-center text-[#D4AF37]">
         <Loader2 className="w-8 h-8 animate-spin" />
-        <p className="mt-3 text-xs tracking-wider font-mono text-gray-400">
-          DIAMANTE OS v2 · A SINCRONIZAR SESSÃO...
+        <p className="mt-3 text-xs tracking-wider font-mono text-slate-400">
+          DIAMANTE OS v2 &bull; A SINCRONIZAR SESSÃO...
         </p>
       </div>
     );
   }
 
-  if (!isAuthenticated || currentPath === '/login') {
-    return <LoginPage onNavigate={navigate} />;
+  // 1. Ecrã de Registo
+  if (currentPath === '/register') {
+    return <RegisterPage onNavigate={navigate} />;
   }
 
+  // 2. Ecrã de Login Centralizado
+  if (currentPath === '/login') {
+    return (
+      <LoginPage
+        onNavigate={navigate}
+        onBackToLanding={() => navigate('/')}
+      />
+    );
+  }
+
+  // 3. Ecrã de Apresentação Pré-Login (Landing Page Oficial)
+  if (!isAuthenticated || currentPath === '/') {
+    return <LandingPage onAccessSystem={() => navigate('/login')} />;
+  }
+
+  // 4. Sala de Operações de Loja
   if (currentPath === '/loja-atual') {
     return <StoreOperatorView onNavigate={navigate} />;
   }
 
-  // Admin Dashboard view (default for admin role)
+  // 5. Sala de Guerra Admin (Painel Central)
   return <AdminDashboard onNavigate={navigate} />;
 }
 

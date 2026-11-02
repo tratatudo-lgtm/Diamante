@@ -14,6 +14,7 @@ interface AuthContextType {
   isConfigured: boolean;
   errorMessage: string | null;
   login: (email: string, password: string) => Promise<{ success: boolean; redirectPath: string }>;
+  setDirectSession: (user: Partial<UserSessionData>, assignedRole: string, token?: string) => void;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
   clearError: () => void;
@@ -220,8 +221,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const setDirectSession = (user: Partial<UserSessionData>, assignedRole: string, token?: string) => {
+    const fullSession: UserSessionData = {
+      id: user.id || 'usr-direct',
+      user_id: user.user_id || user.id,
+      email: user.email || '',
+      nome_completo: user.nome_completo || 'Utilizador',
+      role: assignedRole,
+      loja_id: user.loja_id || null,
+      ativo: true,
+    };
+
+    setUserSession(fullSession);
+    setRole(assignedRole);
+    setLojaId(user.loja_id || null);
+    setFuncionario({
+      id: fullSession.id || 'usr-direct',
+      nome_completo: fullSession.nome_completo || 'Utilizador',
+      email: fullSession.email,
+      role: assignedRole,
+      loja_id: fullSession.loja_id || null,
+      ativo: true,
+    });
+    setErrorMessage(null);
+
+    if (token) {
+      try {
+        sessionStorage.setItem('diamante_jwt_token', token);
+      } catch {}
+    }
+  };
+
   const logout = async () => {
     try {
+      sessionStorage.removeItem('diamante_jwt_token');
       await supabase.auth.signOut();
     } catch (err) {
       console.error('Erro ao terminar sessão:', err);
@@ -255,6 +288,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isConfigured,
         errorMessage,
         login,
+        setDirectSession,
         logout,
         refreshSession,
         clearError,
