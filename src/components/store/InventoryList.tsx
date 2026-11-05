@@ -81,7 +81,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
       );
       onShowToast('success', `Lote ${codigoUnico} marcado como enviado para a Sede.`, 'Inventário Atualizado');
     } catch (err: unknown) {
-      console.error('Falha ao atualizar estado no inventário:', err);
+      console.warn('[Inventário] Falha ao atualizar estado no inventário:', err);
       onShowToast('error', 'Erro ao atualizar estado no inventário.');
     } finally {
       setUpdatingId(null);

@@ -74,6 +74,7 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
           presence: 'composing',
         },
       }),
+      signal: AbortSignal.timeout(2000),
     });
 
     const data = await response.json().catch(() => ({}));

@@ -177,7 +177,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
 
       onSuccess();
     } catch (err: unknown) {
-      console.error('Falha ao registar nova compra:', err);
+      console.warn('[Compra] Falha ao registar nova compra:', err);
       const msg = err instanceof Error ? err.message : 'Falha ao gravar no Supabase.';
       setErrorMessage(`Erro ao registar compra: ${msg}`);
       onShowToast('error', 'Falha ao gravar transação na base de dados.');

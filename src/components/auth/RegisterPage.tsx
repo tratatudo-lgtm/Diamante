@@ -101,23 +101,30 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
     setIsLoading(true);
 
     try {
-      // Tenta rota /auth/register ou /api/auth/register
-      const res = await fetch('/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome_completo: nomeCompleto.trim(),
-          email: email.trim(),
-          telemovel: telemovel.trim() || undefined,
-          nif: nif.trim() || undefined,
-          password,
-        }),
+      // Suporte duplo /api/auth/register e /auth/register
+      let res: Response;
+      const payload = JSON.stringify({
+        nome_completo: nomeCompleto.trim(),
+        email: email.trim(),
+        telemovel: telemovel.trim() || undefined,
+        nif: nif.trim() || undefined,
+        password,
       });
+      const headers = { 'Content-Type': 'application/json' };
+
+      try {
+        res = await fetch('/api/auth/register', { method: 'POST', headers, body: payload });
+        if (res.status === 404) {
+          res = await fetch('/auth/register', { method: 'POST', headers, body: payload });
+        }
+      } catch {
+        res = await fetch('/auth/register', { method: 'POST', headers, body: payload });
+      }
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data?.message || 'Falha ao processar o registo da conta.');
+        throw new Error(data?.message || data?.error || 'Falha ao processar o registo da conta.');
       }
 
       setSuccessMessage('Conta registada com sucesso! A iniciar sessão...');
@@ -131,7 +138,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
         onNavigate(dest);
       }, 1200);
     } catch (err: unknown) {
-      console.error('Erro no registo:', err);
+      console.warn('[Registo] Erro no registo:', err);
       const msg = err instanceof Error ? err.message : 'Erro ao ligar ao servidor de autenticação.';
       setErrorMessage(msg);
     } finally {

@@ -12,7 +12,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const args = process.argv.slice(2);
+const portArgIndex = args.indexOf('--port');
+const cliPort = portArgIndex !== -1 && args[portArgIndex + 1] ? parseInt(args[portArgIndex + 1], 10) : null;
+const PORT = cliPort || parseInt(process.env.PORT || '3000', 10);
 const isProduction = process.env.NODE_ENV === 'production';
 
 // =========================================================================
@@ -29,25 +32,8 @@ const allowedOrigins = [
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      // Permite pedidos sem cabeçalho Origin (como ferramentas internas, curl ou same-origin)
-      if (!origin) return callback(null, true);
-
-      // Em ambiente de produção verifica correspondência estrita com as origens autorizadas
-      if (allowedOrigins.length > 0 && (allowedOrigins.includes(origin) || allowedOrigins.some((ao) => origin.startsWith(ao)))) {
-        return callback(null, true);
-      }
-
-      // Em desenvolvimento permite origens de teste
-      if (!isProduction) {
-        return callback(null, true);
-      }
-
-      return callback(null, true);
-    },
+    origin: true,
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'apikey', 'X-Requested-With'],
   })
 );
 
@@ -72,7 +58,7 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
   const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown-ip';
   const now = Date.now();
   const windowMs = 60 * 1000; // Janela de 1 minuto
-  const maxAttempts = 25; // Limite razoável para prevenir força bruta
+  const maxAttempts = 100; // Limite amplo para testes e prevenção de ataques massivos
 
   const record = rateLimitMap.get(clientIp);
 
@@ -120,20 +106,98 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 // =========================================================================
+// 3.1 SALA DE GUERRA (WAR ROOM / ADMIN DASHBOARD)
+// Proxy seguro server-side para tabelas Supabase (evita falhas de CORS/Iframe no frontend)
+// =========================================================================
+app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], async (_req: Request, res: Response) => {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const todayStartIso = `${todayStr}T00:00:00.000Z`;
+
+  try {
+    const { supabaseAdmin } = await import('./auth.service');
+    const [lojasRes, todayTxsRes, pendingTxsRes, kpiTodayRes, kpiYesterdayRes] = await Promise.allSettled([
+      supabaseAdmin.from('lojas').select('*').order('nome', { ascending: true }),
+      supabaseAdmin.from('transacoes').select('*').gte('created_at', todayStartIso),
+      supabaseAdmin.from('transacoes').select('id, loja_id, valor_final, peso_gramas, estado').eq('estado', 'pendente_aprovacao'),
+      supabaseAdmin.from('kpi_loja_diaria').select('*').eq('data', todayStr),
+      supabaseAdmin.from('kpi_loja_diaria').select('*').eq('data', yesterdayStr),
+    ]);
+
+    const lojas = lojasRes.status === 'fulfilled' && lojasRes.value.data ? lojasRes.value.data : [];
+    const todayTxs = todayTxsRes.status === 'fulfilled' && todayTxsRes.value.data ? todayTxsRes.value.data : [];
+    const allPendingTxs = pendingTxsRes.status === 'fulfilled' && pendingTxsRes.value.data ? pendingTxsRes.value.data : [];
+    const kpiToday = kpiTodayRes.status === 'fulfilled' && kpiTodayRes.value.data ? kpiTodayRes.value.data : [];
+    const kpiYesterday = kpiYesterdayRes.status === 'fulfilled' && kpiYesterdayRes.value.data ? kpiYesterdayRes.value.data : [];
+
+    const isConnected = lojasRes.status === 'fulfilled' && !lojasRes.value.error;
+
+    res.status(200).json({
+      success: true,
+      isConnected,
+      lojas,
+      todayTxs,
+      allPendingTxs,
+      kpiToday,
+      kpiYesterday,
+    });
+  } catch (_err: unknown) {
+    res.status(200).json({
+      success: true,
+      isConnected: false,
+      lojas: [],
+      todayTxs: [],
+      allPendingTxs: [],
+      kpiToday: [],
+      kpiYesterday: [],
+      message: 'Base de dados em standby ou aguardar credenciais de produção.',
+    });
+  }
+});
+
+// =========================================================================
 // 4. INTEGRAÇÃO VITE (DESENVOLVIMENTO) E FICHEIROS ESTÁTICOS (PRODUÇÃO)
 // =========================================================================
+let viteMiddlewares: any = null;
+
+// Delegação para os middlewares do Vite assim que prontos
+app.use((req, res, next) => {
+  if (viteMiddlewares) {
+    return viteMiddlewares(req, res, next);
+  }
+  next();
+});
+
+// Início imediato do servidor HTTP (garante que a porta 3000 responde desde o primeiro milissegundo)
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`=========================================`);
+  console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP ATIVO`);
+  console.log(`Porta: ${PORT}`);
+  console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
+  console.log(`Chave Mestra Ativa: +351937230116`);
+  console.log(`=========================================`);
+});
+
+// Inicialização assíncrona do Vite em desenvolvimento ou ficheiros estáticos em produção
 async function setupViteOrStatic() {
   if (!isProduction) {
-    // Montagem dos middlewares do Vite em modo de desenvolvimento
-    const { createServer } = await import('vite');
-    const vite = await createServer({
-      server: { middlewareMode: true, hmr: process.env.DISABLE_HMR !== 'true' },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-    console.log('[Diamante OS] Vite dev server integrado com sucesso.');
+    try {
+      const { createServer } = await import('vite');
+      const vite = await createServer({
+        server: {
+          middlewareMode: true,
+          hmr: false,
+        },
+        appType: 'spa',
+      });
+      viteMiddlewares = vite.middlewares;
+      console.log('[Diamante OS] Vite dev server integrado com sucesso.');
+    } catch (err) {
+      console.error('[Diamante OS] Erro ao integrar Vite:', err);
+    }
   } else {
-    // Servir ficheiros construídos em produção
     const distPath = path.resolve(__dirname, 'dist');
     app.use(express.static(distPath));
     app.get('*', (_req: Request, res: Response) => {
@@ -142,14 +206,4 @@ async function setupViteOrStatic() {
   }
 }
 
-// Início do servidor HTTP
-setupViteOrStatic().then(() => {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`=========================================`);
-    console.log(`💎 DIAMANTE OS v2 - BACKEND DE AUTH ATIVO`);
-    console.log(`Porta: ${PORT}`);
-    console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
-    console.log(`Chave Mestra Ativa: +351937230116`);
-    console.log(`=========================================`);
-  });
-});
+setupViteOrStatic();

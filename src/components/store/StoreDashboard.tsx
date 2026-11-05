@@ -265,7 +265,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
       );
       loadDashboardData();
     } catch (err: unknown) {
-      console.error('Falha no registo de ponto:', err);
+      console.warn('[Loja] Falha no registo de ponto:', err);
       onShowToast('error', 'Falha ao gravar registo de ponto no Supabase.');
     } finally {
       setIsClocking(false);

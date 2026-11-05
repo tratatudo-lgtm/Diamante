@@ -16,8 +16,8 @@ export const getSupabaseConfig = () => {
 
 const initialConfig = getSupabaseConfig();
 
-// Dummy fallback to prevent library crash if not yet connected, but flag it
-const fallbackUrl = 'https://placeholder-instance.supabase.co';
+// URL real do projeto Supabase conectado
+const fallbackUrl = 'https://ytpetuvvxbmlafsisfaf.supabase.co';
 const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
 
 export const isSupabaseConfigured = (): boolean => {

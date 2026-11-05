@@ -118,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     } catch (err) {
-      console.error('Falha ao restaurar sessão:', err);
+      console.warn('[AuthContext] Falha ao restaurar sessão:', err);
     } finally {
       setIsLoading(false);
     }
@@ -257,7 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionStorage.removeItem('diamante_jwt_token');
       await supabase.auth.signOut();
     } catch (err) {
-      console.error('Erro ao terminar sessão:', err);
+      console.warn('[AuthContext] Erro ao terminar sessão:', err);
     } finally {
       setUserSession(null);
       setFuncionario(null);

@@ -75,13 +75,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     return map;
   }, [lojas]);
 
-  // Fetch War Room data strictly from real Supabase tables
+  // Fetch War Room data strictly from real Supabase tables via API or client
   const fetchWarRoomData = useCallback(async () => {
-    if (!isSupabaseConfigured()) {
-      setIsLoading(false);
-      return;
-    }
-
     try {
       setIsRefreshing(true);
 
@@ -89,58 +84,75 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       const todayStr = now.toISOString().split('T')[0];
       const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-      // Start of today in ISO (00:00:00 UTC)
       const todayStartIso = `${todayStr}T00:00:00.000Z`;
 
-      // 1. Fetch ALL lojas
-      const { data: rawLojas, error: lojasError } = await supabase
-        .from('lojas')
-        .select('*')
-        .order('nome', { ascending: true });
+      let rawLojas: Loja[] = [];
+      let todayTxs: Transacao[] = [];
+      let allPendingTxs: Array<{ id: string; loja_id: string; valor_final: number; peso_gramas: number; estado: string }> = [];
+      let kpiToday: KpiLojaDiaria[] = [];
+      let kpiYesterday: KpiLojaDiaria[] = [];
+      let connected = false;
 
-      if (lojasError) {
-        throw lojasError;
+      // 1. Tentar primeiro através do endpoint server-side /api/admin/war-room (sem restrições de CORS/Iframe)
+      try {
+        const res = await fetch('/api/admin/war-room', {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(4000),
+        });
+        if (res.ok) {
+          const apiData = await res.json();
+          if (apiData && apiData.success) {
+            rawLojas = Array.isArray(apiData.lojas) ? apiData.lojas : [];
+            todayTxs = Array.isArray(apiData.todayTxs) ? apiData.todayTxs : [];
+            allPendingTxs = Array.isArray(apiData.allPendingTxs) ? apiData.allPendingTxs : [];
+            kpiToday = Array.isArray(apiData.kpiToday) ? apiData.kpiToday : [];
+            kpiYesterday = Array.isArray(apiData.kpiYesterday) ? apiData.kpiYesterday : [];
+            connected = Boolean(apiData.isConnected);
+          }
+        }
+      } catch {
+        // Fallback silencioso para consulta direta caso o proxy esteja offline
       }
 
-      // 2. Fetch today's transactions to compute real metrics
-      // WHERE created_at >= todayStart
-      const { data: todayTxs, error: txError } = await supabase
-        .from('transacoes')
-        .select('*')
-        .gte('created_at', todayStartIso);
+      // 2. Se a API não tiver retornado lojas e o Supabase estiver configurado diretamente no cliente
+      if (rawLojas.length === 0 && isSupabaseConfigured()) {
+        try {
+          const { data: lojasData, error: lojasErr } = await supabase
+            .from('lojas')
+            .select('*')
+            .order('nome', { ascending: true });
 
-      if (txError) {
-        throw txError;
-      }
+          if (!lojasErr && lojasData) {
+            rawLojas = lojasData;
+            connected = true;
 
-      // 3. Fetch all pending transactions (any date, awaiting approval)
-      const { data: allPendingTxs, error: pendingError } = await supabase
-        .from('transacoes')
-        .select('id, loja_id, valor_final, peso_gramas, estado')
-        .eq('estado', 'pendente_aprovacao');
+            const { data: txData } = await supabase
+              .from('transacoes')
+              .select('*')
+              .gte('created_at', todayStartIso);
+            if (txData) todayTxs = txData;
 
-      if (pendingError) {
-        throw pendingError;
-      }
+            const { data: pendingData } = await supabase
+              .from('transacoes')
+              .select('id, loja_id, valor_final, peso_gramas, estado')
+              .eq('estado', 'pendente_aprovacao');
+            if (pendingData) allPendingTxs = pendingData as any;
 
-      // 4. Fetch kpi_loja_diaria for today & yesterday to calculate deltas
-      const { data: kpiToday, error: kpiTodayError } = await supabase
-        .from('kpi_loja_diaria')
-        .select('*')
-        .eq('data', todayStr);
+            const { data: kToday } = await supabase
+              .from('kpi_loja_diaria')
+              .select('*')
+              .eq('data', todayStr);
+            if (kToday) kpiToday = kToday;
 
-      if (kpiTodayError) {
-        console.warn('kpi_loja_diaria erro hoje:', kpiTodayError);
-      }
-
-      const { data: kpiYesterday, error: kpiYesterdayError } = await supabase
-        .from('kpi_loja_diaria')
-        .select('*')
-        .eq('data', yesterdayStr);
-
-      if (kpiYesterdayError) {
-        console.warn('kpi_loja_diaria erro ontem:', kpiYesterdayError);
+            const { data: kYesterday } = await supabase
+              .from('kpi_loja_diaria')
+              .select('*')
+              .eq('data', yesterdayStr);
+            if (kYesterday) kpiYesterday = kYesterday;
+          }
+        } catch (supabaseErr) {
+          console.warn('[Sala de Guerra] Acesso direto Supabase:', supabaseErr);
+        }
       }
 
       // Compute Global KPIs:
@@ -193,7 +205,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       });
 
       // Build merged LojaComKpi list:
-      // SELECT l.*, k.total_compras_valor, k.pendentes_aprovacao_qtd FROM lojas l LEFT JOIN kpi_loja_diaria k ON l.id = k.loja_id AND k.data = CURRENT_DATE
       const mergedLojas: LojaComKpi[] = (rawLojas || []).map((loja) => {
         const kpi = kpiByLoja[loja.id];
         const pendentesCount = pendingsByLoja[loja.id] ?? kpi?.pendentes_aprovacao_qtd ?? 0;
@@ -208,15 +219,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       });
 
       setLojas(mergedLojas);
-      setIsOnline(true);
+      setIsOnline(connected);
     } catch (err: unknown) {
-      console.error('Falha ao carregar dados da Sala de Guerra:', err);
+      console.warn('[Sala de Guerra] A aguardar dados do Supabase:', err);
       setIsOnline(false);
-      addToast(
-        'error',
-        'Erro na sincronização com Supabase. Verifique a ligação de dados.',
-        'Falha de Rede'
-      );
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -228,18 +234,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     fetchWarRoomData();
 
     // Listen to changes in transacoes and kpi_loja_diaria to keep KPIs in sync
-    const channel = supabase
-      .channel('admin-dashboard-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transacoes' }, () => {
-        fetchWarRoomData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'kpi_loja_diaria' }, () => {
-        fetchWarRoomData();
-      })
-      .subscribe();
+    let channel: any = null;
+    try {
+      if (isSupabaseConfigured()) {
+        channel = supabase
+          .channel('admin-dashboard-sync')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'transacoes' }, () => {
+            fetchWarRoomData();
+          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'kpi_loja_diaria' }, () => {
+            fetchWarRoomData();
+          })
+          .subscribe();
+      }
+    } catch {
+      // Ignorar indisponibilidade de canal realtime em ambiente local/sandbox
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {
+          // ignore
+        }
+      }
     };
   }, [fetchWarRoomData]);
 

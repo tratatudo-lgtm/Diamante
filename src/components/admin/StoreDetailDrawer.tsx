@@ -90,7 +90,7 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
         onRefreshData?.();
       }
     } catch (err) {
-      console.error('Erro ao aprovar transação:', err);
+      console.warn('[Admin] Erro ao aprovar transação:', err);
     } finally {
       setIsApproving(null);
     }

@@ -63,7 +63,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout, onShowToast 
         setShowPasswordChange(false);
       }, 1500);
     } catch (err: unknown) {
-      console.error('Erro ao atualizar palavra-passe:', err);
+      console.warn('[Perfil] Erro ao atualizar palavra-passe:', err);
       const msg = err instanceof Error ? err.message : 'Falha ao atualizar.';
       setPasswordError(msg);
       onShowToast('error', 'Falha ao atualizar palavra-passe.');

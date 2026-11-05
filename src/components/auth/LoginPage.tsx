@@ -66,6 +66,31 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
     };
   }, [otpStep, countdown]);
 
+  // Helper resiliente para chamadas aos endpoints de autenticação
+  const apiPost = async (endpoint: string, bodyData: any): Promise<any> => {
+    const payload = JSON.stringify(bodyData);
+    const headers = { 'Content-Type': 'application/json' };
+    const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const apiPath = path.startsWith('/api') ? path : `/api${path}`;
+    const directPath = path.startsWith('/api') ? path.replace('/api', '') : path;
+
+    let res: Response;
+    try {
+      res = await fetch(apiPath, { method: 'POST', headers, body: payload });
+      if (res.status === 404) {
+        res = await fetch(directPath, { method: 'POST', headers, body: payload });
+      }
+    } catch {
+      res = await fetch(directPath, { method: 'POST', headers, body: payload });
+    }
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.message || data?.error || 'Falha ao comunicar com o servidor.');
+    }
+    return data;
+  };
+
   const formatPhoneForApi = (raw: string): string => {
     const cleaned = raw.replace(/[^\d+]/g, '');
     if (cleaned.startsWith('+')) return cleaned;
@@ -91,16 +116,12 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
     setLoading(true);
 
     try {
-      const res = await fetch('/auth/request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: normalized }),
-      });
+      const data = await apiPost('/auth/request-otp', { phone: normalized });
 
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data?.message || 'Falha ao solicitar código de acesso.');
+      if (data?.devOtpCode) {
+        setSuccessNotice(`Código de verificação: ${data.devOtpCode}`);
+      } else {
+        setSuccessNotice('Código de verificação enviado via WhatsApp.');
       }
 
       setOtpStep('code');
@@ -110,7 +131,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
         otpInputRefs.current[0]?.focus();
       }, 150);
     } catch (err: unknown) {
-      console.error('Erro ao enviar OTP:', err);
+      console.warn('[Login OTP] Erro ao enviar OTP:', err);
       const msg = err instanceof Error ? err.message : 'Falha ao comunicar com o servidor de autenticação.';
       setError(msg);
     } finally {
@@ -135,20 +156,10 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
     const normalized = formatPhoneForApi(phone);
 
     try {
-      const res = await fetch('/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: normalized,
-          code,
-        }),
+      const data = await apiPost('/auth/verify-otp', {
+        phone: normalized,
+        code,
       });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data?.message || 'Código de verificação incorreto ou expirado.');
-      }
 
       // Role oficial extraída da resposta do backend consultada no Supabase
       const userRole = String(data?.role || data?.user?.role || 'operador').toLowerCase();
@@ -162,7 +173,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
         window.location.href = targetPath;
       }
     } catch (err: unknown) {
-      console.error('Erro na validação do OTP:', err);
+      console.warn('[Login OTP] Erro na validação do OTP:', err);
       const msg = err instanceof Error ? err.message : 'Erro ao validar código OTP.';
       setError(msg);
     } finally {
@@ -216,20 +227,10 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
     setLoading(true);
 
     try {
-      const res = await fetch('/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: email.trim(),
-          password,
-        }),
+      const data = await apiPost('/auth/login', {
+        email: email.trim(),
+        password,
       });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        throw new Error(data?.message || 'Credenciais inválidas ou conta inativa.');
-      }
 
       const userRole = String(data?.role || data?.user?.role || 'operador').toLowerCase();
       setDirectSession(data.user, userRole, data.token);
@@ -241,7 +242,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
         window.location.href = targetPath;
       }
     } catch (err: unknown) {
-      console.error('Erro no login por email:', err);
+      console.warn('[Login Email] Erro no login por email:', err);
       const msg = err instanceof Error ? err.message : 'Falha na autenticação.';
       setError(msg);
     } finally {
@@ -266,21 +267,12 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
     setLoading(true);
 
     try {
-      const res = await fetch('/auth/request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: normalized }),
-      });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data?.message || 'Número de telemóvel não autorizado.');
-      }
+      const data = await apiPost('/auth/request-otp', { phone: normalized });
 
       setResetStep('confirm');
-      setSuccessNotice('Código de validação enviado para o seu WhatsApp.');
+      setSuccessNotice(data?.message || 'Código de validação enviado para o seu WhatsApp.');
     } catch (err: unknown) {
-      console.error('Erro no pedido de redefinição:', err);
+      console.warn('[Login Reset] Erro no pedido de redefinição:', err);
       const msg = err instanceof Error ? err.message : 'Falha ao solicitar código de recuperação.';
       setError(msg);
     } finally {
@@ -321,7 +313,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
         setConfirmNewPassword('');
       }, 1500);
     } catch (err: unknown) {
-      console.error('Erro na redefinição:', err);
+      console.warn('[Login Reset] Erro na redefinição:', err);
       const msg = err instanceof Error ? err.message : 'Erro ao atualizar palavra-passe.';
       setError(msg);
     } finally {

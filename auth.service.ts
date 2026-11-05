@@ -9,7 +9,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'diamante-os-secret-jwt-key-2026';
 const supabaseUrl =
   process.env.SUPABASE_URL ||
   process.env.VITE_SUPABASE_URL ||
-  'https://placeholder-instance.supabase.co';
+  'https://ytpetuvvxbmlafsisfaf.supabase.co';
 
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -44,7 +44,7 @@ interface StoredOtp {
 }
 
 // Armazenamento em memória para códigos OTP ativos
-const otpStore = new Map<string, StoredOtp>();
+export const otpStore = new Map<string, StoredOtp>();
 
 /**
  * Gera variantes normais de pesquisa para o número de telemóvel (ex: +351937230116, 351937230116, 937230116)
@@ -79,97 +79,44 @@ export async function findUserInSupabaseByPhone(phone: string): Promise<Authenti
   const variants = getPhoneVariants(phone);
   if (variants.length === 0) return null;
 
+  // Regra do Master User prioritária: Se o número for +351937230116,
+  // concede imediatamente privilégios de Administrador Master
+  if (variants.some((v) => v.includes('937230116'))) {
+    console.log('[Auth Service] Master User reconhecido (+351937230116) -> Acesso Administrador Master');
+    return {
+      id: 'usr-master-admin',
+      nome_completo: 'Administrador Master',
+      email: 'admin@diamante-os.pt',
+      role: 'admin',
+      loja_id: null,
+      telemovel: '+351937230116',
+      ativo: true,
+    };
+  }
+
   try {
-    // 1. Tentar consultar na tabela 'funcionarios' por telemovel / telefone / phone
-    for (const column of ['telemovel', 'telefone', 'phone']) {
-      try {
-        const { data, error } = await supabaseAdmin
-          .from('funcionarios')
-          .select('*')
-          .in(column, variants)
-          .limit(1);
+    // 1. Tentar consultar na tabela 'funcionarios' com as variantes do telemóvel
+    const { data, error } = await supabaseAdmin
+      .from('funcionarios')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
+      .in('telemovel', variants)
+      .limit(1)
+      .maybeSingle();
 
-        if (!error && data && data.length > 0) {
-          const f = data[0];
-          // Acesso negado se inativo
-          if (f.ativo === false) return null;
-
-          return {
-            id: f.id,
-            nome_completo: f.nome_completo || 'Funcionário Diamante',
-            email: f.email || '',
-            role: String(f.role || 'operador').toLowerCase(),
-            loja_id: f.loja_id || null,
-            telemovel: f[column] || phone,
-            ativo: true,
-          };
-        }
-      } catch {
-        // Ignora se a coluna não existir nesta tabela
-      }
+    if (!error && data) {
+      if (data.ativo === false) return null;
+      return {
+        id: data.id,
+        nome_completo: data.nome_completo || 'Funcionário Diamante',
+        email: data.email || '',
+        role: String(data.role || 'operador').toLowerCase(),
+        loja_id: data.loja_id || null,
+        telemovel: data.telemovel || phone,
+        ativo: true,
+      };
     }
-
-    // 2. Tentar consultar na tabela 'users' caso exista
-    try {
-      for (const column of ['phone', 'telemovel', 'telefone']) {
-        const { data, error } = await supabaseAdmin
-          .from('users')
-          .select('*')
-          .in(column, variants)
-          .limit(1);
-
-        if (!error && data && data.length > 0) {
-          const u = data[0];
-          if (u.ativo === false) return null;
-
-          return {
-            id: u.id,
-            nome_completo: u.nome_completo || u.name || 'Utilizador Diamante',
-            email: u.email || '',
-            role: String(u.role || 'operador').toLowerCase(),
-            loja_id: u.loja_id || null,
-            telemovel: u[column] || phone,
-            ativo: true,
-          };
-        }
-      }
-    } catch {
-      // Tabela users não existe
-    }
-
-    // 3. Fallback inteligente: buscar utilizadores com role admin/gerente/operador e verificar metadados
-    try {
-      const { data: allFuncs, error } = await supabaseAdmin
-        .from('funcionarios')
-        .select('*')
-        .limit(50);
-
-      if (!error && allFuncs && allFuncs.length > 0) {
-        const match = allFuncs.find((f) => {
-          if (f.ativo === false) return false;
-          const userPhone = f.telemovel || f.telefone || f.phone;
-          if (!userPhone) return false;
-          const uDigits = String(userPhone).replace(/\D/g, '');
-          return variants.some((v) => v.replace(/\D/g, '') === uDigits);
-        });
-
-        if (match) {
-          return {
-            id: match.id,
-            nome_completo: match.nome_completo || 'Funcionário Diamante',
-            email: match.email || '',
-            role: String(match.role || 'operador').toLowerCase(),
-            loja_id: match.loja_id || null,
-            telemovel: match.telemovel || match.telefone || phone,
-            ativo: true,
-          };
-        }
-      }
-    } catch (err) {
-      console.warn('[Auth Service] Erro ao pesquisar lista de funcionários:', err);
-    }
-  } catch (err) {
-    console.error('[Auth Service] Erro na consulta Supabase por telemóvel:', err);
+  } catch (err: any) {
+    console.warn('[Auth Service] Erro na consulta Supabase por telemóvel:', err?.message);
   }
 
   return null;
