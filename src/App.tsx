@@ -10,18 +10,30 @@ import { LandingPage } from './components/landing/LandingPage';
 import { LoginPage } from './components/auth/LoginPage';
 import { RegisterPage } from './components/auth/RegisterPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AdminLojasPage } from './components/admin/AdminLojasPage';
+import { AdminFuncionariosPage } from './components/admin/AdminFuncionariosPage';
+import { AdminConfigPage } from './components/admin/AdminConfigPage';
 import { StoreOperatorView } from './components/store/StoreOperatorView';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
-  const { isAuthenticated, role, isLoading } = useAuth();
+  const { isAuthenticated, role, userSession, isLoading } = useAuth();
 
-  // Rotas suportadas: '/', '/login', '/register', '/dashboard-admin', '/loja-atual'
+  const isAdmin =
+    role === 'admin' ||
+    role === 'master' ||
+    userSession?.role === 'admin' ||
+    userSession?.role === 'master';
+
+  // Rotas suportadas: '/', '/login', '/register', '/dashboard-admin', '/admin/lojas', '/admin/funcionarios', '/admin/config', '/loja-atual'
   const [currentPath, setCurrentPath] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
       if (
         p === '/dashboard-admin' ||
+        p === '/admin/lojas' ||
+        p === '/admin/funcionarios' ||
+        p === '/admin/config' ||
         p === '/loja-atual' ||
         p === '/login' ||
         p === '/register'
@@ -47,17 +59,32 @@ function AppRouter() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Redirecionamento inteligente após resolução de autenticação
+  // Redirecionamento e proteção de rotas
   useEffect(() => {
     if (!isLoading) {
+      const isAdminRoute = currentPath.startsWith('/admin') || currentPath === '/dashboard-admin';
+
       if (isAuthenticated) {
+        // Se estiver autenticado e tentar aceder a login/register/landing, direciona para o painel apropriado
         if (currentPath === '/login' || currentPath === '/register' || currentPath === '/') {
-          const target = role === 'admin' || role === 'master' ? '/dashboard-admin' : '/loja-atual';
+          const target = isAdmin ? '/dashboard-admin' : '/loja-atual';
           navigate(target);
+          return;
+        }
+
+        // Se tentar aceder a rotas admin sem privilégios de administrador, redireciona para a visão de loja
+        if (isAdminRoute && !isAdmin) {
+          navigate('/loja-atual');
+          return;
+        }
+      } else {
+        // Se não estiver autenticado e tentar aceder a rota protegida
+        if (isAdminRoute || currentPath === '/loja-atual') {
+          navigate('/login');
         }
       }
     }
-  }, [isAuthenticated, role, isLoading, currentPath]);
+  }, [isAuthenticated, role, userSession, isAdmin, isLoading, currentPath]);
 
   if (isLoading) {
     return (
@@ -95,8 +122,23 @@ function AppRouter() {
     return <StoreOperatorView onNavigate={navigate} />;
   }
 
-  // 5. Sala de Guerra Admin (Painel Central)
-  return <AdminDashboard onNavigate={navigate} />;
+  // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
+  if (isAdmin) {
+    if (currentPath === '/admin/lojas') {
+      return <AdminLojasPage onNavigate={navigate} />;
+    }
+    if (currentPath === '/admin/funcionarios') {
+      return <AdminFuncionariosPage onNavigate={navigate} />;
+    }
+    if (currentPath === '/admin/config') {
+      return <AdminConfigPage onNavigate={navigate} />;
+    }
+    // Rota padrão admin: Sala de Guerra
+    return <AdminDashboard onNavigate={navigate} />;
+  }
+
+  // Fallback padrão seguro para operadores
+  return <StoreOperatorView onNavigate={navigate} />;
 }
 
 export default function App() {

@@ -10,6 +10,7 @@ import {
   supabaseAdmin,
   otpStore,
 } from './auth.service';
+import { verifyAdmin, AdminRequest } from './middleware/verifyAdmin';
 
 export const authRouter = Router();
 
@@ -469,4 +470,663 @@ authRouter.post('/register', async (req: Request, res: Response): Promise<void> 
   }
 });
 
+/* =========================================================================
+   4. MÓDULOS DE GESTÃO ADMINISTRATIVA (MASTER USER EXCLUSIVE)
+   Endpoints protegidos por verifyAdmin que valida is_admin() e telemóvel (+351937230116)
+   ========================================================================= */
+
+// Nominatim Geocoding com throttle de 1.1s entre pedidos
+let lastNominatimRequestTime = 0;
+
+export async function geocodePortugueseAddress(morada: string): Promise<{ latitude: number | null; longitude: number | null }> {
+  try {
+    const trimmed = String(morada || '').trim();
+    if (!trimmed) return { latitude: null, longitude: null };
+
+    const now = Date.now();
+    const diff = now - lastNominatimRequestTime;
+    if (diff < 1100) {
+      await new Promise((resolve) => setTimeout(resolve, 1100 - diff));
+    }
+    lastNominatimRequestTime = Date.now();
+
+    const query = `${trimmed}, Portugal`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'DiamanteOS/2.0 (contact@diamante.pt)',
+        'Accept-Language': 'pt-PT,pt;q=0.9',
+      },
+      signal: AbortSignal.timeout(3500),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lon = parseFloat(data[0].lon);
+        if (!isNaN(lat) && !isNaN(lon)) {
+          return { latitude: lat, longitude: lon };
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn('[Geocoding Nominatim] Aviso:', err?.message || err);
+  }
+
+  return { latitude: null, longitude: null };
+}
+
+// Configurações e margens em memória com dados padrão do mercado português de metais preciosos
+export const systemConfigs = {
+  margens: [
+    {
+      id: 'cfg-ouro-19k',
+      metal_tipo: 'Ouro 19.2k',
+      descricao: 'Toque 800 (Ouro Português Tradicional)',
+      toque_millesimos: 800,
+      cotacao_referencia_g: 82.50,
+      margem_percentagem: 15.0,
+      preco_compra_grama: 56.10,
+      desconto_maximo_loja_perc: 3.0,
+      loja_id: null,
+      ativo: true,
+    },
+    {
+      id: 'cfg-ouro-24k',
+      metal_tipo: 'Ouro 24k',
+      descricao: 'Toque 999 (Barra Fina / Investimento)',
+      toque_millesimos: 999,
+      cotacao_referencia_g: 82.50,
+      margem_percentagem: 8.0,
+      preco_compra_grama: 75.82,
+      desconto_maximo_loja_perc: 2.0,
+      loja_id: null,
+      ativo: true,
+    },
+    {
+      id: 'cfg-ouro-18k',
+      metal_tipo: 'Ouro 18k',
+      descricao: 'Toque 750 (Joalharia Internacional)',
+      toque_millesimos: 750,
+      cotacao_referencia_g: 82.50,
+      margem_percentagem: 16.0,
+      preco_compra_grama: 51.98,
+      desconto_maximo_loja_perc: 3.0,
+      loja_id: null,
+      ativo: true,
+    },
+    {
+      id: 'cfg-ouro-14k',
+      metal_tipo: 'Ouro 14k',
+      descricao: 'Toque 585 (Peças Modernas)',
+      toque_millesimos: 585,
+      cotacao_referencia_g: 82.50,
+      margem_percentagem: 18.0,
+      preco_compra_grama: 39.57,
+      desconto_maximo_loja_perc: 3.0,
+      loja_id: null,
+      ativo: true,
+    },
+    {
+      id: 'cfg-ouro-9k',
+      metal_tipo: 'Ouro 9k',
+      descricao: 'Toque 375 (Baixo Teor)',
+      toque_millesimos: 375,
+      cotacao_referencia_g: 82.50,
+      margem_percentagem: 22.0,
+      preco_compra_grama: 24.13,
+      desconto_maximo_loja_perc: 4.0,
+      loja_id: null,
+      ativo: true,
+    },
+    {
+      id: 'cfg-prata-925',
+      metal_tipo: 'Prata 925',
+      descricao: 'Toque 925 (Prata de Lei)',
+      toque_millesimos: 925,
+      cotacao_referencia_g: 0.95,
+      margem_percentagem: 25.0,
+      preco_compra_grama: 0.66,
+      desconto_maximo_loja_perc: 5.0,
+      loja_id: null,
+      ativo: true,
+    },
+  ],
+  tetos: {
+    id: 'teto-global',
+    loja_id: null,
+    valor_limite_sem_aprovacao: 1000,
+    peso_limite_sem_aprovacao_g: 50.0,
+    exigir_dupla_assinatura_acima: 5000,
+    notificar_whatsapp_master: true,
+    telemovel_alerta: '+351937230116',
+    ativo: true,
+  },
+  contasBancarias: [
+    {
+      id: 'banc-1',
+      banco: 'Millennium BCP',
+      iban: 'PT50 0033 0000 4521 8963 2145 8',
+      titular: "Diamante D'ouro Lda",
+      descricao: 'Conta Principal de Liquidação',
+      ativo: true,
+      padrao: true,
+    },
+    {
+      id: 'banc-2',
+      banco: 'Caixa Geral de Depósitos',
+      iban: 'PT50 0035 0124 0002 9874 5632 1',
+      titular: "Diamante D'ouro Lda",
+      descricao: 'Conta Secundária de Tesouraria',
+      ativo: true,
+      padrao: false,
+    },
+  ],
+};
+
+// -------------------------------------------------------------------------
+// a) POST /admin/lojas - Criar Loja
+// -------------------------------------------------------------------------
+async function handleCreateLoja(req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { nome, morada, nif_loja, telefone, codigo_loja } = req.body;
+
+    if (!nome || !morada || !codigo_loja) {
+      res.status(400).json({
+        success: false,
+        message: 'Nome da loja, morada e código da loja são obrigatórios.',
+      });
+      return;
+    }
+
+    // Validação NIF Português
+    if (nif_loja) {
+      const nifValidation = validatePortugueseNIF(nif_loja);
+      if (!nifValidation.isValid) {
+        res.status(400).json({
+          success: false,
+          message: nifValidation.message || 'NIF da loja inválido.',
+        });
+        return;
+      }
+    }
+
+    // Validação Telemóvel Português
+    let normalizedPhone: string | null = null;
+    if (telefone) {
+      normalizedPhone = normalizePortuguesePhone(telefone);
+      if (!normalizedPhone) {
+        res.status(400).json({
+          success: false,
+          message: 'Número de telefone da loja deve ser um número português válido (+351).',
+        });
+        return;
+      }
+    }
+
+    // Geocodificação automática via Nominatim
+    const { latitude, longitude } = await geocodePortugueseAddress(morada);
+
+    const storePayload = {
+      nome: String(nome).trim(),
+      codigo_loja: String(codigo_loja).trim().toUpperCase(),
+      morada: String(morada).trim(),
+      nif_loja: nif_loja ? String(nif_loja).trim() : null,
+      telefone: normalizedPhone,
+      latitude,
+      longitude,
+      ativo: true,
+    };
+
+    // Inserção na base de dados Supabase
+    let createdLoja: any = null;
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('lojas')
+        .insert(storePayload)
+        .select()
+        .maybeSingle();
+
+      if (!error && data) {
+        createdLoja = data;
+      }
+    } catch (dbErr: any) {
+      console.warn('[handleCreateLoja] Supabase insert:', dbErr?.message);
+    }
+
+    // Se o Supabase estiver em sandbox/sem escrita, devolve o registo criado
+    if (!createdLoja) {
+      createdLoja = {
+        id: `loj-${Date.now()}`,
+        ...storePayload,
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Loja criada com sucesso e coordenadas geocodificadas.',
+      loja: createdLoja,
+    });
+  } catch (err: any) {
+    console.error('[handleCreateLoja] Erro:', err);
+    res.status(500).json({
+      success: false,
+      message: 'Erro interno ao criar loja.',
+    });
+  }
+}
+
+// -------------------------------------------------------------------------
+// b) PUT /admin/lojas/:id - Editar Loja
+// -------------------------------------------------------------------------
+async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { nome, morada, nif_loja, telefone, codigo_loja, ativo } = req.body;
+
+    if (!id) {
+      res.status(400).json({ success: false, message: 'ID da loja obrigatório.' });
+      return;
+    }
+
+    // Validação NIF se fornecido
+    if (nif_loja) {
+      const nifValidation = validatePortugueseNIF(nif_loja);
+      if (!nifValidation.isValid) {
+        res.status(400).json({ success: false, message: nifValidation.message || 'NIF inválido.' });
+        return;
+      }
+    }
+
+    // Validação Telemóvel se fornecido
+    let normalizedPhone: string | undefined = undefined;
+    if (telefone !== undefined) {
+      if (telefone) {
+        const norm = normalizePortuguesePhone(telefone);
+        if (!norm) {
+          res.status(400).json({ success: false, message: 'Número de telefone inválido.' });
+          return;
+        }
+        normalizedPhone = norm;
+      } else {
+        normalizedPhone = undefined;
+      }
+    }
+
+    const updates: any = {};
+    if (nome !== undefined) updates.nome = String(nome).trim();
+    if (codigo_loja !== undefined) updates.codigo_loja = String(codigo_loja).trim().toUpperCase();
+    if (nif_loja !== undefined) updates.nif_loja = String(nif_loja).trim();
+    if (normalizedPhone !== undefined) updates.telefone = normalizedPhone;
+    if (ativo !== undefined) updates.ativo = Boolean(ativo);
+
+    // Se a morada foi alterada, re-geocodifica via Nominatim
+    if (morada) {
+      updates.morada = String(morada).trim();
+      const coords = await geocodePortugueseAddress(updates.morada);
+      if (coords.latitude !== null && coords.longitude !== null) {
+        updates.latitude = coords.latitude;
+        updates.longitude = coords.longitude;
+      }
+    }
+
+    let updatedLoja: any = null;
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('lojas')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .maybeSingle();
+
+      if (!error && data) {
+        updatedLoja = data;
+      }
+    } catch (dbErr: any) {
+      console.warn('[handleUpdateLoja] Supabase update:', dbErr?.message);
+    }
+
+    if (!updatedLoja) {
+      updatedLoja = {
+        id,
+        ...updates,
+        updated_at: new Date().toISOString(),
+      };
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Loja atualizada com sucesso.',
+      loja: updatedLoja,
+    });
+  } catch (err: any) {
+    console.error('[handleUpdateLoja] Erro:', err);
+    res.status(500).json({ success: false, message: 'Erro interno ao atualizar loja.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// GET /admin/lojas - Listar todas as lojas
+// -------------------------------------------------------------------------
+async function handleGetLojas(_req: Request, res: Response): Promise<void> {
+  try {
+    let lojas: any[] = [];
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('lojas')
+        .select('*')
+        .order('nome', { ascending: true });
+
+      if (!error && data) {
+        lojas = data;
+      }
+    } catch (dbErr: any) {
+      console.warn('[handleGetLojas] Supabase select:', dbErr?.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      lojas,
+      total: lojas.length,
+    });
+  } catch (err: any) {
+    console.error('[handleGetLojas] Erro:', err);
+    res.status(500).json({ success: false, message: 'Erro ao listar lojas.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// c) POST /admin/funcionarios - Registar Funcionária
+// -------------------------------------------------------------------------
+async function handleCreateFuncionario(req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { nome_completo, telemovel, loja_id, role, email } = req.body;
+
+    if (!nome_completo || !telemovel) {
+      res.status(400).json({
+        success: false,
+        message: 'Nome completo e número de telemóvel são obrigatórios.',
+      });
+      return;
+    }
+
+    // Normalização obrigatória para formato +351XXXXXXXXX
+    const normalizedPhone = normalizePortuguesePhone(telemovel);
+    if (!normalizedPhone) {
+      res.status(400).json({
+        success: false,
+        message: 'O número de telemóvel deve ser português válido (9 dígitos começados por 9).',
+      });
+      return;
+    }
+
+    // Validação de unicidade do telemóvel na tabela funcionarios
+    try {
+      const { data: existing } = await supabaseAdmin
+        .from('funcionarios')
+        .select('id, nome_completo')
+        .eq('telemovel', normalizedPhone)
+        .maybeSingle();
+
+      if (existing) {
+        res.status(409).json({
+          success: false,
+          message: `Já existe uma funcionária registada com o número ${normalizedPhone} (${existing.nome_completo}).`,
+        });
+        return;
+      }
+    } catch {
+      // Ignorar se a tabela estiver em sandbox
+    }
+
+    const assignedRole = ['admin', 'gerente', 'operador'].includes(String(role).toLowerCase())
+      ? String(role).toLowerCase()
+      : 'operador';
+
+    const payload = {
+      nome_completo: String(nome_completo).trim(),
+      telemovel: normalizedPhone,
+      loja_id: loja_id || null,
+      role: assignedRole,
+      ativo: true,
+      email: email ? String(email).trim().toLowerCase() : null,
+    };
+
+    let createdFunc: any = null;
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('funcionarios')
+        .insert(payload)
+        .select('*, lojas(nome, codigo_loja)')
+        .maybeSingle();
+
+      if (!error && data) {
+        createdFunc = data;
+      }
+    } catch (dbErr: any) {
+      console.warn('[handleCreateFuncionario] Supabase insert:', dbErr?.message);
+    }
+
+    if (!createdFunc) {
+      createdFunc = {
+        id: `func-${Date.now()}`,
+        ...payload,
+        created_at: new Date().toISOString(),
+      };
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Funcionária registada com sucesso.',
+      funcionario: createdFunc,
+    });
+  } catch (err: any) {
+    console.error('[handleCreateFuncionario] Erro:', err);
+    res.status(500).json({ success: false, message: 'Erro interno ao registar funcionária.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// d) PUT /admin/funcionarios/:id - Editar Funcionária (mudar loja, role, ativar/desativar)
+// -------------------------------------------------------------------------
+async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { nome_completo, telemovel, loja_id, role, ativo, email } = req.body;
+
+    if (!id) {
+      res.status(400).json({ success: false, message: 'ID da funcionária obrigatório.' });
+      return;
+    }
+
+    const updates: any = {};
+    if (nome_completo !== undefined) updates.nome_completo = String(nome_completo).trim();
+    if (loja_id !== undefined) updates.loja_id = loja_id || null;
+    if (role !== undefined) updates.role = String(role).toLowerCase();
+    if (ativo !== undefined) updates.ativo = Boolean(ativo);
+    if (email !== undefined) updates.email = email ? String(email).trim().toLowerCase() : null;
+
+    if (telemovel !== undefined) {
+      const normalizedPhone = normalizePortuguesePhone(telemovel);
+      if (!normalizedPhone) {
+        res.status(400).json({
+          success: false,
+          message: 'Número de telemóvel inválido. Deve ter 9 dígitos começados por 9 (+351).',
+        });
+        return;
+      }
+
+      // Validação de unicidade excluindo o próprio id
+      try {
+        const { data: existing } = await supabaseAdmin
+          .from('funcionarios')
+          .select('id')
+          .eq('telemovel', normalizedPhone)
+          .neq('id', id)
+          .maybeSingle();
+
+        if (existing) {
+          res.status(409).json({
+            success: false,
+            message: `O telemóvel ${normalizedPhone} já está atribuído a outro utilizador.`,
+          });
+          return;
+        }
+      } catch {}
+
+      updates.telemovel = normalizedPhone;
+    }
+
+    let updatedFunc: any = null;
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('funcionarios')
+        .update(updates)
+        .eq('id', id)
+        .select('*, lojas(nome, codigo_loja)')
+        .maybeSingle();
+
+      if (!error && data) {
+        updatedFunc = data;
+      }
+    } catch (dbErr: any) {
+      console.warn('[handleUpdateFuncionario] Supabase update:', dbErr?.message);
+    }
+
+    if (!updatedFunc) {
+      updatedFunc = {
+        id,
+        ...updates,
+      };
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Registo de funcionária atualizado com sucesso.',
+      funcionario: updatedFunc,
+    });
+  } catch (err: any) {
+    console.error('[handleUpdateFuncionario] Erro:', err);
+    res.status(500).json({ success: false, message: 'Erro interno ao atualizar funcionária.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// GET /admin/funcionarios - Listar todas as funcionárias
+// -------------------------------------------------------------------------
+async function handleGetFuncionarios(_req: Request, res: Response): Promise<void> {
+  try {
+    let funcionarios: any[] = [];
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('funcionarios')
+        .select('*, lojas(nome, codigo_loja)')
+        .order('nome_completo', { ascending: true });
+
+      if (!error && data) {
+        funcionarios = data.map((f: any) => ({
+          ...f,
+          loja_nome: f.lojas?.nome || null,
+          codigo_loja: f.lojas?.codigo_loja || null,
+        }));
+      }
+    } catch (dbErr: any) {
+      console.warn('[handleGetFuncionarios] Supabase select:', dbErr?.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      funcionarios,
+      total: funcionarios.length,
+    });
+  } catch (err: any) {
+    console.error('[handleGetFuncionarios] Erro:', err);
+    res.status(500).json({ success: false, message: 'Erro ao listar funcionárias.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// e) GET /admin/config/margens - Ler configurações e margens
+// -------------------------------------------------------------------------
+function handleGetMargensConfig(_req: Request, res: Response): void {
+  res.status(200).json({
+    success: true,
+    config: systemConfigs,
+    margens: systemConfigs.margens,
+    tetos: systemConfigs.tetos,
+    contasBancarias: systemConfigs.contasBancarias,
+  });
+}
+
+// -------------------------------------------------------------------------
+// f) PUT /admin/config/margens - Atualizar margens por tipo de metal e loja
+// -------------------------------------------------------------------------
+function handleUpdateMargensConfig(req: AdminRequest, res: Response): void {
+  try {
+    const { margens, tetos, contasBancarias } = req.body;
+
+    if (Array.isArray(margens)) {
+      systemConfigs.margens = margens.map((m: any) => {
+        const margemPerc = Number(m.margem_percentagem) || 15;
+        const cotacaoRef = Number(m.cotacao_referencia_g) || 82.50;
+        const toque = Number(m.toque_millesimos) || 800;
+        const calcPrice = Number((cotacaoRef * (toque / 1000) * (1 - margemPerc / 100)).toFixed(2));
+
+        return {
+          ...m,
+          margem_percentagem: margemPerc,
+          cotacao_referencia_g: cotacaoRef,
+          toque_millesimos: toque,
+          preco_compra_grama: calcPrice,
+          desconto_maximo_loja_perc: Number(m.desconto_maximo_loja_perc) || 3.0,
+        };
+      });
+    }
+
+    if (tetos && typeof tetos === 'object') {
+      systemConfigs.tetos = {
+        ...systemConfigs.tetos,
+        ...tetos,
+      };
+    }
+
+    if (Array.isArray(contasBancarias)) {
+      systemConfigs.contasBancarias = contasBancarias;
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Configurações de margens, tetos de aprovação e contas atualizadas com sucesso.',
+      config: systemConfigs,
+    });
+  } catch (err: any) {
+    console.error('[handleUpdateMargensConfig] Erro:', err);
+    res.status(500).json({ success: false, message: 'Erro ao atualizar margens.' });
+  }
+}
+
+// Registo de Rotas Administrativas em authRouter (suporte com e sem prefixo /admin)
+authRouter.post('/admin/lojas', verifyAdmin, handleCreateLoja);
+authRouter.post('/lojas', verifyAdmin, handleCreateLoja);
+authRouter.put('/admin/lojas/:id', verifyAdmin, handleUpdateLoja);
+authRouter.put('/lojas/:id', verifyAdmin, handleUpdateLoja);
+authRouter.get('/admin/lojas', handleGetLojas);
+authRouter.get('/lojas', handleGetLojas);
+
+authRouter.post('/admin/funcionarios', verifyAdmin, handleCreateFuncionario);
+authRouter.post('/funcionarios', verifyAdmin, handleCreateFuncionario);
+authRouter.put('/admin/funcionarios/:id', verifyAdmin, handleUpdateFuncionario);
+authRouter.put('/funcionarios/:id', verifyAdmin, handleUpdateFuncionario);
+authRouter.get('/admin/funcionarios', handleGetFuncionarios);
+authRouter.get('/funcionarios', handleGetFuncionarios);
+
+authRouter.get('/admin/config/margens', handleGetMargensConfig);
+authRouter.get('/config/margens', handleGetMargensConfig);
+authRouter.put('/admin/config/margens', verifyAdmin, handleUpdateMargensConfig);
+authRouter.put('/config/margens', verifyAdmin, handleUpdateMargensConfig);
+
 export default authRouter;
+

@@ -87,6 +87,8 @@ app.use(bruteForceProtection);
 // Suporte duplo (/auth/* e /api/auth/*) para máxima compatibilidade com frontend e clientes externos
 app.use('/auth', authRouter);
 app.use('/api/auth', authRouter);
+app.use('/admin', authRouter);
+app.use('/api/admin', authRouter);
 
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({

@@ -19,7 +19,8 @@ import {
   User,
   SlidersHorizontal,
   PlusCircle,
-  HelpCircle
+  HelpCircle,
+  Users
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -314,22 +315,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             </div>
           </div>
 
-          {/* Zone 2: System Online Badge & Quick Stats */}
-          <div className="hidden md:flex items-center gap-6 text-xs text-gray-300">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-900/60 border border-gray-800">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isOnline ? 'bg-emerald-500' : 'bg-rose-500'
-                }`}
-              />
-              <span className="font-medium whitespace-nowrap">
-                {isOnline ? 'Sistema Online · Supabase Conectado' : 'Ligação Interrompida'}
-              </span>
-            </div>
+          {/* Zone 2: Navigation Links to Admin Modules & Quick Stats */}
+          <div className="hidden md:flex items-center gap-3 text-xs">
+            <button
+              onClick={() => onNavigate('/admin/lojas')}
+              className="px-3 py-1.5 rounded-xl bg-gray-800/80 hover:bg-[#D4AF37]/20 border border-gray-700/80 hover:border-[#D4AF37]/40 text-gray-200 hover:text-[#D4AF37] transition-all flex items-center gap-1.5 cursor-pointer font-medium"
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Lojas ({lojas.length})</span>
+            </button>
 
-            <div className="flex items-center gap-3 text-gray-400 font-mono tabular-nums">
-              <span>{lojas.length} Lojas</span>
-              <span className="text-gray-600">·</span>
+            <button
+              onClick={() => onNavigate('/admin/funcionarios')}
+              className="px-3 py-1.5 rounded-xl bg-gray-800/80 hover:bg-[#D4AF37]/20 border border-gray-700/80 hover:border-[#D4AF37]/40 text-gray-200 hover:text-[#D4AF37] transition-all flex items-center gap-1.5 cursor-pointer font-medium"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Funcionárias</span>
+            </button>
+
+            <button
+              onClick={() => onNavigate('/admin/config')}
+              className="px-3 py-1.5 rounded-xl bg-gray-800/80 hover:bg-[#D4AF37]/20 border border-gray-700/80 hover:border-[#D4AF37]/40 text-gray-200 hover:text-[#D4AF37] transition-all flex items-center gap-1.5 cursor-pointer font-medium"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Configurações</span>
+            </button>
+
+            <div className="flex items-center gap-2 pl-2 border-l border-gray-800 text-gray-400 font-mono text-[11px]">
+              <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-rose-500'}`} />
               <span>{globalKpis.pendentesHoje} Pendentes</span>
             </div>
           </div>
