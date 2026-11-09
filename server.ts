@@ -1,3 +1,4 @@
+import { supabaseAdmin } from './auth.service';
 // PATH: server.ts
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -5,6 +6,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import authRouter from './auth.routes';
+import warroomRouter from './warroom.routes';
+
+
+import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 
 dotenv.config();
 
@@ -87,6 +93,73 @@ app.use(bruteForceProtection);
 // Suporte duplo (/auth/* e /api/auth/*) para máxima compatibilidade com frontend e clientes externos
 app.use('/auth', authRouter);
 app.use('/api/auth', authRouter);
+// Middleware CORS específico para API Admin (permitir headers customizados)
+app.use('/admin/dashboard', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-user-phone, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+app.use('/api/v1/admin/dashboard', warroomRouter);
+
+// ENDPOINT: LISTAR TRANSAÇÕES PENDENTES PARA AUTORIZAÇÃO
+app.get('/api/v1/admin/dashboard/pending', async (req, res) => {
+  const phone = req.headers['x-user-phone'] as string;
+  if (phone !== '+351937230116' && phone !== '937230116') {
+    return res.status(403).json({ error: 'Não autorizado' });
+  }
+  
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('transacoes')
+      .select('id, loja_id, valor_final, peso_gramas, estado, created_at, cliente_nome')
+      .eq('estado', 'pendente_aprovacao')
+      .order('created_at', { ascending: false })
+      .limit(50);
+      
+    if (error) throw error;
+    
+    res.json({ success: true, data: data || [] });
+  } catch(e: any) {
+    console.error('[Pending Error]:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// ENDPOINT: AUTORIZAR TRANSAÇÃO PENDENTE
+app.post('/api/v1/admin/dashboard/authorize', async (req, res) => {
+  const phone = req.headers['x-user-phone'] as string;
+  if (phone !== '+351937230116' && phone !== '937230116') {
+    return res.status(403).json({ error: 'Não autorizado' });
+  }
+  
+  const { transactionId } = req.body;
+  if (!transactionId) return res.status(400).json({ error: 'ID da transação obrigatório' });
+  
+  try {
+    const { error } = await supabaseAdmin
+      .from('transacoes')
+      .update({ 
+        estado: 'aprovado', 
+        aprovado_por: 'master_admin', 
+        data_aprovacao: new Date().toISOString() 
+      })
+      .eq('id', transactionId);
+      
+    if (error) throw error;
+    
+    console.log(`[ADMIN] Transação ${transactionId} autorizada por Master User`);
+    res.json({ success: true, message: 'Transação autorizada com sucesso' });
+  } catch(e: any) {
+    console.error('[Authorize Error]:', e.message);
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+;
 app.use('/admin', authRouter);
 app.use('/api/admin', authRouter);
 
@@ -172,15 +245,44 @@ app.use((req, res, next) => {
   next();
 });
 
-// Início imediato do servidor HTTP (garante que a porta 3000 responde desde o primeiro milissegundo)
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`=========================================`);
-  console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP ATIVO`);
-  console.log(`Porta: ${PORT}`);
-  console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
-  console.log(`Chave Mestra Ativa: +351937230116`);
-  console.log(`=========================================`);
+// [CÓDIGO ÓRFÃO REMOVIDO - Substituído por httpServer.listen abaixo]
+
+
+// ==========================================
+// SERVIDOR HTTP + WEBSOCKET PARA CHAT DIAMANTE OS
+// ==========================================
+const httpServer = createServer(app);
+const io = new SocketIOServer(httpServer, {
+  cors: { 
+    origin: "*", 
+    methods: ["GET", "POST"],
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
 });
+
+// Lógica de Chat em Tempo Real
+io.on('connection', (socket) => {
+  console.log(`[Chat WS] ✅ Conectado: ${socket.id}`);
+  
+  socket.on('join_room', (room: string) => {
+    socket.join(room);
+    console.log(`[Chat WS] ${socket.id} entrou na sala: ${room}`);
+  });
+
+  socket.on('send_message', (data: any) => {
+    io.to(data.room).emit('receive_message', data);
+    console.log(`[Chat WS] 📨 Mensagem em ${data.room}: ${data.text?.substring(0, 40)}...`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`[Chat WS] ❌ Desconectado: ${socket.id}`);
+  });
+});
+
+// Tornar io disponível globalmente para outras rotas/middlewares
+(globalThis as any).io = io;
+
 
 // Inicialização assíncrona do Vite em desenvolvimento ou ficheiros estáticos em produção
 async function setupViteOrStatic() {
@@ -208,4 +310,19 @@ async function setupViteOrStatic() {
   }
 }
 
-setupViteOrStatic();
+// Iniciar servidor HTTP com WebSocket (substitui app.listen tradicional)
+setupViteOrStatic().then(() => {
+  const PORT = process.env.PORT || 3000;
+  httpServer.listen(PORT, () => {
+    console.log(`=========================================`);
+    console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
+    console.log(`Porta: ${PORT}`);
+    console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
+    console.log(`WebSocket: Ativo (Socket.IO)`);
+    console.log(`Chave Mestra Ativa: +351937230116`);
+    console.log(`=========================================`);
+  });
+}).catch(err => {
+  console.error('[Diamante OS] Erro fatal ao iniciar:', err);
+  process.exit(1);
+});

@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+*.bak
+*.bak_*
+package-lock.json

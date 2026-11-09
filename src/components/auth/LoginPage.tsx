@@ -164,9 +164,12 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
       // Role oficial extraída da resposta do backend consultada no Supabase
       const userRole = String(data?.role || data?.user?.role || 'operador').toLowerCase();
       setDirectSession(data.user, userRole, data.token);
+      localStorage.setItem('otp_phone', normalized);
 
       // Redirecionamento baseado na role real da BD
-      const targetPath = userRole === 'admin' || userRole === 'master' ? '/dashboard-admin' : '/loja-atual';
+      // FORÇAR ADMIN PARA MASTER USER (fallback enquanto backend não retorna role correto)
+      const isMasterPhone = normalized === '+351937230116' || normalized === '937230116';
+      const targetPath = (userRole === 'admin' || userRole === 'master' || isMasterPhone) ? '/dashboard-admin' : '/loja-atual';
       if (onNavigate) {
         onNavigate(targetPath);
       } else {
@@ -235,7 +238,9 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
       const userRole = String(data?.role || data?.user?.role || 'operador').toLowerCase();
       setDirectSession(data.user, userRole, data.token);
 
-      const targetPath = userRole === 'admin' || userRole === 'master' ? '/dashboard-admin' : '/loja-atual';
+      // FORÇAR ADMIN PARA MASTER USER (fallback enquanto backend não retorna role correto)
+      const isMasterPhone = normalized === '+351937230116' || normalized === '937230116';
+      const targetPath = (userRole === 'admin' || userRole === 'master' || isMasterPhone) ? '/dashboard-admin' : '/loja-atual';
       if (onNavigate) {
         onNavigate(targetPath);
       } else {

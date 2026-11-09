@@ -124,22 +124,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [fetchSessionMetadata]);
 
+    // Inicializar sessão pelo telemóvel guardado no localStorage (fluxo OTP)
   useEffect(() => {
-    restoreSession();
+    const initSession = async () => {
+      setIsLoading(true);
+      try {
+        const storedPhone = localStorage.getItem('otp_phone');
+        
+        if (!storedPhone) {
+          console.warn('[AuthContext] Nenhum telemóvel encontrado em localStorage');
+          logout();
+          return;
+        }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        setUserSession(null);
-        setFuncionario(null);
-        setRole(null);
-        setLojaId(null);
+        const normalizedPhone = storedPhone.startsWith('+351') ? storedPhone : `+351${storedPhone}`;
+        
+        // Buscar dados do funcionário diretamente pela BD
+        const sessionData = await fetchSessionMetadata(normalizedPhone, 'otp-user');
+        
+        if (sessionData) {
+          setUserSession(sessionData);
+          setRole(sessionData.role);
+          setLojaId(sessionData.loja_id);
+          setFuncionario({
+            id: sessionData.id,
+            nome_completo: sessionData.nome_completo,
+            email: sessionData.email,
+            role: sessionData.role,
+            loja_id: sessionData.loja_id
+          });
+          console.log(`[AuthContext] Sessão restaurada: ${sessionData.nome_completo} (${sessionData.role})`);
+        } else {
+          console.error('[AuthContext] Funcionário inválido após refresh:', normalizedPhone);
+          localStorage.removeItem('otp_phone');
+          logout();
+        }
+      } catch (err) {
+        console.error('[AuthContext] Erro na restauração:', err);
+        logout();
+      } finally {
+        setIsLoading(false);
       }
-    });
-
-    return () => {
-      subscription.unsubscribe();
     };
-  }, [restoreSession]);
+
+    initSession();
+  }, []);
 
   /**
    * FLUXO EXATO REQUISITO 1:
