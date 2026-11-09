@@ -1,5 +1,6 @@
 // PATH: src/components/finance/FinanceManagement.tsx
 import React, { useState, useMemo } from 'react';
+import { useFinanceTransactions } from '../../hooks/useSupabaseData';
 import {
   Wallet,
   Plus,
@@ -493,8 +494,14 @@ export interface FinanceManagementProps {
 }
 
 export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate }) => {
-  const [transactions, setTransactions] =
-    useState<FinancialTransaction[]>(INITIAL_TRANSACTIONS);
+  const {
+    data: transactions,
+    loading,
+    error,
+    confirmPayment,
+    rejectPayment,
+    createPayment,
+  } = useFinanceTransactions();
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -609,21 +616,8 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
   // =========================================================
   // 3. AÇÕES RÁPIDAS (CONFIRMAR, REJEITAR, CRIAR)
   // =========================================================
-  const handleConfirmPayment = (txId: string) => {
-    setTransactions((prev) =>
-      prev.map((t) => {
-        if (t.id === txId) {
-          return {
-            ...t,
-            estado: 'pago',
-            comprovativoRef: `SEPA-COMP-${Math.floor(1000 + Math.random() * 9000)}-OK`,
-            data: '06/11/2026',
-            hora: new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }),
-          };
-        }
-        return t;
-      })
-    );
+  const handleConfirmPayment = async (txId: string) => {
+    await confirmPayment(txId);
 
     // Deduz do saldo disponível
     const tx = transactions.find((t) => t.id === txId);
@@ -636,16 +630,14 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
     }
   };
 
-  const handleRejectPayment = (txId: string) => {
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === txId ? { ...t, estado: 'rejeitado' } : t))
-    );
+  const handleRejectPayment = async (txId: string) => {
+    await rejectPayment(txId);
     if (selectedTx && selectedTx.id === txId) {
       setSelectedTx((prev) => (prev ? { ...prev, estado: 'rejeitado' } : null));
     }
   };
 
-  const handleCreatePayment = (e: React.FormEvent) => {
+  const handleCreatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPayment.beneficiarioNome.trim() || !newPayment.valor) return;
 
@@ -675,7 +667,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
       comprovativoRef: `SEPA-COMP-${refNum}-PEND`,
     };
 
-    setTransactions((prev) => [createdTx, ...prev]);
+    await createPayment(createdTx);
     setIsCreateModalOpen(false);
     setNewPayment({
       lojaId: STORE_LIST[0].id,

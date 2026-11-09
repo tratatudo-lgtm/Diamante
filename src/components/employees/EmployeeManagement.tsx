@@ -25,6 +25,7 @@ import {
   ArrowUpDown,
   MoreVertical,
 } from 'lucide-react';
+import { useEmployees } from '../../hooks/useSupabaseData';
 
 export type EmployeeRole = 'Gerente' | 'Operador' | 'Estagiário';
 export type EmployeeStatus = 'em_servico' | 'ausente' | 'ferias';
@@ -76,7 +77,7 @@ export const STORE_OPTIONS = [
 ];
 
 // Array com 30 colaboradores realistas da rede
-const INITIAL_EMPLOYEES: Employee[] = [
+export const INITIAL_EMPLOYEES: Employee[] = [
   {
     id: 'emp-001',
     codigo: 'COL-001',
@@ -590,7 +591,7 @@ const INITIAL_EMPLOYEES: Employee[] = [
 ];
 
 export const EmployeeManagement: React.FC = () => {
-  const [employees, setEmployees] = useState<Employee[]>(INITIAL_EMPLOYEES);
+  const { data: employees, loading, createEmployee, updateEmployee, deleteEmployee } = useEmployees();
 
   // Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -800,64 +801,44 @@ export const EmployeeManagement: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  // Submeter Novo Funcionário
-  const handleSaveCreate = (e: React.FormEvent) => {
+  // Submeter Novo Funcionário (Supabase)
+  const handleSaveCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nome.trim() || !formData.nif.trim()) return;
-
-    const nextIdNum = employees.length + 1;
-    const codigo = `COL-${String(nextIdNum).padStart(3, '0')}`;
-    const id = `emp-${Date.now()}`;
-
-    const colorGradients = [
-      'from-amber-600 to-yellow-500',
-      'from-blue-600 to-indigo-500',
-      'from-emerald-600 to-teal-500',
-      'from-purple-600 to-pink-500',
-      'from-rose-600 to-orange-500',
-    ];
-    const avatarColor = colorGradients[nextIdNum % colorGradients.length];
 
     const storeObj = STORE_OPTIONS.find((s) => s.id === formData.lojaId);
     const lojaNome = storeObj ? storeObj.nome : formData.lojaNome;
 
-    const newEmp: Employee = {
-      id,
-      codigo,
+    await createEmployee({
       ...formData,
       lojaNome,
-      avatarColor,
       transacoesMes: 0,
-    };
+    });
 
-    setEmployees((prev) => [newEmp, ...prev]);
     setIsCreateModalOpen(false);
   };
 
-  // Submeter Edição
-  const handleSaveEdit = (e: React.FormEvent) => {
+  // Submeter Edição (Supabase)
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmployee) return;
 
     const storeObj = STORE_OPTIONS.find((s) => s.id === formData.lojaId);
     const lojaNome = storeObj ? storeObj.nome : formData.lojaNome;
 
-    const updated: Employee = {
-      ...selectedEmployee,
+    const updated: Partial<Employee> = {
       ...formData,
       lojaNome,
     };
 
-    setEmployees((prev) =>
-      prev.map((emp) => (emp.id === selectedEmployee.id ? updated : emp))
-    );
-    setSelectedEmployee(updated);
+    await updateEmployee(selectedEmployee.id, updated);
+    setSelectedEmployee({ ...selectedEmployee, ...updated });
     setIsEditModalOpen(false);
   };
 
-  // Eliminar Funcionário
-  const handleDeleteEmployee = (id: string) => {
-    setEmployees((prev) => prev.filter((e) => e.id !== id));
+  // Eliminar Funcionário (Supabase)
+  const handleDeleteEmployee = async (id: string) => {
+    await deleteEmployee(id);
     setIsDeletingId(null);
     setSelectedEmployee(null);
   };

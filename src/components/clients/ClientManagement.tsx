@@ -29,6 +29,7 @@ import {
   CreditCard,
   Plus,
 } from 'lucide-react';
+import { useClients } from '../../hooks/useSupabaseData';
 
 export type ClientStatus = 'vip' | 'normal' | 'bloqueado';
 
@@ -1023,7 +1024,7 @@ const INITIAL_CLIENTS: Client[] = [
 ];
 
 export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }) => {
-  const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
+  const { data: clients, loading, createClient, toggleBlockClient, toggleVipClient } = useClients();
 
   // Filtros de Pesquisa & Visualização
   const [searchTerm, setSearchTerm] = useState('');
@@ -1118,23 +1119,8 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
   // =========================================================
   // 3. AÇÕES SOBRE CLIENTES (MUDAR STATUS / CRIAR)
   // =========================================================
-  const handleToggleBlockClient = (clientId: string) => {
-    setClients((prev) =>
-      prev.map((c) => {
-        if (c.id === clientId) {
-          const nextStatus: ClientStatus = c.status === 'bloqueado' ? 'normal' : 'bloqueado';
-          return {
-            ...c,
-            status: nextStatus,
-            notasInternas:
-              nextStatus === 'bloqueado'
-                ? `[BLOQUEADO em ${new Date().toLocaleDateString('pt-PT')}] Bloqueio manual de segurança ativado pelo Master.`
-                : `[DESBLOQUEADO em ${new Date().toLocaleDateString('pt-PT')}] Conformidade restabelecida.`,
-          };
-        }
-        return c;
-      })
-    );
+  const handleToggleBlockClient = async (clientId: string) => {
+    await toggleBlockClient(clientId);
 
     if (selectedClient && selectedClient.id === clientId) {
       setSelectedClient((prev) =>
@@ -1148,19 +1134,8 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
     }
   };
 
-  const handleToggleVipClient = (clientId: string) => {
-    setClients((prev) =>
-      prev.map((c) => {
-        if (c.id === clientId) {
-          const nextStatus: ClientStatus = c.status === 'vip' ? 'normal' : 'vip';
-          return {
-            ...c,
-            status: nextStatus,
-          };
-        }
-        return c;
-      })
-    );
+  const handleToggleVipClient = async (clientId: string) => {
+    await toggleVipClient(clientId);
 
     if (selectedClient && selectedClient.id === clientId) {
       setSelectedClient((prev) =>
@@ -1174,7 +1149,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
     }
   };
 
-  const handleCreateClient = (e: React.FormEvent) => {
+  const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClient.nome.trim() || !newClient.nif.trim()) return;
 
@@ -1204,7 +1179,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
       historico: [],
     };
 
-    setClients((prev) => [created, ...prev]);
+    await createClient(created);
     setIsNewClientModalOpen(false);
     setNewClient({
       nome: '',

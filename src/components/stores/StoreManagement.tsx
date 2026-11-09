@@ -22,7 +22,9 @@ import {
   Sparkles,
   ArrowUpRight,
   Filter,
+  Loader2,
 } from 'lucide-react';
+import { useStores } from '../../hooks/useSupabaseData';
 
 export interface Store {
   id: string;
@@ -505,7 +507,7 @@ const INITIAL_STORES: Store[] = [
 ];
 
 export const StoreManagement: React.FC = () => {
-  const [stores, setStores] = useState<Store[]>(INITIAL_STORES);
+  const { data: stores, loading, createStore, updateStore, deleteStore } = useStores();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todas' | 'ativa' | 'inativa'>('todas');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -580,18 +582,12 @@ export const StoreManagement: React.FC = () => {
     }).format(value);
   };
 
-  // Criar Nova Loja (Local State)
-  const handleCreateStore = (e: React.FormEvent) => {
+  // Criar Nova Loja (Supabase)
+  const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStore.nome.trim() || !newStore.endereco.trim()) return;
 
-    const nextNumber = stores.length + 1;
-    const codigo = `LOJ-${String(nextNumber).padStart(3, '0')}`;
-    const id = `loj-${Date.now()}`;
-
-    const created: Store = {
-      id,
-      codigo,
+    await createStore({
       nome: newStore.nome.trim(),
       status: newStore.status,
       endereco: newStore.endereco.trim(),
@@ -601,15 +597,9 @@ export const StoreManagement: React.FC = () => {
       email: newStore.email.trim() || 'contacto@diamantedouro.pt',
       horario: newStore.horario.trim() || 'Seg - Sáb: 09:30 - 19:00',
       nif: newStore.nif.trim() || '509999999',
-      volumeMes: 0,
       metaMes: Number(newStore.metaMes) || 30000,
-      progressoMeta: 0,
-      totalTransacoesMes: 0,
-      ouroCompradoGramas: 0.0,
-      dataAbertura: new Date().toLocaleDateString('pt-PT'),
-    };
+    });
 
-    setStores((prev) => [created, ...prev]);
     setIsCreateModalOpen(false);
     setNewStore({
       nome: '',
@@ -625,14 +615,12 @@ export const StoreManagement: React.FC = () => {
     });
   };
 
-  // Guardar Edição (Local State)
-  const handleSaveEdit = (e: React.FormEvent) => {
+  // Guardar Edição (Supabase)
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStore) return;
 
-    setStores((prev) =>
-      prev.map((s) => (s.id === editingStore.id ? editingStore : s))
-    );
+    await updateStore(editingStore.id, editingStore);
     if (selectedStore?.id === editingStore.id) {
       setSelectedStore(editingStore);
     }
@@ -640,9 +628,9 @@ export const StoreManagement: React.FC = () => {
     setEditingStore(null);
   };
 
-  // Eliminar / Desativar Loja (Local State)
-  const handleDeleteStore = (id: string) => {
-    setStores((prev) => prev.filter((s) => s.id !== id));
+  // Eliminar / Desativar Loja (Supabase)
+  const handleDeleteStore = async (id: string) => {
+    await deleteStore(id);
     setIsDeletingId(null);
     setSelectedStore(null);
   };

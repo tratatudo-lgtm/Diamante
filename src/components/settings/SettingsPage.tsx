@@ -1,5 +1,6 @@
 // PATH: src/components/settings/SettingsPage.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSystemSettings } from '../../hooks/useSupabaseData';
 import {
   SlidersHorizontal,
   Building,
@@ -67,6 +68,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('geral');
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const { data: dbSettings, loading: isLoadingSettings, saveSettings } = useSystemSettings();
 
   // =========================================================
   // 1. ESTADO: GERAL
@@ -217,6 +220,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     logsAuditRetentionDays: 365,
   });
 
+  // Sincronização quando as configurações do Supabase são carregadas
+  useEffect(() => {
+    if (dbSettings) {
+      if (dbSettings.general) setGeneralConfig((prev) => ({ ...prev, ...dbSettings.general }));
+      if (dbSettings.goldPrices) setGoldPrices((prev) => ({ ...prev, ...dbSettings.goldPrices }));
+    }
+  }, [dbSettings]);
+
   // Helper de Toast
   const triggerToast = (msg: string) => {
     setToastMessage(msg);
@@ -225,12 +236,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     }, 4000);
   };
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
     setIsSaving(true);
-    setTimeout(() => {
+    try {
+      await saveSettings({
+        general: generalConfig,
+        goldPrices: goldPrices,
+      });
+      triggerToast('Configurações guardadas com sucesso na base de dados Supabase.');
+    } catch {
+      triggerToast('Aviso: Configurações mantidas em memória local.');
+    } finally {
       setIsSaving(false);
-      triggerToast('Configurações guardadas com sucesso no Diamante OS.');
-    }, 600);
+    }
   };
 
   const handleAddBank = (e: React.FormEvent) => {
