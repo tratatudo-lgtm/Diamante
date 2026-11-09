@@ -22,6 +22,7 @@ import {
   Check,
   AlertCircle,
   Loader2,
+  X,
 } from 'lucide-react';
 
 interface AdminConfigPageProps {

@@ -13,6 +13,9 @@ import {
   X,
   Phone,
   Store,
+  Wallet,
+  UserCheck,
+  Terminal,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -39,18 +42,39 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentPath, onNavig
       badge: 'Tempo Real',
     },
     {
-      id: 'lojas',
-      label: 'Lojas & Balcões',
-      path: '/admin/lojas',
-      icon: Building2,
-      badge: '24 Ativas',
+      id: 'finance',
+      label: 'Financeiro & Tesouraria',
+      path: '/finance',
+      icon: Wallet,
+      badge: 'Liquidações',
     },
     {
-      id: 'funcionarios',
-      label: 'Funcionárias',
-      path: '/admin/funcionarios',
+      id: 'stores',
+      label: 'Gestão de Lojas',
+      path: '/stores',
+      icon: Building2,
+      badge: '24 Lojas',
+    },
+    {
+      id: 'employees',
+      label: 'Equipa & Funcionários',
+      path: '/employees',
       icon: Users,
-      badge: null,
+      badge: '30 Colab.',
+    },
+    {
+      id: 'clients',
+      label: 'Clientes & Fornecedores',
+      path: '/clients',
+      icon: UserCheck,
+      badge: '40 KYC',
+    },
+    {
+      id: 'logs',
+      label: 'Logs & Auditoria',
+      path: '/admin/logs',
+      icon: Terminal,
+      badge: 'Forense',
     },
     {
       id: 'config',
@@ -71,8 +95,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentPath, onNavig
     onNavigate('/login');
   };
 
-  const adminPhone = userSession?.telemovel || '+351 937 230 116';
-  const adminName = userSession?.nome_completo || 'Administrador Master';
+  const adminPhone = String(userSession?.telemovel || '+351 937 230 116');
+  const adminName = String(userSession?.nome_completo || 'Administrador Master');
 
   return (
     <>

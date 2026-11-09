@@ -367,6 +367,14 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
               </button>
 
               <button
+                onClick={() => onNavigate('/equipa')}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 hover:text-white transition-colors cursor-pointer"
+                title="Ver Painel Operacional de Equipa (Cards)"
+              >
+                <span>Vista Operacional</span>
+              </button>
+
+              <button
                 onClick={handleOpenCreate}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-[#D4AF37] to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-semibold text-xs shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
               >

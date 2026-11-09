@@ -14,6 +14,12 @@ import { AdminLojasPage } from './components/admin/AdminLojasPage';
 import { AdminFuncionariosPage } from './components/admin/AdminFuncionariosPage';
 import { AdminConfigPage } from './components/admin/AdminConfigPage';
 import { StoreOperatorView } from './components/store/StoreOperatorView';
+import { StoreManagement } from './components/stores/StoreManagement';
+import { EmployeeManagement } from './components/employees/EmployeeManagement';
+import { FinanceManagement } from './components/finance/FinanceManagement';
+import { ClientManagement } from './components/clients/ClientManagement';
+import { SettingsPage } from './components/settings/SettingsPage';
+import { LogAuditPage } from './components/admin/LogAuditPage';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
@@ -34,7 +40,23 @@ function AppRouter() {
         p === '/admin/lojas' ||
         p === '/admin/funcionarios' ||
         p === '/admin/config' ||
+        p === '/admin/logs' ||
+        p === '/logs' ||
+        p === '/auditoria' ||
         p === '/loja-atual' ||
+        p === '/stores' ||
+        p === '/gestao-lojas' ||
+        p === '/employees' ||
+        p === '/equipa' ||
+        p === '/gestao-funcionarios' ||
+        p === '/finance' ||
+        p === '/financeiro' ||
+        p === '/tesouraria' ||
+        p === '/clients' ||
+        p === '/clientes' ||
+        p === '/fornecedores' ||
+        p === '/settings' ||
+        p === '/configuracoes' ||
         p === '/login' ||
         p === '/register'
       ) {
@@ -132,6 +154,24 @@ function AppRouter() {
     }
     if (currentPath === '/admin/config') {
       return <AdminConfigPage onNavigate={navigate} />;
+    }
+    if (currentPath === '/stores' || currentPath === '/gestao-lojas') {
+      return <StoreManagement />;
+    }
+    if (currentPath === '/employees' || currentPath === '/equipa' || currentPath === '/gestao-funcionarios') {
+      return <EmployeeManagement />;
+    }
+    if (currentPath === '/finance' || currentPath === '/financeiro' || currentPath === '/tesouraria') {
+      return <FinanceManagement onNavigate={navigate} />;
+    }
+    if (currentPath === '/clients' || currentPath === '/clientes' || currentPath === '/fornecedores') {
+      return <ClientManagement onNavigate={navigate} />;
+    }
+    if (currentPath === '/settings' || currentPath === '/configuracoes' || currentPath === '/admin/config') {
+      return <SettingsPage onNavigate={navigate} />;
+    }
+    if (currentPath === '/admin/logs' || currentPath === '/logs' || currentPath === '/auditoria') {
+      return <LogAuditPage onNavigate={navigate} />;
     }
     // Rota padrão admin: Sala de Guerra
     return <AdminDashboard onNavigate={navigate} />;
