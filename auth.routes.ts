@@ -264,10 +264,6 @@ authRouter.post('/verify-otp', async (req: Request, res: Response): Promise<void
       token: result.token,
       role: result.role,
       user: result.user,
-      session: {
-        access_token: result.token,
-        refresh_token: `rf-${Date.now()}`,
-      },
     });
   } catch (error: unknown) {
     console.error('[Auth Verify OTP] Erro:', error);
@@ -318,8 +314,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
           token,
           role: dbUser.role,
           user: dbUser,
-          session: { access_token: token },
-        });
+            });
         return;
       }
     } catch {
