@@ -125,32 +125,14 @@ export async function findUserInSupabaseByEmail(email: string): Promise<Authenti
         id: data.id,
         nome_completo: data.nome_completo || 'Utilizador Diamante',
         email: data.email,
-        role: String(data.role || 'operador').toLowerCase(),
+        role: String(data.role || '').toLowerCase(),
         loja_id: data.loja_id || null,
         telemovel: data.telemovel || data.telefone,
         ativo: true,
       };
     }
 
-    // Tentar tabela users
-    const { data: uData, error: uError } = await supabaseAdmin
-      .from('users')
-      .select('*')
-      .eq('email', normalizedEmail)
-      .maybeSingle();
 
-    if (!uError && uData) {
-      if (uData.ativo === false) return null;
-      return {
-        id: uData.id,
-        nome_completo: uData.nome_completo || uData.name || 'Utilizador Diamante',
-        email: uData.email,
-        role: String(uData.role || 'operador').toLowerCase(),
-        loja_id: uData.loja_id || null,
-        telemovel: uData.phone || uData.telemovel,
-        ativo: true,
-      };
-    }
   } catch (err) {
     console.error('[Auth Service] Erro na consulta Supabase por email:', err);
   }
