@@ -11,6 +11,8 @@ import warroomRouter from './warroom.routes';
 
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import jwt from 'jsonwebtoken';
+import { verifyAdmin } from './middleware/verifyAdmin';
 
 dotenv.config();
 
@@ -36,12 +38,16 @@ const allowedOrigins = [
   'http://127.0.0.1:3000',
 ].filter(Boolean) as string[];
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+const corsOptions: cors.CorsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Origem não autorizada por CORS.'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type'],
+};
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -93,24 +99,10 @@ app.use(bruteForceProtection);
 // Suporte duplo (/auth/* e /api/auth/*) para máxima compatibilidade com frontend e clientes externos
 app.use('/auth', authRouter);
 app.use('/api/auth', authRouter);
-// Middleware CORS específico para API Admin (permitir headers customizados)
-app.use('/admin/dashboard', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-user-phone, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
 app.use('/api/v1/admin/dashboard', warroomRouter);
 
 // ENDPOINT: LISTAR TRANSAÇÕES PENDENTES PARA AUTORIZAÇÃO
-app.get('/api/v1/admin/dashboard/pending', async (req, res) => {
-  const phone = req.headers['x-user-phone'] as string;
-  if (phone !== '+351937230116' && phone !== '937230116') {
-    return res.status(403).json({ error: 'Não autorizado' });
-  }
+app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req, res) => {
   
   try {
     const { data, error } = await supabaseAdmin
@@ -130,11 +122,7 @@ app.get('/api/v1/admin/dashboard/pending', async (req, res) => {
 });
 
 // ENDPOINT: AUTORIZAR TRANSAÇÃO PENDENTE
-app.post('/api/v1/admin/dashboard/authorize', async (req, res) => {
-  const phone = req.headers['x-user-phone'] as string;
-  if (phone !== '+351937230116' && phone !== '937230116') {
-    return res.status(403).json({ error: 'Não autorizado' });
-  }
+app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
   
   const { transactionId } = req.body;
   if (!transactionId) return res.status(400).json({ error: 'ID da transação obrigatório' });
@@ -144,14 +132,14 @@ app.post('/api/v1/admin/dashboard/authorize', async (req, res) => {
       .from('transacoes')
       .update({ 
         estado: 'aprovado', 
-        aprovado_por: 'master_admin', 
+        aprovado_por: (req as any).adminUser.id, 
         data_aprovacao: new Date().toISOString() 
       })
       .eq('id', transactionId);
       
     if (error) throw error;
     
-    console.log(`[ADMIN] Transação ${transactionId} autorizada por Master User`);
+    console.log(`[ADMIN] Transação ${transactionId} autorizada por ${(req as any).adminUser.id}`);
     res.json({ success: true, message: 'Transação autorizada com sucesso' });
   } catch(e: any) {
     console.error('[Authorize Error]:', e.message);
@@ -168,7 +156,6 @@ app.get('/health', (_req: Request, res: Response) => {
     status: 'ok',
     system: 'Diamante OS v2',
     timestamp: new Date().toISOString(),
-    evolutionApiUrl: process.env.EVOLUTION_API_URL || 'configurada por omissão',
   });
 });
 
@@ -184,7 +171,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // 3.1 SALA DE GUERRA (WAR ROOM / ADMIN DASHBOARD)
 // Proxy seguro server-side para tabelas Supabase (evita falhas de CORS/Iframe no frontend)
 // =========================================================================
-app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], async (_req: Request, res: Response) => {
+app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin, async (_req: Request, res: Response) => {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -253,26 +240,46 @@ app.use((req, res, next) => {
 // ==========================================
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
-  cors: { 
-    origin: "*", 
-    methods: ["GET", "POST"],
-    credentials: true
-  },
+  cors: corsOptions,
   transports: ['websocket', 'polling']
 });
 
 // Lógica de Chat em Tempo Real
+io.use(async (socket, next) => {
+  try {
+    const authToken = typeof socket.handshake.auth?.token === 'string' ? socket.handshake.auth.token : '';
+    const header = socket.handshake.headers.authorization || '';
+    const token = authToken || (header.startsWith('Bearer ') ? header.slice(7).trim() : '');
+    const secret = process.env.JWT_SECRET;
+    if (!secret || !token) return next(new Error('Autenticação obrigatória.'));
+    const claims = jwt.verify(token, secret) as jwt.JwtPayload;
+    const userId = typeof claims.id === 'string' ? claims.id : '';
+    if (!userId) return next(new Error('Sessão inválida.'));
+    const { data: employee, error } = await supabaseAdmin.from('funcionarios')
+      .select('id, role, loja_id, ativo').eq('id', userId).eq('ativo', true).maybeSingle();
+    if (error || !employee) return next(new Error('Utilizador inativo ou não autorizado.'));
+    socket.data.employee = employee;
+    next();
+  } catch {
+    next(new Error('Sessão inválida ou expirada.'));
+  }
+});
+
 io.on('connection', (socket) => {
   console.log(`[Chat WS] ✅ Conectado: ${socket.id}`);
   
-  socket.on('join_room', (room: string) => {
-    socket.join(room);
-    console.log(`[Chat WS] ${socket.id} entrou na sala: ${room}`);
+  const employee = socket.data.employee as { id: string; role: string; loja_id: string | null };
+  const allowedRooms = new Set([employee.id, ...(employee.loja_id ? [`store:${employee.loja_id}`] : [])]);
+  if (employee.role === 'admin') allowedRooms.add('admin');
+  socket.on('join_room', (room: unknown) => {
+    if (typeof room === 'string' && allowedRooms.has(room)) socket.join(room);
   });
-
   socket.on('send_message', (data: any) => {
-    io.to(data.room).emit('receive_message', data);
-    console.log(`[Chat WS] 📨 Mensagem em ${data.room}: ${data.text?.substring(0, 40)}...`);
+    if (!data || typeof data.room !== 'string' || !allowedRooms.has(data.room)) return;
+    if (typeof data.text !== 'string' || !data.text.trim() || data.text.length > 4000) return;
+    io.to(data.room).emit('receive_message', {
+      room: data.room, text: data.text.trim(), senderId: employee.id, createdAt: new Date().toISOString(),
+    });
   });
 
   socket.on('disconnect', () => {
@@ -319,7 +326,6 @@ setupViteOrStatic().then(() => {
     console.log(`Porta: ${PORT}`);
     console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
     console.log(`WebSocket: Ativo (Socket.IO)`);
-    console.log(`Chave Mestra Ativa: +351937230116`);
     console.log(`=========================================`);
   });
 }).catch(err => {
