@@ -2,6 +2,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { randomInt } from 'crypto';
 import { sendWhatsAppOtp, formatPortuguesePhone } from './whatsapp.service';
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -40,6 +41,7 @@ interface StoredOtp {
   code: string;
   expiresAt: number;
   attempts: number;
+  userId?: string;
 }
 
 // Armazenamento em memória para códigos OTP ativos
@@ -189,7 +191,7 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
   }
 
   // 2. Gera código de 6 dígitos
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpCode = randomInt(100000, 1000000).toString();
   const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutos
 
   otpStore.set(formatted, {
@@ -197,6 +199,7 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
     code: otpCode,
     expiresAt,
     attempts: 0,
+    userId: user.id,
   });
 
   console.log(`[Auth Service] Utilizador verificado no Supabase (${user.nome_completo}, Role: ${user.role}). A enviar OTP.`);
@@ -248,7 +251,7 @@ export async function verifyOtpAndAuthenticate(
   }
 
   stored.attempts += 1;
-  if (stored.attempts > 5) {
+  if (stored.attempts > 3) {
     otpStore.delete(formatted);
     return {
       success: false,
@@ -270,7 +273,7 @@ export async function verifyOtpAndAuthenticate(
 
   // Consulta novamente a base de dados Supabase para obter os privilégios reais
   const dbUser = await findUserInSupabaseByPhone(rawPhone);
-  if (!dbUser) {
+  if (!dbUser || (stored.userId && stored.userId !== dbUser.id)) {
     return {
       success: false,
       message: 'Acesso negado. Registo de utilizador inexistente ou inativo no Supabase.',
