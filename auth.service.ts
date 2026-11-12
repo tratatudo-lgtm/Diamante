@@ -4,19 +4,17 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { sendWhatsAppOtp, formatPortuguesePhone } from './whatsapp.service';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'diamante-os-secret-jwt-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET;\nif (!JWT_SECRET) throw new Error('JWT_SECRET tem de estar configurado no servidor.');
 
 const supabaseUrl =
   process.env.SUPABASE_URL ||
   process.env.VITE_SUPABASE_URL ||
   'https://ytpetuvvxbmlafsisfaf.supabase.co';
 
-const supabaseKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
-  process.env.VITE_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseKey) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY tem de estar configurada no servidor; nunca usar anon key como cliente admin.');
+}
 
 // Cliente Supabase com privilégios de administração (Service Role ou Anon Key)
 export const supabaseAdmin: SupabaseClient = createClient(supabaseUrl, supabaseKey, {
@@ -78,21 +76,6 @@ function getPhoneVariants(rawPhone: string): string[] {
 export async function findUserInSupabaseByPhone(phone: string): Promise<AuthenticatedUser | null> {
   const variants = getPhoneVariants(phone);
   if (variants.length === 0) return null;
-
-  // Regra do Master User prioritária: Se o número for +351937230116,
-  // concede imediatamente privilégios de Administrador Master
-  if (variants.some((v) => v.includes('937230116'))) {
-    console.log('[Auth Service] Master User reconhecido (+351937230116) -> Acesso Administrador Master');
-    return {
-      id: 'usr-master-admin',
-      nome_completo: 'Administrador Master',
-      email: 'admin@diamante-os.pt',
-      role: 'admin',
-      loja_id: null,
-      telemovel: '+351937230116',
-      ativo: true,
-    };
-  }
 
   try {
     // 1. Tentar consultar na tabela 'funcionarios' com as variantes do telemóvel
