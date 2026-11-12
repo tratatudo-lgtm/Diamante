@@ -48,14 +48,12 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
 
   console.log(`[WhatsApp Service] A preparar envio de OTP para ${formattedNumber} via instância '${instanceName}'`);
 
-  // Se a Evolution API não estiver configurada ou estiver em ambiente local sem API key, simula e regista no log
-  if (!evolutionKey || evolutionUrl.includes('localhost') && process.env.NODE_ENV !== 'production' && !process.env.EVOLUTION_API_KEY) {
-    console.log(`[WhatsApp Service - MODO DESENVOLVIMENTO] OTP para ${formattedNumber}: ${otpCode}`);
-    return {
-      success: true,
-      messageId: `dev-sim-${Date.now()}`,
-      simulated: true,
-    };
+  // Simulação só é permitida fora de produção e nunca regista o código OTP.
+  if (!evolutionKey || !process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_INSTANCE) {
+    if (process.env.NODE_ENV === 'production') {
+      return { success: false, error: 'Evolution API não está configurada para produção.' };
+    }
+    return { success: true, messageId: `dev-sim-${Date.now()}`, simulated: true };
   }
 
   try {
@@ -99,7 +97,6 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
 
     // Em modo dev, não bloqueia o fluxo caso o container ainda esteja a subir
     if (process.env.NODE_ENV !== 'production') {
-      console.log(`[WhatsApp Service - FALLBACK DEV] Código OTP gerado para ${formattedNumber}: ${otpCode}`);
       return {
         success: true,
         messageId: `fallback-dev-${Date.now()}`,
