@@ -1,15 +1,12 @@
 // PATH: auth.routes.ts
 import { Router, Request, Response } from 'express';
-import { randomInt } from 'crypto';
 import bcrypt from 'bcryptjs';
 import {
   requestOtpForPhone,
   verifyOtpAndAuthenticate,
   findUserInSupabaseByEmail,
-  findUserInSupabaseByPhone,
   generateAuthToken,
   supabaseAdmin,
-  otpStore,
 } from './auth.service';
 import { verifyAdmin, AdminRequest } from './middleware/verifyAdmin';
 
@@ -53,180 +50,30 @@ export function validatePortugueseNIF(nifRaw: string): { isValid: boolean; messa
    Evolution API na instância diamante-os e logs detalhados a cada passo.
    ========================================================================= */
 
-// Armazenamento em memória para códigos OTP (validade de 5 minutos)
-export const otpMemoryStore = new Map<
-  string,
-  { code: string; expiresAt: number; userId: string; role: string; nome: string }
->();
-
-/**
- * Normalização inteligente de número de telefone português (+351XXXXXXXXX)
- */
-export function normalizePortuguesePhone(phoneInput: string): string | null {
-  if (!phoneInput) return null;
-  const digits = String(phoneInput).replace(/\D/g, '');
-
-  // Se tiver 9 dígitos e começar por 9 -> adiciona '+351'
-  if (digits.length === 9 && digits.startsWith('9')) {
-    return `+351${digits}`;
-  }
-  // Se tiver 12 dígitos e começar por 351 -> adiciona '+'
-  if (digits.length === 12 && digits.startsWith('351') && digits.charAt(3) === '9') {
-    return `+${digits}`;
-  }
-  // Se tiver 12 dígitos e começar por 351 geral
-  if (digits.length === 12 && digits.startsWith('351')) {
-    return `+${digits}`;
-  }
-  return null;
-}
-
 export async function handleRequestOtp(req: Request, res: Response): Promise<void> {
   try {
     const rawPhone = req.body?.phone || req.body?.telemovel || req.body?.number;
-    console.log(`[OTP] Pedido recebido para: ${rawPhone}`);
-
-    if (!rawPhone) {
-      res.status(400).json({
-        success: false,
-        error: 'Número de telemóvel é obrigatório',
-        message: 'Número de telemóvel é obrigatório',
-      });
+    if (typeof rawPhone !== 'string' || !rawPhone.trim()) {
+      res.status(400).json({ success: false, message: 'Número de telemóvel é obrigatório.' });
       return;
     }
 
-    // a) Normalização Inteligente
     const normalizedPhone = normalizePortuguesePhone(rawPhone);
-    console.log(`[OTP] Normalizado para: ${normalizedPhone}`);
-
     if (!normalizedPhone) {
-      res.status(400).json({
-        success: false,
-        error: 'Número de telemóvel inválido (deve ser um contacto móvel português válido)',
-        message: 'Número de telemóvel inválido (deve ser um contacto móvel português válido)',
-      });
+      res.status(400).json({ success: false, message: 'Número de telemóvel português inválido.' });
       return;
     }
 
-    // b) Validação no Supabase (Service Role Key - Bypassing RLS)
-    const user = await findUserInSupabaseByPhone(normalizedPhone);
-
-    if (!user || user.ativo === false) {
-      console.log(`[OTP] User not found ou inativo para: ${normalizedPhone}`);
-      res.status(404).json({
-        success: false,
-        error: 'Número não registado ou conta inativa',
-        message: 'Número de telemóvel não registado ou conta inativa no sistema.',
-      });
+    const result = await requestOtpForPhone(normalizedPhone);
+    if (!result.success) {
+      res.status(result.statusCode || 400).json({ success: false, message: result.message });
       return;
     }
 
-    console.log(`[OTP] User found: ${user.nome_completo} (ID: ${user.id}, Role: ${user.role})`);
-
-    // c) Geração e Envio de OTP
-    const otpCode = randomInt(100000, 1000000).toString();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutos
-
-    otpMemoryStore.set(normalizedPhone, {
-      code: otpCode,
-      expiresAt,
-      userId: user.id,
-      role: user.role,
-      nome: user.nome_completo,
-    });
-
-    // Sincroniza com otpStore partilhado
-    const formattedDigits = normalizedPhone.replace(/\D/g, '');
-    otpStore.set(normalizedPhone, {
-      phone: normalizedPhone,
-      code: otpCode,
-      expiresAt,
-      attempts: 0,
-      userId: user.id,
-    });
-    otpStore.set(formattedDigits, {
-      phone: formattedDigits,
-      code: otpCode,
-      expiresAt,
-      attempts: 0,
-      userId: user.id,
-    });
-
-    // Sem Evolution API configurada, nunca devolver o OTP ao cliente.
-    const evolutionApiKey = process.env.EVOLUTION_API_KEY || '';
-    const evolutionApiUrlConfig = process.env.EVOLUTION_API_URL || '';
-    const evolutionInstance = process.env.EVOLUTION_INSTANCE || '';
-    if (!evolutionApiKey || !evolutionApiUrlConfig || !evolutionInstance) {
-      otpStore.delete(normalizedPhone);
-      otpStore.delete(normalizedPhone.replace(/\D/g, ''));
-      otpMemoryStore.delete(normalizedPhone);
-      res.status(503).json({
-        success: false,
-        error: 'Serviço OTP indisponível',
-        message: 'A integração Evolution API não está completamente configurada no servidor.',
-      });
-      return;
-    }
-    const evolutionApiUrl = evolutionApiUrlConfig.replace(/\/+$/, '');
-
-    // Chamada à Evolution API com configuração explícita do servidor.
-
-    const whatsappNumber = normalizedPhone.replace('+', '');
-    const messageBody = {
-      number: whatsappNumber,
-      text: `🔐 Diamante OS v2\n\nOlá ${user.nome_completo},\nO teu código de acesso é: *${otpCode}*\n\nVálido por 5 minutos.`,
-    };
-
-    let evolutionSuccess = false;
-    let evolutionResponseData: any = null;
-
-    try {
-      const response = await fetch(`${evolutionApiUrl}/message/sendText/${evolutionInstance}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: evolutionApiKey,
-        },
-        body: JSON.stringify(messageBody),
-        signal: AbortSignal.timeout(2000),
-      });
-
-      evolutionResponseData = await response.json().catch(() => null);
-      console.log(`[OTP] Evolution response: status=${response.status}`, evolutionResponseData);
-
-      if (response.ok) {
-        evolutionSuccess = true;
-      }
-    } catch (evoErr: any) {
-      console.error('[OTP] Falha de conexão à Evolution API:', evoErr.message);
-    }
-
-    if (!evolutionSuccess) {
-      otpStore.delete(normalizedPhone);
-      otpStore.delete(normalizedPhone.replace(/\D/g, ''));
-      otpMemoryStore.delete(normalizedPhone);
-      res.status(502).json({
-        success: false,
-        error: 'Falha ao enviar WhatsApp',
-        message: 'Não foi possível enviar o código. Solicite um novo código mais tarde.',
-      });
-      return;
-    }
-
-    // Resposta padronizada sem revelar o código OTP.
-
-    res.status(200).json({
-      success: true,
-      error: null,
-      message: 'Código enviado por WhatsApp',
-    });
-  } catch (err: any) {
-    console.error('[OTP] Erro interno:', err);
-    res.status(500).json({
-      success: false,
-      error: 'Erro interno do servidor',
-      message: 'Erro interno do servidor ao processar autenticação.',
-    });
+    res.status(200).json({ success: true, message: result.message });
+  } catch (error) {
+    console.error('[OTP] Falha ao solicitar código.');
+    res.status(500).json({ success: false, message: 'Erro interno ao solicitar autenticação.' });
   }
 }
 
