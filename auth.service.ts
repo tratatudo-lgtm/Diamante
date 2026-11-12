@@ -89,14 +89,15 @@ export async function findUserInSupabaseByPhone(phone: string): Promise<Authenti
       .limit(2);
 
     if (!error && Array.isArray(data) && data.length === 1) {
-      if (data.ativo === false) return null;
+      const matchedUser = data[0];
+      if (matchedUser.ativo === false) return null;
       return {
-        id: data.id,
-        nome_completo: data.nome_completo || 'Funcionário Diamante',
-        email: data.email || '',
-        role: String(data.role || '').toLowerCase(),
-        loja_id: data.loja_id || null,
-        telemovel: data.telemovel || phone,
+        id: matchedUser.id,
+        nome_completo: matchedUser.nome_completo || 'Funcionário Diamante',
+        email: matchedUser.email || '',
+        role: String(matchedUser.role || '').toLowerCase(),
+        loja_id: matchedUser.loja_id || null,
+        telemovel: matchedUser.telemovel || phone,
         ativo: true,
       };
     }
