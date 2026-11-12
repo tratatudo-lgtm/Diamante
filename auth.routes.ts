@@ -750,82 +750,71 @@ async function handleCreateFuncionario(req: AdminRequest, res: Response): Promis
 async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { nome_completo, telemovel, loja_id, role, ativo, email } = req.body;
-
     if (!id) {
-      res.status(400).json({ success: false, message: 'ID da funcionária obrigatório.' });
+      res.status(400).json({ success: false, message: 'ID do funcionário obrigatório.' });
       return;
     }
-
+    const { nome_completo, telemovel, loja_id, role, ativo, email } = req.body || {};
+    if (email !== undefined) {
+      res.status(409).json({
+        success: false,
+        message: 'A alteração de email está temporariamente bloqueada para evitar dessincronização entre Auth e funcionarios. Requer fluxo próprio de alteração de identidade.',
+      });
+      return;
+    }
     const updates: any = {};
     if (nome_completo !== undefined) updates.nome_completo = String(nome_completo).trim();
     if (loja_id !== undefined) updates.loja_id = loja_id || null;
-    if (role !== undefined) updates.role = String(role).toLowerCase();
-    if (ativo !== undefined) updates.ativo = Boolean(ativo);
-    if (email !== undefined) updates.email = email ? String(email).trim().toLowerCase() : null;
-
-    if (telemovel !== undefined) {
-      const normalizedPhone = normalizePortuguesePhone(telemovel);
-      if (!normalizedPhone) {
-        res.status(400).json({
-          success: false,
-          message: 'Número de telemóvel inválido. Deve ter 9 dígitos começados por 9 (+351).',
-        });
+    if (role !== undefined) {
+      const normalizedRole = String(role).toLowerCase();
+      if (!['admin', 'funcionario', 'aprovador'].includes(normalizedRole)) {
+        res.status(400).json({ success: false, message: 'Papel inválido para a constraint atual da base de dados.' });
         return;
       }
-
-      // Validação de unicidade excluindo o próprio id
-      try {
-        const { data: existing } = await supabaseAdmin
-          .from('funcionarios')
-          .select('id')
-          .eq('telemovel', normalizedPhone)
-          .neq('id', id)
-          .maybeSingle();
-
-        if (existing) {
-          res.status(409).json({
-            success: false,
-            message: `O telemóvel ${normalizedPhone} já está atribuído a outro utilizador.`,
-          });
+      updates.role = normalizedRole;
+    }
+    if (ativo !== undefined) updates.ativo = Boolean(ativo);
+    if (telemovel !== undefined) {
+      if (telemovel === null || telemovel === '') updates.telemovel = null;
+      else {
+        const normalizedPhone = normalizePortuguesePhone(String(telemovel));
+        if (!normalizedPhone) {
+          res.status(400).json({ success: false, message: 'Número de telemóvel português inválido.' });
           return;
         }
-      } catch {}
-
-      updates.telemovel = normalizedPhone;
-    }
-
-    let updatedFunc: any = null;
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('funcionarios')
-        .update(updates)
-        .eq('id', id)
-        .select('*, lojas(nome, codigo_loja)')
-        .maybeSingle();
-
-      if (!error && data) {
-        updatedFunc = data;
+        updates.telemovel = normalizedPhone;
       }
-    } catch (dbErr: any) {
-      console.warn('[handleUpdateFuncionario] Supabase update:', dbErr?.message);
     }
-
-    if (!updatedFunc) {
-      updatedFunc = {
-        id,
-        ...updates,
-      };
+    if (loja_id) {
+      const { data: store, error: storeError } = await supabaseAdmin
+        .from('lojas').select('id').eq('id', loja_id).maybeSingle();
+      if (storeError || !store) {
+        res.status(400).json({ success: false, message: 'A loja indicada não existe.' });
+        return;
+      }
     }
-
-    res.status(200).json({
-      success: true,
-      message: 'Registo de funcionária atualizado com sucesso.',
-      funcionario: updatedFunc,
-    });
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ success: false, message: 'Não foram enviados campos para atualizar.' });
+      return;
+    }
+    const { data, error } = await supabaseAdmin
+      .from('funcionarios')
+      .update(updates)
+      .eq('id', id)
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
+      .maybeSingle();
+    if (error) {
+      res.status(400).json({ success: false, message: 'Não foi possível atualizar o funcionário.', details: error.message });
+      return;
+    }
+    if (!data) {
+      res.status(404).json({ success: false, message: 'Funcionário não encontrado.' });
+      return;
+    }
+    res.status(200).json({ success: true, message: 'Funcionário atualizado.', funcionario: data });
   } catch (err: any) {
     console.error('[handleUpdateFuncionario] Erro:', err);
-    res.status(500).json({ success: false, message: 'Erro interno ao atualizar funcionária.' });
+    res.status(500).json({ success: false, message: 'Erro interno ao atualizar funcionário.' });
   }
 }
 
