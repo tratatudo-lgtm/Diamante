@@ -1,6 +1,6 @@
 # Diamante OS — plano de reconstrução segura
 
-Estado: branch isolada de preparação. Este documento não altera o comportamento da aplicação.
+Estado: branch isolada de preparação. Correções iniciais foram preparadas; ainda não foram compiladas nem testadas em runtime. Este documento não autoriza deploy.
 
 ## Base de trabalho
 - Repositório: tratatudo-lgtm/Diamante
@@ -42,6 +42,25 @@ Estado: branch isolada de preparação. Este documento não altera o comportamen
 - Operações com Service Role permanecem exclusivamente no backend e após autorização explícita por endpoint.
 - O frontend não deve assumir que o JWT próprio permite consultas diretas a tabelas protegidas por RLS. Essas consultas devem usar sessão Supabase real ou endpoints backend autorizados.
 - A compatibilidade com o login por email/password só pode manter-se se a autenticação Supabase for validada e o perfil corresponder ao mesmo UUID de Auth.
+
+## Trabalho já preparado nesta branch
+- [x] Criada branch isolada a partir do HEAD de `main`.
+- [x] Criado middleware `middleware/verifyAuth.ts` para validar JWT próprio e revalidar funcionário ativo no Supabase.
+- [x] Protegidas com `verifyAdmin` as rotas de listagem e aprovação de transações pendentes.
+- [x] Protegidas com `verifyAdmin` as três variantes HTTP da War Room.
+- [x] CORS HTTP e Socket.IO passaram de wildcard/reflexão para allowlist de `FRONTEND_URL` e `APP_URL`.
+- [x] Socket.IO exige JWT e funcionário ativo; salas limitadas ao ID do funcionário, loja atribuída e sala admin para administradores.
+- [x] Removida a divulgação da URL Evolution no health check.
+- [x] Fluxo de pedido OTP duplicado em `auth.routes.ts` foi consolidado no serviço `auth.service.ts`.
+- [x] Falha de entrega WhatsApp deixa de ser reportada como envio bem-sucedido.
+- [x] Simulação OTP desativada em produção e removido o registo do código nos logs.
+- [x] Adicionado limite inicial de 5 pedidos OTP por número em 15 minutos.
+- [x] Criado endpoint `GET /api/auth/session` para validar e reconstruir sessão de API.
+- [x] Frontend deixa de restaurar autenticação a partir de `localStorage.otp_phone`; usa o token de API e valida-o no backend.
+- [x] Removido fallback de role `admin` quando faltam metadados; login Supabase exige correspondência exata do UUID do funcionário.
+- [x] Frontend deixa de persistir o número OTP como credencial de sessão.
+
+**Ainda não concluído:** build TypeScript/Vite, testes automatizados, auditoria integral de todas as rotas e operações administrativas, validação do modelo de salas/chat com os consumidores reais, revisão do fluxo de criação de funcionários/Auth, e testes funcionais com contas de teste. O rate limit OTP atual é em memória e precisa de solução partilhada antes de escalar para múltiplas instâncias.
 
 ## Sequência de implementação e validação
 1. Inventariar todas as rotas HTTP, WebSocket e chamadas frontend, incluindo rotas administrativas e de dados.
