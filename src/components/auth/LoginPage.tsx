@@ -118,11 +118,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
     try {
       const data = await apiPost('/auth/request-otp', { phone: normalized });
 
-      if (data?.devOtpCode) {
-        setSuccessNotice(`Código de verificação: ${data.devOtpCode}`);
-      } else {
-        setSuccessNotice('Código de verificação enviado via WhatsApp.');
-      }
+      setSuccessNotice('Código de verificação enviado via WhatsApp.');
 
       setOtpStep('code');
       setCountdown(300);
@@ -167,9 +163,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
       localStorage.setItem('otp_phone', normalized);
 
       // Redirecionamento baseado na role real da BD
-      // FORÇAR ADMIN PARA MASTER USER (fallback enquanto backend não retorna role correto)
-      const isMasterPhone = normalized === '+351937230116' || normalized === '937230116';
-      const targetPath = (userRole === 'admin' || userRole === 'master' || isMasterPhone) ? '/dashboard-admin' : '/loja-atual';
+      const targetPath = userRole === 'admin' ? '/dashboard-admin' : '/loja-atual';
       if (onNavigate) {
         onNavigate(targetPath);
       } else {
@@ -238,9 +232,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
       const userRole = String(data?.role || data?.user?.role || 'operador').toLowerCase();
       setDirectSession(data.user, userRole, data.token);
 
-      // FORÇAR ADMIN PARA MASTER USER (fallback enquanto backend não retorna role correto)
-      const isMasterPhone = normalized === '+351937230116' || normalized === '937230116';
-      const targetPath = (userRole === 'admin' || userRole === 'master' || isMasterPhone) ? '/dashboard-admin' : '/loja-atual';
+      const targetPath = userRole === 'admin' ? '/dashboard-admin' : '/loja-atual';
       if (onNavigate) {
         onNavigate(targetPath);
       } else {
@@ -260,70 +252,14 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
   // =========================================================================
   const handleRequestPasswordResetOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
+    setError('A recuperação de palavra-passe por WhatsApp ainda não está implementada no servidor. Nenhuma alteração foi efetuada.');
     setSuccessNotice(null);
-
-    const normalized = formatPhoneForApi(resetPhone);
-    if (!normalized || normalized.length < 9) {
-      setError('Introduza o número de telemóvel associado à sua conta.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const data = await apiPost('/auth/request-otp', { phone: normalized });
-
-      setResetStep('confirm');
-      setSuccessNotice(data?.message || 'Código de validação enviado para o seu WhatsApp.');
-    } catch (err: unknown) {
-      console.warn('[Login Reset] Erro no pedido de redefinição:', err);
-      const msg = err instanceof Error ? err.message : 'Falha ao solicitar código de recuperação.';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleConfirmPasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-
-    if (resetCode.trim().length !== 6) {
-      setError('O código de recuperação deve conter 6 dígitos.');
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setError('A nova palavra-passe deve conter pelo menos 6 caracteres.');
-      return;
-    }
-
-    if (newPassword !== confirmNewPassword) {
-      setError('A confirmação da palavra-passe não coincide.');
-      return;
-    }
-
-    setLoading(true);
-    const normalized = formatPhoneForApi(resetPhone);
-
-    try {
-      // Simulação ou chamada a endpoint de reset
-      setSuccessNotice('Palavra-passe alterada com sucesso! Inicie sessão com a sua nova credencial.');
-      setTimeout(() => {
-        setMode('email');
-        setResetStep('request');
-        setResetCode('');
-        setNewPassword('');
-        setConfirmNewPassword('');
-      }, 1500);
-    } catch (err: unknown) {
-      console.warn('[Login Reset] Erro na redefinição:', err);
-      const msg = err instanceof Error ? err.message : 'Erro ao atualizar palavra-passe.';
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
+    setError('A redefinição de palavra-passe não está disponível. Nenhuma palavra-passe foi alterada.');
+    setSuccessNotice(null);
   };
 
   const formatCountdown = (secs: number) => {
@@ -777,15 +713,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
               <span>Validação Supabase &bull; Evolution 2FA</span>
             </span>
 
-            {onNavigate && (
-              <button
-                type="button"
-                onClick={() => onNavigate('/register')}
-                className="text-[#D4AF37] hover:underline cursor-pointer font-medium text-xs"
-              >
-                Criar Conta
-              </button>
-            )}
+
           </div>
         </div>
 
