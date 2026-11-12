@@ -357,26 +357,12 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       // Falha ao conectar ao Supabase Auth direto, continua verificação
     }
 
-    // 2. Consulta direta à tabela funcionarios/users no Supabase
-    const user = await findUserInSupabaseByEmail(normalizedEmail);
-
-    if (!user) {
-      res.status(401).json({
-        success: false,
-        message: 'Credenciais inválidas ou conta inativa no sistema.',
-      });
-      return;
-    }
-
-    const token = generateAuthToken(user);
-
-    res.status(200).json({
-      success: true,
-      token,
-      role: user.role,
-      user,
-      session: { access_token: token },
+    // Não emitir sessão sem validação de password pelo Supabase Auth.
+    res.status(401).json({
+      success: false,
+      message: 'Credenciais inválidas ou conta inativa no sistema.',
     });
+    return;
   } catch (error: unknown) {
     console.error('[Auth Login] Erro interno:', error);
     res.status(500).json({
@@ -389,85 +375,11 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
 /* =========================================================================
    4. ENDPOINT: REGISTO (/auth/register)
    ========================================================================= */
-authRouter.post('/register', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, password, nome_completo, nif, telemovel, loja_id } = req.body;
-
-    if (!email || !password || !nome_completo) {
-      res.status(400).json({
-        success: false,
-        message: 'Email, palavra-passe e nome completo são campos obrigatórios.',
-      });
-      return;
-    }
-
-    if (password.length < 6) {
-      res.status(400).json({
-        success: false,
-        message: 'A palavra-passe deve conter pelo menos 6 caracteres.',
-      });
-      return;
-    }
-
-    if (nif) {
-      const nifCheck = validatePortugueseNIF(nif);
-      if (!nifCheck.isValid) {
-        res.status(400).json({
-          success: false,
-          message: nifCheck.message || 'NIF inválido.',
-        });
-        return;
-      }
-    }
-
-    const normalizedEmail = String(email).trim().toLowerCase();
-
-    // Inserir funcionário no Supabase
-    const { data: inserted, error: insertError } = await supabaseAdmin
-      .from('funcionarios')
-      .insert({
-        nome_completo: String(nome_completo).trim(),
-        email: normalizedEmail,
-        telemovel: telemovel ? String(telemovel).trim() : null,
-        role: 'operador',
-        loja_id: loja_id || null,
-        ativo: true,
-      })
-      .select()
-      .maybeSingle();
-
-    if (insertError) {
-      console.warn('[Auth Register] Aviso ao registar em funcionarios:', insertError.message);
-    }
-
-    const role = inserted?.role || 'operador';
-    const userPayload = {
-      id: inserted?.id || `usr-${Date.now()}`,
-      email: normalizedEmail,
-      nome_completo: String(nome_completo).trim(),
-      role,
-      loja_id: loja_id || null,
-      telemovel: telemovel ? String(telemovel).trim() : undefined,
-      ativo: true,
-    };
-
-    const token = generateAuthToken(userPayload);
-
-    res.status(201).json({
-      success: true,
-      message: 'Utilizador registado com sucesso.',
-      token,
-      role,
-      user: userPayload,
-      session: { access_token: token },
-    });
-  } catch (error: unknown) {
-    console.error('[Auth Register] Erro interno:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Ocorreu um erro ao processar o registo. Tente novamente.',
-    });
-  }
+authRouter.post('/register', (_req: Request, res: Response): void => {
+  res.status(403).json({
+    success: false,
+    message: 'O registo público está desativado. A criação de contas é feita exclusivamente por um administrador autorizado.',
+  });
 });
 
 /* =========================================================================
@@ -811,7 +723,7 @@ async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void>
 // -------------------------------------------------------------------------
 // GET /admin/lojas - Listar todas as lojas
 // -------------------------------------------------------------------------
-async function handleGetLojas(_req: Request, res: Response): Promise<void> {
+async function handleGetLojas(_req: AdminRequest, res: Response): Promise<void> {
   try {
     let lojas: any[] = [];
     try {
@@ -1017,7 +929,7 @@ async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promis
 // -------------------------------------------------------------------------
 // GET /admin/funcionarios - Listar todas as funcionárias
 // -------------------------------------------------------------------------
-async function handleGetFuncionarios(_req: Request, res: Response): Promise<void> {
+async function handleGetFuncionarios(_req: AdminRequest, res: Response): Promise<void> {
   try {
     let funcionarios: any[] = [];
     try {
