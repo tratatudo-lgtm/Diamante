@@ -48,7 +48,7 @@ interface StoredOtp {
 export const otpStore = new Map<string, StoredOtp>();
 
 /**
- * Gera variantes normais de pesquisa para o número de telemóvel (ex: +351937230116, 351937230116, 937230116)
+ * Gera variantes normalizadas para pesquisa de um número de telemóvel português.
  */
 function getPhoneVariants(rawPhone: string): string[] {
   const digits = rawPhone.replace(/\D/g, '');
