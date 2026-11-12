@@ -1,5 +1,6 @@
 // PATH: auth.routes.ts
-import { Router, Request, Response } from 'express';\nimport { randomInt } from 'crypto';
+import { Router, Request, Response } from 'express';
+import { randomInt } from 'crypto';
 import bcrypt from 'bcryptjs';
 import {
   requestOtpForPhone,
@@ -108,28 +109,7 @@ export async function handleRequestOtp(req: Request, res: Response): Promise<voi
     }
 
     // b) Validação no Supabase (Service Role Key - Bypassing RLS)
-    const variants = [
-      normalizedPhone,
-      normalizedPhone.replace('+', ''),
-      normalizedPhone.replace('+351', ''),
-    , '937230116'];
-
-    let user: any = null;
-
-    // Regra do Master User prioritária (+351937230116)
-    if (variants.some((v) => v.includes('937230116'))) {
-      user = {
-        id: 'usr-master-admin',
-        nome_completo: 'Administrador Master',
-        email: 'admin@diamante-os.pt',
-        role: 'admin',
-        loja_id: null,
-        telemovel: '+351937230116',
-        ativo: true,
-      };
-    } else {
-      user = await findUserInSupabaseByPhone(normalizedPhone);
-    }
+    const user = await findUserInSupabaseByPhone(normalizedPhone);
 
     if (!user || user.ativo === false) {
       console.log(`[OTP] User not found ou inativo para: ${normalizedPhone}`);
@@ -329,26 +309,21 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
       });
 
       if (!authError && authData?.user) {
-        // Obter dados do utilizador na tabela funcionarios
         const dbUser = await findUserInSupabaseByEmail(normalizedEmail);
-        const role = dbUser?.role || (authData.user.user_metadata?.role as string) || 'operador';
+        if (!dbUser || dbUser.id !== authData.user.id || dbUser.ativo !== true) {
+          res.status(403).json({
+            success: false,
+            message: 'A conta Auth não tem um perfil de funcionário ativo e correspondente.',
+          });
+          return;
+        }
 
-        const token = generateAuthToken(
-          dbUser || {
-            id: authData.user.id,
-            email: normalizedEmail,
-            nome_completo: authData.user.user_metadata?.nome_completo || 'Utilizador Diamante',
-            role,
-            loja_id: null,
-            ativo: true,
-          }
-        );
-
+        const token = generateAuthToken(dbUser);
         res.status(200).json({
           success: true,
           token,
-          role,
-          user: dbUser || { id: authData.user.id, email: normalizedEmail, role },
+          role: dbUser.role,
+          user: dbUser,
           session: { access_token: token },
         });
         return;
