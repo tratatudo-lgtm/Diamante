@@ -47,6 +47,8 @@ interface StoredOtp {
 // Armazenamento em memória para códigos OTP ativos
 export const otpStore = new Map<string, StoredOtp>();
 
+const otpRequestLimits = new Map<string, { count: number; resetAt: number }>();
+
 /**
  * Gera variantes normalizadas para pesquisa de um número de telemóvel português.
  */
@@ -176,6 +178,22 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
       message: 'Introduza um número de telemóvel válido.',
       statusCode: 400,
     };
+  }
+
+  const now = Date.now();
+  const limit = otpRequestLimits.get(formatted);
+  if (limit && now < limit.resetAt && limit.count >= 5) {
+    return { success: false, message: 'Demasiados pedidos de código. Tente novamente mais tarde.', statusCode: 429 };
+  }
+  if (!limit || now >= limit.resetAt) {
+    otpRequestLimits.set(formatted, { count: 1, resetAt: now + 15 * 60 * 1000 });
+  } else {
+    limit.count += 1;
+  }
+  if (otpRequestLimits.size > 10000) {
+    for (const [key, value] of otpRequestLimits) {
+      if (now >= value.resetAt) otpRequestLimits.delete(key);
+    }
   }
 
   // 1. Validação estrita contra a BD Supabase
