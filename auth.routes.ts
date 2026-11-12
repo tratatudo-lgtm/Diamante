@@ -1,5 +1,5 @@
 // PATH: auth.routes.ts
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response } from 'express';\nimport { randomInt } from 'crypto';
 import bcrypt from 'bcryptjs';
 import {
   requestOtpForPhone,
@@ -144,7 +144,7 @@ export async function handleRequestOtp(req: Request, res: Response): Promise<voi
     console.log(`[OTP] User found: ${user.nome_completo} (ID: ${user.id}, Role: ${user.role})`);
 
     // c) Geração e Envio de OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpCode = randomInt(100000, 1000000).toString();
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutos
 
     otpMemoryStore.set(normalizedPhone, {
@@ -545,10 +545,10 @@ async function handleCreateLoja(req: AdminRequest, res: Response): Promise<void>
   try {
     const { nome, morada, nif_loja, telefone, codigo_loja } = req.body;
 
-    if (!nome || !morada || !codigo_loja) {
+    if (!nome || !morada || !codigo_loja || !nif_loja) {
       res.status(400).json({
         success: false,
-        message: 'Nome da loja, morada e código da loja são obrigatórios.',
+        message: 'Nome, morada, código e NIF da loja são obrigatórios.',
       });
       return;
     }
@@ -1025,15 +1025,15 @@ authRouter.post('/admin/lojas', verifyAdmin, handleCreateLoja);
 authRouter.post('/lojas', verifyAdmin, handleCreateLoja);
 authRouter.put('/admin/lojas/:id', verifyAdmin, handleUpdateLoja);
 authRouter.put('/lojas/:id', verifyAdmin, handleUpdateLoja);
-authRouter.get('/admin/lojas', handleGetLojas);
-authRouter.get('/lojas', handleGetLojas);
+authRouter.get('/admin/lojas', verifyAdmin, handleGetLojas);
+authRouter.get('/lojas', verifyAdmin, handleGetLojas);
 
 authRouter.post('/admin/funcionarios', verifyAdmin, handleCreateFuncionario);
 authRouter.post('/funcionarios', verifyAdmin, handleCreateFuncionario);
 authRouter.put('/admin/funcionarios/:id', verifyAdmin, handleUpdateFuncionario);
 authRouter.put('/funcionarios/:id', verifyAdmin, handleUpdateFuncionario);
-authRouter.get('/admin/funcionarios', handleGetFuncionarios);
-authRouter.get('/funcionarios', handleGetFuncionarios);
+authRouter.get('/admin/funcionarios', verifyAdmin, handleGetFuncionarios);
+authRouter.get('/funcionarios', verifyAdmin, handleGetFuncionarios);
 
 authRouter.get('/admin/config/margens', handleGetMargensConfig);
 authRouter.get('/config/margens', handleGetMargensConfig);
