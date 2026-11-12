@@ -905,8 +905,8 @@ authRouter.put('/funcionarios/:id', verifyAdmin, handleUpdateFuncionario);
 authRouter.get('/admin/funcionarios', verifyAdmin, handleGetFuncionarios);
 authRouter.get('/funcionarios', verifyAdmin, handleGetFuncionarios);
 
-authRouter.get('/admin/config/margens', handleGetMargensConfig);
-authRouter.get('/config/margens', handleGetMargensConfig);
+authRouter.get('/admin/config/margens', verifyAdmin, handleGetMargensConfig);
+authRouter.get('/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.put('/admin/config/margens', verifyAdmin, handleUpdateMargensConfig);
 authRouter.put('/config/margens', verifyAdmin, handleUpdateMargensConfig);
 
