@@ -154,23 +154,22 @@ export async function handleRequestOtp(req: Request, res: Response): Promise<voi
 
     // Sem Evolution API configurada, nunca devolver o OTP ao cliente.
     const evolutionApiKey = process.env.EVOLUTION_API_KEY || '';
-    if (!evolutionApiKey) {
+    const evolutionApiUrlConfig = process.env.EVOLUTION_API_URL || '';
+    const evolutionInstance = process.env.EVOLUTION_INSTANCE || '';
+    if (!evolutionApiKey || !evolutionApiUrlConfig || !evolutionInstance) {
       otpStore.delete(normalizedPhone);
       otpStore.delete(normalizedPhone.replace(/\D/g, ''));
       otpMemoryStore.delete(normalizedPhone);
       res.status(503).json({
         success: false,
         error: 'Serviço OTP indisponível',
-        message: 'O envio WhatsApp não está configurado no servidor.',
+        message: 'A integração Evolution API não está completamente configurada no servidor.',
       });
       return;
     }
+    const evolutionApiUrl = evolutionApiUrlConfig.replace(/\/+$/, '');
 
-    // Chamada à Evolution API (apenas quando chave está configurada)
-    const evolutionApiUrl = (
-      process.env.EVOLUTION_API_URL || 'http://localhost:9090'
-    ).replace(/\/+$/, '');
-    const evolutionInstance = process.env.EVOLUTION_INSTANCE || 'diamante-os';
+    // Chamada à Evolution API com configuração explícita do servidor.
 
     const whatsappNumber = normalizedPhone.replace('+', '');
     const messageBody = {
