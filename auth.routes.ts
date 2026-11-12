@@ -518,91 +518,49 @@ export const systemConfigs = {
 // -------------------------------------------------------------------------
 async function handleCreateLoja(req: AdminRequest, res: Response): Promise<void> {
   try {
-    const { nome, morada, nif_loja, telefone, codigo_loja } = req.body;
-
+    const { nome, morada, nif_loja, telefone, codigo_loja } = req.body || {};
     if (!nome || !morada || !codigo_loja || !nif_loja) {
-      res.status(400).json({
-        success: false,
-        message: 'Nome, morada, código e NIF da loja são obrigatórios.',
-      });
+      res.status(400).json({ success: false, message: 'Nome, morada, código e NIF são obrigatórios.' });
       return;
     }
-
-    // Validação NIF Português
-    if (nif_loja) {
-      const nifValidation = validatePortugueseNIF(nif_loja);
-      if (!nifValidation.isValid) {
-        res.status(400).json({
-          success: false,
-          message: nifValidation.message || 'NIF da loja inválido.',
-        });
-        return;
-      }
+    const nifValidation = validatePortugueseNIF(String(nif_loja));
+    if (!nifValidation.isValid) {
+      res.status(400).json({ success: false, message: nifValidation.message || 'NIF inválido.' });
+      return;
     }
-
-    // Validação Telemóvel Português
     let normalizedPhone: string | null = null;
     if (telefone) {
-      normalizedPhone = normalizePortuguesePhone(telefone);
+      normalizedPhone = normalizePortuguesePhone(String(telefone));
       if (!normalizedPhone) {
-        res.status(400).json({
-          success: false,
-          message: 'Número de telefone da loja deve ser um número português válido (+351).',
-        });
+        res.status(400).json({ success: false, message: 'Telefone português inválido.' });
         return;
       }
     }
-
-    // Geocodificação automática via Nominatim
-    const { latitude, longitude } = await geocodePortugueseAddress(morada);
-
-    const storePayload = {
+    const { latitude, longitude } = await geocodePortugueseAddress(String(morada));
+    const payload = {
       nome: String(nome).trim(),
-      codigo_loja: String(codigo_loja).trim().toUpperCase(),
       morada: String(morada).trim(),
-      nif_loja: nif_loja ? String(nif_loja).trim() : null,
+      codigo_loja: String(codigo_loja).trim().toUpperCase(),
+      nif_loja: String(nif_loja).trim(),
       telefone: normalizedPhone,
       latitude,
       longitude,
       ativo: true,
     };
-
-    // Inserção na base de dados Supabase
-    let createdLoja: any = null;
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('lojas')
-        .insert(storePayload)
-        .select()
-        .maybeSingle();
-
-      if (!error && data) {
-        createdLoja = data;
-      }
-    } catch (dbErr: any) {
-      console.warn('[handleCreateLoja] Supabase insert:', dbErr?.message);
+    const { data, error } = await supabaseAdmin
+      .from('lojas')
+      .insert(payload)
+      .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo')
+      .single();
+    if (error) {
+      console.error('[handleCreateLoja] Supabase insert:', error.message);
+      res.status(400).json({ success: false, message: 'Não foi possível criar a loja.', details: error.message });
+      return;
     }
-
-    // Se o Supabase estiver em sandbox/sem escrita, devolve o registo criado
-    if (!createdLoja) {
-      createdLoja = {
-        id: `loj-${Date.now()}`,
-        ...storePayload,
-        created_at: new Date().toISOString(),
-      };
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'Loja criada com sucesso e coordenadas geocodificadas.',
-      loja: createdLoja,
-    });
+    res.status(201).json({ success: true, message: 'Loja criada.', loja: data });
   } catch (err: any) {
     console.error('[handleCreateLoja] Erro:', err);
-    res.status(500).json({
-      success: false,
-      message: 'Erro interno ao criar loja.',
-    });
+    res.status(500).json({ success: false, message: 'Erro interno ao criar loja.' });
   }
 }
 
@@ -612,46 +570,35 @@ async function handleCreateLoja(req: AdminRequest, res: Response): Promise<void>
 async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { nome, morada, nif_loja, telefone, codigo_loja, ativo } = req.body;
-
     if (!id) {
       res.status(400).json({ success: false, message: 'ID da loja obrigatório.' });
       return;
     }
-
-    // Validação NIF se fornecido
-    if (nif_loja) {
-      const nifValidation = validatePortugueseNIF(nif_loja);
-      if (!nifValidation.isValid) {
-        res.status(400).json({ success: false, message: nifValidation.message || 'NIF inválido.' });
-        return;
-      }
-    }
-
-    // Validação Telemóvel se fornecido
-    let normalizedPhone: string | undefined = undefined;
-    if (telefone !== undefined) {
-      if (telefone) {
-        const norm = normalizePortuguesePhone(telefone);
-        if (!norm) {
-          res.status(400).json({ success: false, message: 'Número de telefone inválido.' });
-          return;
-        }
-        normalizedPhone = norm;
-      } else {
-        normalizedPhone = undefined;
-      }
-    }
-
+    const { nome, morada, nif_loja, telefone, codigo_loja, ativo } = req.body || {};
     const updates: any = {};
     if (nome !== undefined) updates.nome = String(nome).trim();
     if (codigo_loja !== undefined) updates.codigo_loja = String(codigo_loja).trim().toUpperCase();
-    if (nif_loja !== undefined) updates.nif_loja = String(nif_loja).trim();
-    if (normalizedPhone !== undefined) updates.telefone = normalizedPhone;
+    if (nif_loja !== undefined) {
+      const validation = validatePortugueseNIF(String(nif_loja));
+      if (!validation.isValid) {
+        res.status(400).json({ success: false, message: validation.message || 'NIF inválido.' });
+        return;
+      }
+      updates.nif_loja = String(nif_loja).trim();
+    }
+    if (telefone !== undefined) {
+      if (telefone === null || telefone === '') updates.telefone = null;
+      else {
+        const normalized = normalizePortuguesePhone(String(telefone));
+        if (!normalized) {
+          res.status(400).json({ success: false, message: 'Telefone português inválido.' });
+          return;
+        }
+        updates.telefone = normalized;
+      }
+    }
     if (ativo !== undefined) updates.ativo = Boolean(ativo);
-
-    // Se a morada foi alterada, re-geocodifica via Nominatim
-    if (morada) {
+    if (morada !== undefined) {
       updates.morada = String(morada).trim();
       const coords = await geocodePortugueseAddress(updates.morada);
       if (coords.latitude !== null && coords.longitude !== null) {
@@ -659,36 +606,25 @@ async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void>
         updates.longitude = coords.longitude;
       }
     }
-
-    let updatedLoja: any = null;
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('lojas')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .maybeSingle();
-
-      if (!error && data) {
-        updatedLoja = data;
-      }
-    } catch (dbErr: any) {
-      console.warn('[handleUpdateLoja] Supabase update:', dbErr?.message);
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ success: false, message: 'Não foram enviados campos para atualizar.' });
+      return;
     }
-
-    if (!updatedLoja) {
-      updatedLoja = {
-        id,
-        ...updates,
-        updated_at: new Date().toISOString(),
-      };
+    const { data, error } = await supabaseAdmin
+      .from('lojas')
+      .update(updates)
+      .eq('id', id)
+      .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo')
+      .maybeSingle();
+    if (error) {
+      res.status(400).json({ success: false, message: 'Não foi possível atualizar a loja.', details: error.message });
+      return;
     }
-
-    res.status(200).json({
-      success: true,
-      message: 'Loja atualizada com sucesso.',
-      loja: updatedLoja,
-    });
+    if (!data) {
+      res.status(404).json({ success: false, message: 'Loja não encontrada.' });
+      return;
+    }
+    res.status(200).json({ success: true, message: 'Loja atualizada.', loja: data });
   } catch (err: any) {
     console.error('[handleUpdateLoja] Erro:', err);
     res.status(500).json({ success: false, message: 'Erro interno ao atualizar loja.' });
@@ -730,89 +666,81 @@ async function handleGetLojas(_req: AdminRequest, res: Response): Promise<void> 
 // -------------------------------------------------------------------------
 async function handleCreateFuncionario(req: AdminRequest, res: Response): Promise<void> {
   try {
-    const { nome_completo, telemovel, loja_id, role, email } = req.body;
-
-    if (!nome_completo || !telemovel) {
+    const { nome_completo, telemovel, loja_id, role, email } = req.body || {};
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!nome_completo || !normalizedEmail) {
+      res.status(400).json({ success: false, message: 'Nome completo e email são obrigatórios.' });
+      return;
+    }
+    const assignedRole = String(role || 'funcionario').toLowerCase();
+    if (!['admin', 'funcionario', 'aprovador'].includes(assignedRole)) {
       res.status(400).json({
         success: false,
-        message: 'Nome completo e número de telemóvel são obrigatórios.',
+        message: 'Papel inválido. A base de dados aceita atualmente: admin, funcionario ou aprovador. A equivalência gerente/operador carece de aprovação.',
       });
       return;
     }
-
-    // Normalização obrigatória para formato +351XXXXXXXXX
-    const normalizedPhone = normalizePortuguesePhone(telemovel);
-    if (!normalizedPhone) {
-      res.status(400).json({
-        success: false,
-        message: 'O número de telemóvel deve ser português válido (9 dígitos começados por 9).',
-      });
-      return;
-    }
-
-    // Validação de unicidade do telemóvel na tabela funcionarios
-    try {
-      const { data: existing } = await supabaseAdmin
-        .from('funcionarios')
-        .select('id, nome_completo')
-        .eq('telemovel', normalizedPhone)
-        .maybeSingle();
-
-      if (existing) {
-        res.status(409).json({
-          success: false,
-          message: `Já existe uma funcionária registada com o número ${normalizedPhone} (${existing.nome_completo}).`,
-        });
+    let normalizedPhone: string | null = null;
+    if (telemovel) {
+      normalizedPhone = normalizePortuguesePhone(String(telemovel));
+      if (!normalizedPhone) {
+        res.status(400).json({ success: false, message: 'Número de telemóvel português inválido.' });
         return;
       }
-    } catch {
-      // Ignorar se a tabela estiver em sandbox
     }
-
-    const assignedRole = ['admin', 'gerente', 'operador'].includes(String(role).toLowerCase())
-      ? String(role).toLowerCase()
-      : 'operador';
-
-    const payload = {
-      nome_completo: String(nome_completo).trim(),
-      telemovel: normalizedPhone,
-      loja_id: loja_id || null,
-      role: assignedRole,
-      ativo: true,
-      email: email ? String(email).trim().toLowerCase() : null,
-    };
-
-    let createdFunc: any = null;
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('funcionarios')
-        .insert(payload)
-        .select('*, lojas(nome, codigo_loja)')
-        .maybeSingle();
-
-      if (!error && data) {
-        createdFunc = data;
+    if (loja_id) {
+      const { data: store, error: storeError } = await supabaseAdmin
+        .from('lojas').select('id').eq('id', loja_id).maybeSingle();
+      if (storeError || !store) {
+        res.status(400).json({ success: false, message: 'A loja indicada não existe.' });
+        return;
       }
-    } catch (dbErr: any) {
-      console.warn('[handleCreateFuncionario] Supabase insert:', dbErr?.message);
+    }
+    const { data: existing } = await supabaseAdmin
+      .from('funcionarios').select('id').eq('email', normalizedEmail).maybeSingle();
+    if (existing) {
+      res.status(409).json({ success: false, message: 'Já existe um funcionário com esse email.' });
+      return;
     }
 
-    if (!createdFunc) {
-      createdFunc = {
-        id: `func-${Date.now()}`,
-        ...payload,
-        created_at: new Date().toISOString(),
-      };
+    // Criar primeiro a identidade Auth por convite; o trigger existente associa-a pelo email.
+    const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      normalizedEmail,
+      { data: { nome_completo: String(nome_completo).trim() } }
+    );
+    if (inviteError || !invited.user) {
+      res.status(400).json({ success: false, message: 'Não foi possível convidar o utilizador para Supabase Auth.', details: inviteError?.message });
+      return;
     }
 
-    res.status(201).json({
-      success: true,
-      message: 'Funcionária registada com sucesso.',
-      funcionario: createdFunc,
-    });
+    const { data, error } = await supabaseAdmin
+      .from('funcionarios')
+      .insert({
+        id: invited.user.id,
+        nome_completo: String(nome_completo).trim(),
+        email: normalizedEmail,
+        telemovel: normalizedPhone,
+        loja_id: loja_id || null,
+        role: assignedRole,
+        ativo: true,
+      })
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
+      .single();
+
+    if (error || !data) {
+      await supabaseAdmin.auth.admin.deleteUser(invited.user.id);
+      res.status(400).json({ success: false, message: 'Não foi possível gravar o funcionário. O convite Auth foi revertido.', details: error?.message });
+      return;
+    }
+    if (data.id !== invited.user.id) {
+      await supabaseAdmin.auth.admin.deleteUser(invited.user.id);
+      res.status(409).json({ success: false, message: 'A associação Auth/funcionário não ficou consistente; criação revertida.' });
+      return;
+    }
+    res.status(201).json({ success: true, message: 'Funcionário criado e convite enviado.', funcionario: data });
   } catch (err: any) {
     console.error('[handleCreateFuncionario] Erro:', err);
-    res.status(500).json({ success: false, message: 'Erro interno ao registar funcionária.' });
+    res.status(500).json({ success: false, message: 'Erro interno ao registar funcionário.' });
   }
 }
 
