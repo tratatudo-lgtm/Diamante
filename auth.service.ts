@@ -4,7 +4,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { sendWhatsAppOtp, formatPortuguesePhone } from './whatsapp.service';
 
-const JWT_SECRET = process.env.JWT_SECRET;\nif (!JWT_SECRET) throw new Error('JWT_SECRET tem de estar configurado no servidor.');
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) throw new Error('JWT_SECRET tem de estar configurado no servidor.');
 
 const supabaseUrl =
   process.env.SUPABASE_URL ||
@@ -92,7 +93,7 @@ export async function findUserInSupabaseByPhone(phone: string): Promise<Authenti
         id: data.id,
         nome_completo: data.nome_completo || 'Funcionário Diamante',
         email: data.email || '',
-        role: String(data.role || 'operador').toLowerCase(),
+        role: String(data.role || '').toLowerCase(),
         loja_id: data.loja_id || null,
         telemovel: data.telemovel || phone,
         ativo: true,
@@ -114,7 +115,7 @@ export async function findUserInSupabaseByEmail(email: string): Promise<Authenti
   try {
     const { data, error } = await supabaseAdmin
       .from('funcionarios')
-      .select('*')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
       .eq('email', normalizedEmail)
       .maybeSingle();
 
