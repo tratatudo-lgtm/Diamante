@@ -9,6 +9,7 @@ import {
   supabaseAdmin,
 } from './auth.service';
 import { verifyAdmin, AdminRequest } from './middleware/verifyAdmin';
+import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 
 export const authRouter = Router();
 
@@ -84,6 +85,10 @@ authRouter.post('/send-otp', handleRequestOtp);
    2. ENDPOINT: VALIDAÇÃO DE OTP WHATSAPP (/auth/verify-otp)
    REGRA: Role e permissões extraídas diretamente da base de dados Supabase
    ========================================================================= */
+authRouter.get('/session', verifyAuth, (req: AuthenticatedRequest, res: Response) => {
+  res.status(200).json({ success: true, user: req.authenticatedUser });
+});
+
 authRouter.post('/verify-otp', async (req: Request, res: Response): Promise<void> => {
   try {
     const { phone, code } = req.body;
