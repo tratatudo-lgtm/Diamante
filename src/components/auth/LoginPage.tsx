@@ -158,7 +158,8 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
       });
 
       // Role oficial extraída da resposta do backend consultada no Supabase
-      const userRole = String(data?.role || data?.user?.role || 'operador').toLowerCase();
+      const userRole = String(data?.role || data?.user?.role || '').toLowerCase();
+      if (!data?.user?.id || !data?.token || !userRole) throw new Error('O servidor não devolveu uma sessão de funcionário válida.');
       setDirectSession(data.user, userRole, data.token);
       localStorage.setItem('otp_phone', normalized);
 
