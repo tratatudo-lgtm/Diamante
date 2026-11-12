@@ -1,10 +1,10 @@
+import 'dotenv/config';
 import { supabaseAdmin } from './auth.service';
 // PATH: server.ts
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 import authRouter from './auth.routes';
 import warroomRouter from './warroom.routes';
 
@@ -13,8 +13,6 @@ import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { verifyAdmin } from './middleware/verifyAdmin';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
