@@ -142,12 +142,14 @@ export async function handleRequestOtp(req: Request, res: Response): Promise<voi
       code: otpCode,
       expiresAt,
       attempts: 0,
+      userId: user.id,
     });
     otpStore.set(formattedDigits, {
       phone: formattedDigits,
       code: otpCode,
       expiresAt,
       attempts: 0,
+      userId: user.id,
     });
 
     // Sem Evolution API configurada, nunca devolver o OTP ao cliente.
