@@ -481,7 +481,7 @@ export const systemConfigs = {
     peso_limite_sem_aprovacao_g: 50.0,
     exigir_dupla_assinatura_acima: 5000,
     notificar_whatsapp_master: true,
-    telemovel_alerta: '+351937230116',
+    telemovel_alerta: process.env.ADMIN_ALERT_PHONE || '',
     ativo: true,
   },
   contasBancarias: [
@@ -629,25 +629,16 @@ async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void>
 // -------------------------------------------------------------------------
 async function handleGetLojas(_req: AdminRequest, res: Response): Promise<void> {
   try {
-    let lojas: any[] = [];
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('lojas')
-        .select('*')
-        .order('nome', { ascending: true });
-
-      if (!error && data) {
-        lojas = data;
-      }
-    } catch (dbErr: any) {
-      console.warn('[handleGetLojas] Supabase select:', dbErr?.message);
+    const { data, error } = await supabaseAdmin
+      .from('lojas')
+      .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo, admin_id')
+      .order('nome', { ascending: true });
+    if (error) {
+      console.error('[handleGetLojas] Supabase select:', error.message);
+      res.status(503).json({ success: false, message: 'Não foi possível consultar as lojas.' });
+      return;
     }
-
-    res.status(200).json({
-      success: true,
-      lojas,
-      total: lojas.length,
-    });
+    res.status(200).json({ success: true, lojas: data || [], total: data?.length || 0 });
   } catch (err: any) {
     console.error('[handleGetLojas] Erro:', err);
     res.status(500).json({ success: false, message: 'Erro ao listar lojas.' });
@@ -816,32 +807,30 @@ async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promis
 // -------------------------------------------------------------------------
 async function handleGetFuncionarios(_req: AdminRequest, res: Response): Promise<void> {
   try {
-    let funcionarios: any[] = [];
-    try {
-      const { data, error } = await supabaseAdmin
-        .from('funcionarios')
-        .select('*, lojas(nome, codigo_loja)')
-        .order('nome_completo', { ascending: true });
-
-      if (!error && data) {
-        funcionarios = data.map((f: any) => ({
-          ...f,
-          loja_nome: f.lojas?.nome || null,
-          codigo_loja: f.lojas?.codigo_loja || null,
-        }));
-      }
-    } catch (dbErr: any) {
-      console.warn('[handleGetFuncionarios] Supabase select:', dbErr?.message);
+    const { data, error } = await supabaseAdmin
+      .from('funcionarios')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
+      .order('nome_completo', { ascending: true });
+    if (error) {
+      console.error('[handleGetFuncionarios] Supabase select:', error.message);
+      res.status(503).json({ success: false, message: 'Não foi possível consultar os funcionários.' });
+      return;
     }
-
-    res.status(200).json({
-      success: true,
-      funcionarios,
-      total: funcionarios.length,
-    });
+    const funcionarios = (data || []).map((f: any) => ({
+      id: f.id,
+      nome_completo: f.nome_completo,
+      email: f.email,
+      role: f.role,
+      loja_id: f.loja_id,
+      telemovel: f.telemovel,
+      ativo: f.ativo,
+      loja_nome: f.lojas?.nome || null,
+      codigo_loja: f.lojas?.codigo_loja || null,
+    }));
+    res.status(200).json({ success: true, funcionarios, total: funcionarios.length });
   } catch (err: any) {
     console.error('[handleGetFuncionarios] Erro:', err);
-    res.status(500).json({ success: false, message: 'Erro ao listar funcionárias.' });
+    res.status(500).json({ success: false, message: 'Erro ao listar funcionários.' });
   }
 }
 
