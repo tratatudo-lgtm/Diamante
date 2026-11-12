@@ -155,7 +155,7 @@ export function generateAuthToken(user: AuthenticatedUser): string {
       loja_id: user.loja_id,
     },
     JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: '8h' }
   );
 }
 
