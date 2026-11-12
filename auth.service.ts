@@ -86,10 +86,9 @@ export async function findUserInSupabaseByPhone(phone: string): Promise<Authenti
       .from('funcionarios')
       .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
       .in('telemovel', variants)
-      .limit(1)
-      .maybeSingle();
+      .limit(2);
 
-    if (!error && data) {
+    if (!error && Array.isArray(data) && data.length === 1) {
       if (data.ativo === false) return null;
       return {
         id: data.id,
@@ -129,7 +128,7 @@ export async function findUserInSupabaseByEmail(email: string): Promise<Authenti
         email: data.email,
         role: String(data.role || '').toLowerCase(),
         loja_id: data.loja_id || null,
-        telemovel: data.telemovel || data.telefone,
+        telemovel: data.telemovel,
         ativo: true,
       };
     }
