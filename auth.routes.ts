@@ -150,15 +150,16 @@ export async function handleRequestOtp(req: Request, res: Response): Promise<voi
       attempts: 0,
     });
 
-    // Se estiver sem chave configurada da Evolution API, responde instantaneamente com devOtpCode
+    // Sem Evolution API configurada, nunca devolver o OTP ao cliente.
     const evolutionApiKey = process.env.EVOLUTION_API_KEY || '';
     if (!evolutionApiKey) {
-      console.warn(`[OTP] [MODO TESTE/DEV] Código OTP gerado para ${normalizedPhone}: ${otpCode}`);
-      res.status(200).json({
-        success: true,
-        error: null,
-        message: `Código enviado por WhatsApp (Código de teste: ${otpCode})`,
-        devOtpCode: otpCode,
+      otpStore.delete(normalizedPhone);
+      otpStore.delete(normalizedPhone.replace(/\D/g, ''));
+      otpMemoryStore.delete(normalizedPhone);
+      res.status(503).json({
+        success: false,
+        error: 'Serviço OTP indisponível',
+        message: 'O envio WhatsApp não está configurado no servidor.',
       });
       return;
     }
@@ -199,28 +200,20 @@ export async function handleRequestOtp(req: Request, res: Response): Promise<voi
       console.error('[OTP] Falha de conexão à Evolution API:', evoErr.message);
     }
 
-    // Se a Evolution API falhou ou está em ambiente de teste/preview
     if (!evolutionSuccess) {
-      if (process.env.NODE_ENV !== 'production' || !process.env.EVOLUTION_API_KEY) {
-        console.warn(`[OTP] [MODO TESTE/DEV] Código OTP gerado para ${normalizedPhone}: ${otpCode}`);
-        res.status(200).json({
-          success: true,
-          error: null,
-          message: `Código enviado por WhatsApp (Modo Teste: ${otpCode})`,
-          devOtpCode: otpCode,
-        });
-        return;
-      }
-
+      otpStore.delete(normalizedPhone);
+      otpStore.delete(normalizedPhone.replace(/\D/g, ''));
+      otpMemoryStore.delete(normalizedPhone);
       res.status(502).json({
         success: false,
         error: 'Falha ao enviar WhatsApp',
-        message: 'Falha ao enviar mensagem através da Evolution API. Verifique a instância diamante-os.',
+        message: 'Não foi possível enviar o código. Solicite um novo código mais tarde.',
       });
       return;
     }
 
-    // d) Resposta Padronizada de Sucesso
+    // Resposta padronizada sem revelar o código OTP.
+
     res.status(200).json({
       success: true,
       error: null,
@@ -329,7 +322,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
         return;
       }
     } catch {
-      // Falha ao conectar ao Supabase Auth direto, continua verificação
+      // Falha no Supabase Auth: falhar fechado, sem autenticação alternativa
     }
 
     // Não emitir sessão sem validação de password pelo Supabase Auth.
