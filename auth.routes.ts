@@ -352,8 +352,8 @@ authRouter.post('/register', (_req: Request, res: Response): void => {
 });
 
 /* =========================================================================
-   4. MÓDULOS DE GESTÃO ADMINISTRATIVA (MASTER USER EXCLUSIVE)
-   Endpoints protegidos por verifyAdmin que valida is_admin() e telemóvel (+351937230116)
+   4. MÓDULOS DE GESTÃO ADMINISTRATIVA
+   Endpoints protegidos por verifyAdmin com validação da identidade ativa na BD
    ========================================================================= */
 
 // Nominatim Geocoding com throttle de 1.1s entre pedidos
