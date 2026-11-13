@@ -30,7 +30,7 @@ export interface Store {
   id: string;
   codigo: string;
   nome: string;
-  status: 'ativa' | 'inativa';
+  status: 'ativa' | 'inativa' | '';
   endereco: string;
   cidade: string;
   gerente: string;
@@ -371,6 +371,7 @@ export const StoreManagement: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {filteredStores.map((store) => {
                 const isAtiva = store.status === 'ativa';
+                const statusLabel = store.status === 'ativa' ? 'Ativa' : store.status === 'inativa' ? 'Inativa' : 'Não definido';
                 const progressClamped = Math.min(store.progressoMeta, 100);
 
                 return (
@@ -407,10 +408,10 @@ export const StoreManagement: React.FC = () => {
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
-                              isAtiva ? 'bg-emerald-400' : 'bg-rose-400'
+                              store.status === 'ativa' ? 'bg-emerald-400' : store.status === 'inativa' ? 'bg-rose-400' : 'bg-slate-400'
                             }`}
                           />
-                          {isAtiva ? 'Ativa' : 'Inativa'}
+                          {statusLabel}
                         </span>
                       </div>
 
