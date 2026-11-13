@@ -8,6 +8,11 @@ interface TransactionCreatedEvent {
   created_at: string;
 }
 
+interface RoomAcknowledgement {
+  room?: string;
+  reason?: string;
+}
+
 /**
  * Liga um ecrã à sala Socket.IO autorizada pelo servidor.
  * O JWT é usado apenas no handshake autenticado.
@@ -24,7 +29,10 @@ export function useTransactionRealtime(
 
   useEffect(() => {
     const token = sessionStorage.getItem('diamante_jwt_token');
-    if (!token || !room) return;
+    if (!token || !room) {
+      console.warn('[Diamante Realtime] Ligação não iniciada: sessão ou sala indisponível.');
+      return;
+    }
 
     const socket = io({
       auth: { token },
@@ -36,16 +44,32 @@ export function useTransactionRealtime(
     });
 
     socket.on('connect', () => {
+      console.info('[Diamante Realtime] Ligação estabelecida; a solicitar sala autorizada.');
       socket.emit('join_room', room);
+    });
+
+    socket.on('room_joined', (ack: RoomAcknowledgement) => {
+      if (ack?.room === room) {
+        console.info('[Diamante Realtime] Entrada na sala confirmada.');
+      }
+    });
+
+    socket.on('room_denied', (ack: RoomAcknowledgement) => {
+      console.error('[Diamante Realtime] Entrada na sala recusada:', ack?.reason || 'Sem motivo indicado.');
     });
 
     socket.on('transaction:created', (event: TransactionCreatedEvent) => {
       if (!event || typeof event.id !== 'string' || !event.id) return;
+      console.info('[Diamante Realtime] Nova transação recebida.');
       callbackRef.current(event);
     });
 
-    socket.on('connect_error', () => {
-      console.warn('[Diamante Realtime] Ligação em tempo real indisponível.');
+    socket.on('disconnect', (reason) => {
+      console.warn('[Diamante Realtime] Ligação terminada:', reason);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('[Diamante Realtime] Falha de ligação:', error.message);
     });
 
     return () => {
