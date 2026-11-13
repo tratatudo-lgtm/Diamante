@@ -49,9 +49,9 @@ export interface Employee {
 }
 
 export const EmployeeManagement: React.FC = () => {
-  const { data: employees, loading, createEmployee, updateEmployee, deleteEmployee } = useEmployees();
+  const { data: employees, loading, error: dataError, createEmployee, updateEmployee, deleteEmployee } = useEmployees();
   const [actionError, setActionError] = useState<string | null>(null);
-  const { data: stores } = useStores();
+  const { data: stores, error: storesError } = useStores();
   const storeOptions = stores.map((store) => ({ id: store.id, nome: store.nome }));
 
   // Filtros
@@ -307,6 +307,7 @@ export const EmployeeManagement: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-white p-4 sm:p-6 lg:p-8 font-sans selection:bg-[#D4AF37]/30 selection:text-white">
+      {(dataError || storesError) && <div role="alert" className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{dataError || storesError}</div>}
       {actionError && (
         <div role="alert" className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
           <div className="flex items-center justify-between gap-3">
