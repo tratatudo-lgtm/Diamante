@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import type { ClienteProtegido } from '../../types/database';
 import {
   ShieldCheck,
@@ -28,58 +28,13 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      // 1. Tentar ler da view v_clientes_protegidos
+      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada.');
       const { data, error } = await supabase
         .from('v_clientes_protegidos')
         .select('*');
 
-      if (!error && data) {
-        setClientes(data);
-      } else {
-        // Fallback gracioso: derivar dados mascarados a partir de transações locais se a view ainda não tiver sido criada
-        const { data: txsData, error: txError } = await supabase
-          .from('transacoes')
-          .select('cliente_nome, cliente_cc, cliente_telemovel, valor_final, created_at')
-          .not('cliente_nome', 'is', null);
-
-        if (!txError && txsData) {
-          // Agrupar e mascarar com rigor RGPD
-          const clientMap: Record<string, ClienteProtegido> = {};
-          txsData.forEach((tx) => {
-            const rawCc = tx.cliente_cc || '';
-            const key = rawCc || tx.cliente_nome || 'anónimo';
-
-            // Mascarar BI/CC: ex. 1234****
-            const biMascarado = rawCc.length >= 4
-              ? `${rawCc.slice(0, 4)}****`
-              : '****';
-
-            // Mascarar Telemóvel: ex. 912***45
-            const rawTel = tx.cliente_telemovel || '';
-            const telMascarado = rawTel.length >= 5
-              ? `${rawTel.slice(0, 3)}***${rawTel.slice(-2)}`
-              : '***';
-
-            if (!clientMap[key]) {
-              clientMap[key] = {
-                id: key,
-                nome: tx.cliente_nome,
-                cliente_nome: tx.cliente_nome,
-                bi_mascarado: biMascarado,
-                telemovel_mascarado: telMascarado,
-                total_compras: 1,
-                total_gasto: Number(tx.valor_final) || 0,
-                ultimo_contacto: tx.created_at,
-              };
-            } else {
-              clientMap[key].total_compras = (clientMap[key].total_compras || 1) + 1;
-              clientMap[key].total_gasto = (clientMap[key].total_gasto || 0) + (Number(tx.valor_final) || 0);
-            }
-          });
-
-          setClientes(Object.values(clientMap));
-        }
-      }
+      if (error) throw error;
+      setClientes(data || []);
     } catch (err: unknown) {
       console.warn('[Clientes protegidos] Falha ao consultar a vista protegida.');
       setErrorMessage('Não foi possível aceder à vista protegida de clientes.');
