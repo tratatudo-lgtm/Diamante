@@ -168,80 +168,50 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
   // 3. AÇÕES SOBRE CLIENTES (MUDAR STATUS / CRIAR)
   // =========================================================
   const handleToggleBlockClient = async (clientId: string) => {
-    if (selectedClient && selectedClient.id === clientId) {
-
-    if (selectedClient && selectedClient.id === clientId) {
-      setSelectedClient((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: prev.status === 'bloqueado' ? 'normal' : 'bloqueado',
-            }
-          : null
-      );
+    try {
+      await toggleBlockClient(clientId);
+      if (selectedClient?.id === clientId) {
+        setSelectedClient((prev) => prev ? { ...prev, status: prev.status === 'bloqueado' ? 'normal' : 'bloqueado' } : null);
+      }
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao alterar o estado do cliente.');
     }
   };
 
   const handleToggleVipClient = async (clientId: string) => {
-    if (selectedClient && selectedClient.id === clientId) {
-
-    if (selectedClient && selectedClient.id === clientId) {
-      setSelectedClient((prev) =>
-        prev
-          ? {
-              ...prev,
-              status: prev.status === 'vip' ? 'normal' : 'vip',
-            }
-          : null
-      );
+    try {
+      await toggleVipClient(clientId);
+      if (selectedClient?.id === clientId) {
+        setSelectedClient((prev) => prev ? { ...prev, status: prev.status === 'vip' ? 'normal' : 'vip' } : null);
+      }
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao alterar o estatuto VIP.');
     }
   };
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newClient.nome.trim() || !newClient.nif.trim()) return;
-
-    const storeObj = storeOptions.find((s) => s.id === newClient.lojaOrigemId);
+    const storeObj = storeOptions.find((store) => store.id === newClient.lojaOrigemId);
     const newId = `cli-${Date.now()}`;
     const nextCode = `CLI-${String(clients.length + 1).padStart(3, '0')}`;
-
     const created: Client = {
-      id: newId,
-      codigoCliente: nextCode,
-      nome: newClient.nome.trim(),
-      nif: newClient.nif.trim(),
-      telemovel: newClient.telemovel.trim(),
-      email: newClient.email.trim(),
-      docIdentificacao: newClient.docIdentificacao.trim(),
-      dataNascimento: newClient.dataNascimento,
-      morada: newClient.morada.trim(),
-      cidade: newClient.cidade.trim(),
-      lojaOrigemId: newClient.lojaOrigemId,
-      lojaOrigemNome: storeObj?.nome || '',
-      status: newClient.status,
-      totalTransacoes: 0,
-      totalCompradoEUR: 0.0,
-      ultimaVisita: '',
-      dataRegisto: new Date().toLocaleDateString('pt-PT'),
-      notasInternas: newClient.notasInternas.trim(),
-      historico: [],
+      id: newId, codigoCliente: nextCode, nome: newClient.nome.trim(), nif: newClient.nif.trim(),
+      telemovel: newClient.telemovel.trim(), email: newClient.email.trim(),
+      docIdentificacao: newClient.docIdentificacao.trim(), dataNascimento: newClient.dataNascimento,
+      morada: newClient.morada.trim(), cidade: newClient.cidade.trim(),
+      lojaOrigemId: newClient.lojaOrigemId, lojaOrigemNome: storeObj?.nome || '',
+      status: newClient.status, totalTransacoes: 0, totalCompradoEUR: 0,
+      ultimaVisita: '', dataRegisto: new Date().toLocaleDateString('pt-PT'),
+      notasInternas: newClient.notasInternas.trim(), historico: [],
     };
-
-    setIsNewClientModalOpen(false);
-    setIsNewClientModalOpen(false);
-    setNewClient({
-      nome: '',
-      nif: '',
-      telemovel: '',
-      email: '',
-      docIdentificacao: '',
-      dataNascimento: '',
-      morada: '',
-      cidade: '',
-      lojaOrigemId: storeOptions[0]?.id || '',
-      status: 'normal',
-      notasInternas: '',
-    });
+    try {
+      await createClient(created);
+      setIsNewClientModalOpen(false);
+      setNewClient({ nome: '', nif: '', telemovel: '', email: '', docIdentificacao: '', dataNascimento: '', morada: '', cidade: '', lojaOrigemId: '', status: 'normal', notasInternas: '' });
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao criar o cliente.');
+    }
   };
 
   // Helper de Badge de Status
