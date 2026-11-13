@@ -34,7 +34,8 @@ export type PaymentMethod =
   | 'Transferência Imediata'
   | 'Transferência SEPA'
   | 'Numerário Balcão'
-  | 'Cheque Bancário';
+  | 'Cheque Bancário'
+  | '';
 
 export interface FinancialTransaction {
   id: string;
