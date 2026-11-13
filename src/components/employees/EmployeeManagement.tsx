@@ -27,8 +27,8 @@ import {
 } from 'lucide-react';
 import { useEmployees, useStores } from '../../hooks/useSupabaseData';
 
-export type EmployeeRole = 'Gerente' | 'Operador' | 'Estagiário';
-export type EmployeeStatus = 'em_servico' | 'ausente' | 'ferias';
+export type EmployeeRole = 'Gerente' | 'Operador' | 'Estagiário' | '';
+export type EmployeeStatus = 'em_servico' | 'ausente' | 'ferias' | '';
 
 export interface Employee {
   id: string;
@@ -196,6 +196,8 @@ export const EmployeeManagement: React.FC = () => {
             Férias
           </span>
         );
+      default:
+        return <span className="text-[11px] text-slate-400">Não definido</span>;
     }
   };
 
@@ -222,6 +224,8 @@ export const EmployeeManagement: React.FC = () => {
             Estagiário
           </span>
         );
+      default:
+        return <span className="text-[10px] text-slate-400">Não definido</span>;
     }
   };
 
