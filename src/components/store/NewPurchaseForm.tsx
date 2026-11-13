@@ -145,6 +145,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         .single();
 
       if (txError) throw txError;
+      if (!novaTransacao?.id) throw new Error('A base de dados não devolveu o identificador da transação.');
 
       // 2. INSERT INTO inventario_fisico (transacao_origem_id, estado='em_loja', ...)
       const codigoUnico = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`;
@@ -160,7 +161,12 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
           estado: 'em_loja',
         });
 
-      if (invError) throw invError;
+      if (invError) {
+        const partialMessage = 'A transação foi criada, mas o registo no inventário falhou. Não repita a compra; contacte a sede para verificar a transação.';
+        setErrorMessage(partialMessage);
+        onShowToast('error', partialMessage);
+        return;
+      }
 
       // 3. Toast: "Compra registada! Aguarda aprovação."
       onShowToast(
