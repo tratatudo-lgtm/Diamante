@@ -74,151 +74,41 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   // =========================================================
   // 1. ESTADO: GERAL
   // =========================================================
-  const [generalConfig, setGeneralConfig] = useState({
-    nomeEmpresa: "Diamante D'ouro Lda",
-    nif: '509123456',
-    moradaSede: 'Avenida da Liberdade 180, 4º Andar',
-    codigoPostal: '1250-146',
-    cidade: 'Lisboa',
-    telefoneSede: '+351 213 456 789',
-    emailGeral: 'contacto@diamantedouro.pt',
-    registoContrastaria: 'Contrastaria de Lisboa - Licença INCM nº 4892',
-    moedaPadrao: 'EUR (€)',
-    fusoHorario: 'Europe/Lisbon (WET/WEST)',
-    logoUrl: '',
-  });
+  const [generalConfig, setGeneralConfig] = useState({ nomeEmpresa: '', nif: '', moradaSede: '', codigoPostal: '', cidade: '', telefoneSede: '', emailGeral: '', registoContrastaria: '', moedaPadrao: '', fusoHorario: '', logoUrl: '' });
 
   // =========================================================
   // 2. ESTADO: PREÇO DO OURO & COTAÇÕES
   // =========================================================
-  const [goldPrices, setGoldPrices] = useState({
-    ouro24k: 84.5,
-    ouro19k: 65.2, // Toque 800 tradicional português
-    ouro18k: 61.8, // Toque 750
-    ouro14k: 48.0, // Toque 585
-    ouro9k: 30.5, // Toque 375
-    prata925: 0.95,
-    margemSegurancaPercent: 8.5,
-    autoUpdate: true,
-    intervaloMinutos: 15,
-    ultimaAtualizacao: '06/11/2026 às 10:45',
-  });
+  const [goldPrices, setGoldPrices] = useState({ ouro24k: 0, ouro19k: 0, ouro18k: 0, ouro14k: 0, ouro9k: 0, prata925: 0, margemSegurancaPercent: 0, autoUpdate: false, intervaloMinutos: 0, ultimaAtualizacao: '' });
 
   // =========================================================
   // 3. ESTADO: BANCOS & PAGAMENTOS
   // =========================================================
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([
-    {
-      id: 'bnk-01',
-      bancoNome: 'Millennium BCP',
-      titular: "Diamante D'ouro Lda",
-      iban: 'PT50 0033 0000 4521 8963 2145 8',
-      tipo: 'Principal',
-      ativo: true,
-      saldoContabilistico: 124500.0,
-    },
-    {
-      id: 'bnk-02',
-      bancoNome: 'Caixa Geral de Depósitos',
-      titular: "Diamante D'ouro Lda - Tesouraria Norte",
-      iban: 'PT50 0035 0124 0002 9874 5632 1',
-      tipo: 'Secundária',
-      ativo: true,
-      saldoContabilistico: 45000.0,
-    },
-    {
-      id: 'bnk-03',
-      bancoNome: 'Openbank Santander',
-      titular: "Diamante D'ouro Lda - Reserva Digital",
-      iban: 'PT50 0007 0021 3456 7890 1234 5',
-      tipo: 'Emergência',
-      ativo: true,
-      saldoContabilistico: 14750.0,
-    },
-  ]);
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
 
-  const [emergencyIban, setEmergencyIban] = useState('PT50 0033 9999 8888 7777 6666 5');
-  const [limiteDiarioSemDuplaAutorizacao, setLimiteDiarioSemDuplaAutorizacao] = useState(10000);
+  const [emergencyIban, setEmergencyIban] = useState('');
+  const [limiteDiarioSemDuplaAutorizacao, setLimiteDiarioSemDuplaAutorizacao] = useState(0);
   const [isAddBankModalOpen, setIsAddBankModalOpen] = useState(false);
-  const [newBank, setNewBank] = useState({
-    bancoNome: 'Novo Banco',
-    titular: "Diamante D'ouro Lda",
-    iban: 'PT50 ',
-    tipo: 'Secundária' as BankAccount['tipo'],
-  });
+  const [newBank, setNewBank] = useState({ bancoNome: '', titular: '', iban: '', tipo: 'Secundária' as BankAccount['tipo'] });
 
   // =========================================================
   // 4. ESTADO: APROVADORES & WHATSAPP OTP
   // =========================================================
-  const [approvers, setApprovers] = useState<Approver[]>([
-    {
-      id: 'apr-01',
-      nome: 'Administrador Master',
-      telemovel: '+351 937 230 116',
-      cargo: 'Sócio-Gerente / Master',
-      limiteAprovacaoEUR: 100000,
-      ativo: true,
-    },
-    {
-      id: 'apr-02',
-      nome: 'Dra. Helena Vaz',
-      telemovel: '+351 912 345 678',
-      cargo: 'Diretora Financeira',
-      limiteAprovacaoEUR: 25000,
-      ativo: true,
-    },
-    {
-      id: 'apr-03',
-      nome: 'Dr. Carlos Mendonça',
-      telemovel: '+351 964 567 890',
-      cargo: 'Auditor Jurídico & Compliance',
-      limiteAprovacaoEUR: 15000,
-      ativo: false,
-    },
-  ]);
+  const [approvers, setApprovers] = useState<Approver[]>([]);
 
-  const [duplaAutorizacaoThreshold, setDuplaAutorizacaoThreshold] = useState(5000);
+  const [duplaAutorizacaoThreshold, setDuplaAutorizacaoThreshold] = useState(0);
   const [isAddApproverModalOpen, setIsAddApproverModalOpen] = useState(false);
-  const [newApprover, setNewApprover] = useState({
-    nome: '',
-    telemovel: '+351 ',
-    cargo: 'Gerente Regional',
-    limiteAprovacaoEUR: 10000,
-  });
+  const [newApprover, setNewApprover] = useState({ nome: '', telemovel: '', cargo: '', limiteAprovacaoEUR: 0 });
 
   // =========================================================
   // 5. ESTADO: NOTIFICAÇÕES
   // =========================================================
-  const [notifications, setNotifications] = useState({
-    whatsappEnabled: true,
-    whatsappInstance: 'diamante-os',
-    whatsappApiUrl: 'http://localhost:9090',
-    notifyNewPurchase: true,
-    notifyOtpSent: true,
-    notifyHighValueTransactions: true,
-    highValueThresholdEUR: 5000,
-    emailDailyReport: true,
-    emailAuditAlerts: true,
-    emailDestinatario: 'direcao@diamantedouro.pt',
-    pushBrowserAlerts: true,
-    alertaLimiteLojaGrama: 500, // Alerta quando loja acumula +500g num dia
-    alertaBlacklistMatch: true,
-  });
+  const [notifications, setNotifications] = useState({ whatsappEnabled: false, whatsappInstance: '', whatsappApiUrl: '', notifyNewPurchase: false, notifyOtpSent: false, notifyHighValueTransactions: false, highValueThresholdEUR: 0, emailDailyReport: false, emailAuditAlerts: false, emailDestinatario: '', pushBrowserAlerts: false, alertaLimiteLojaGrama: 0, alertaBlacklistMatch: false });
 
   // =========================================================
   // 6. ESTADO: SEGURANÇA & ACESSOS
   // =========================================================
-  const [security, setSecurity] = useState({
-    twoFactorEnforced: true,
-    twoFactorMethod: 'WhatsApp OTP & SMS',
-    sessionTimeoutMinutes: 30,
-    ipAllowlistOnly: false,
-    showApiKeys: false,
-    evolutionApiKey: 'evo_sec_live_9941a87b1c4d92ef',
-    supabaseRoleKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.master_service_role',
-    webhookSecret: 'whsec_diamante_os_prod_2026',
-    logsAuditRetentionDays: 365,
-  });
+  const [security, setSecurity] = useState({ twoFactorEnforced: false, twoFactorMethod: '', sessionTimeoutMinutes: 0, ipAllowlistOnly: false, showApiKeys: false, evolutionApiKey: '', webhookSecret: '', logsAuditRetentionDays: 0 });
 
   // Sincronização quando as configurações do Supabase são carregadas
   useEffect(() => {
@@ -268,9 +158,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     setBankAccounts((prev) => [...prev, bnk]);
     setIsAddBankModalOpen(false);
     setNewBank({
-      bancoNome: 'Novo Banco',
-      titular: "Diamante D'ouro Lda",
-      iban: 'PT50 ',
+      bancoNome: '',
+      titular: '',
+      iban: '',
       tipo: 'Secundária',
     });
     triggerToast('Nova conta bancária adicionada à tesouraria.');
@@ -298,9 +188,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     setIsAddApproverModalOpen(false);
     setNewApprover({
       nome: '',
-      telemovel: '+351 ',
-      cargo: 'Gerente Regional',
-      limiteAprovacaoEUR: 10000,
+      telemovel: '',
+      cargo: '',
+      limiteAprovacaoEUR: 0,
     });
     triggerToast('Novo aprovador autorizado adicionado.');
   };
