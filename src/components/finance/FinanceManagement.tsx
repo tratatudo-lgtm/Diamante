@@ -213,7 +213,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
     const refNum = Date.now();
     const referencia = `PAG-${refNum}`;
     const createdTx: FinancialTransaction = {
-      id: `tx-${refNum}`, referencia, lojaId: newPayment.lojaId, lojaNome: storeObj.nome,
+      id: '', referencia, lojaId: newPayment.lojaId, lojaNome: storeObj.nome,
       beneficiarioNome: newPayment.beneficiarioNome.trim(),
       beneficiarioNif: newPayment.beneficiarioNif.trim(),
       beneficiarioIban: newPayment.beneficiarioIban.trim().toUpperCase(),
@@ -223,7 +223,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
       metodo: newPayment.metodo, contaOrigem: newPayment.contaOrigem,
       descricao: newPayment.descricao.trim(), pesoOuroGramas: Number(newPayment.pesoOuroGramas) || 0,
       tipoMetal: newPayment.tipoMetal, operadorNome: newPayment.operadorNome,
-      comprovativoRef: `SEPA-COMP-${refNum}-PEND`,
+      comprovativoRef: '',
     };
     try {
       await createPayment(createdTx);
