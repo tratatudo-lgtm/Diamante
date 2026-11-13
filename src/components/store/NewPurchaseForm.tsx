@@ -1,5 +1,5 @@
 import React, { useState, useId } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Sparkles,
@@ -125,27 +125,36 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
     setIsSubmitting(true);
 
     try {
-      // 1. INSERT INTO transacoes (estado='pendente_aprovacao', ...)
-      const { data: novaTransacao, error: txError } = await supabase
-        .from('transacoes')
-        .insert({
-          loja_id: lojaId,
-          funcionario_id: funcionarioId,
-          cliente_nome: clienteNome.trim(),
-          cliente_cc: clienteCc.trim(),
-          cliente_telemovel: clienteTelemovel.trim() || null,
-          tipo_peca: tipoPeca,
-          metal: metal,
-          peso_gramas: pesoNum,
-          valor_final: parseFloat(valorFinalEfetivo.toFixed(2)),
-          descricao: descricao.trim() || `${tipoPeca} em ${metal}`,
-          estado: 'pendente_aprovacao',
-        })
-        .select()
-        .single();
+      // A transação é criada exclusivamente pela API protegida.
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
 
-      if (txError) throw txError;
-      if (!novaTransacao?.id) throw new Error('A base de dados não devolveu o identificador da transação.');
+      const txResponse = await fetch('/api/store/purchases', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          clienteNome: clienteNome.trim(),
+          clienteCc: clienteCc.trim(),
+          clienteTelemovel: clienteTelemovel.trim() || null,
+          tipoPeca,
+          metal,
+          pesoGramas: pesoNum,
+          valorFinal: parseFloat(valorFinalEfetivo.toFixed(2)),
+          valorSugerido: parseFloat(valorSugerido.toFixed(2)),
+          cotacaoSpot: spotPrice,
+          margemPercent,
+          descricao: descricao.trim() || `${tipoPeca} em ${metal}`,
+        }),
+      });
+      const txResult = await txResponse.json().catch(() => null);
+      if (!txResponse.ok || !txResult?.success) {
+        throw new Error(txResult?.message || 'Não foi possível registar a transação.');
+      }
+      const novaTransacao = txResult.transacao;
+      if (!novaTransacao?.id) throw new Error('A API não devolveu o identificador da transação.');
 
       // 2. INSERT INTO inventario_fisico (transacao_origem_id, estado='em_loja', ...)
       const codigoUnico = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`;
