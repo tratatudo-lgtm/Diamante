@@ -134,8 +134,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
         goldPrices: goldPrices,
       });
       triggerToast('Configurações guardadas com sucesso na base de dados Supabase.');
-    } catch {
-      triggerToast('Aviso: Configurações mantidas em memória local.');
+    } catch (err: any) {
+      triggerToast(err?.message || 'Falha ao guardar configurações.');
     } finally {
       setIsSaving(false);
     }
@@ -145,59 +145,24 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     e.preventDefault();
     if (!newBank.bancoNome.trim() || !newBank.iban.trim()) return;
 
-    const bnk: BankAccount = {
-      id: `bnk-${Date.now()}`,
-      bancoNome: newBank.bancoNome.trim(),
-      titular: newBank.titular.trim(),
-      iban: newBank.iban.trim().toUpperCase(),
-      tipo: newBank.tipo,
-      ativo: true,
-      saldoContabilistico: 0,
-    };
-
-    setBankAccounts((prev) => [...prev, bnk]);
+    triggerToast('A gestão de contas bancárias ainda não está ligada à base de dados. Nenhuma alteração foi guardada.');
     setIsAddBankModalOpen(false);
-    setNewBank({
-      bancoNome: '',
-      titular: '',
-      iban: '',
-      tipo: 'Secundária',
-    });
-    triggerToast('Nova conta bancária adicionada à tesouraria.');
   };
 
-  const handleRemoveBank = (id: string) => {
-    setBankAccounts((prev) => prev.filter((b) => b.id !== id));
-    triggerToast('Conta bancária removida.');
+  const handleRemoveBank = (_id: string) => {
+    triggerToast('A gestão de contas bancárias ainda não está ligada à base de dados. Nenhuma alteração foi guardada.');
   };
 
   const handleAddApprover = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newApprover.nome.trim() || !newApprover.telemovel.trim()) return;
 
-    const apr: Approver = {
-      id: `apr-${Date.now()}`,
-      nome: newApprover.nome.trim(),
-      telemovel: newApprover.telemovel.trim(),
-      cargo: newApprover.cargo.trim(),
-      limiteAprovacaoEUR: Number(newApprover.limiteAprovacaoEUR) || 5000,
-      ativo: true,
-    };
-
-    setApprovers((prev) => [...prev, apr]);
+    triggerToast('A gestão de aprovadores ainda não está ligada à base de dados. Nenhuma alteração foi guardada.');
     setIsAddApproverModalOpen(false);
-    setNewApprover({
-      nome: '',
-      telemovel: '',
-      cargo: '',
-      limiteAprovacaoEUR: 0,
-    });
-    triggerToast('Novo aprovador autorizado adicionado.');
   };
 
-  const handleRemoveApprover = (id: string) => {
-    setApprovers((prev) => prev.filter((a) => a.id !== id));
-    triggerToast('Aprovador removido das permissões.');
+  const handleRemoveApprover = (_id: string) => {
+    triggerToast('A gestão de aprovadores ainda não está ligada à base de dados. Nenhuma alteração foi guardada.');
   };
 
   const tabs = [
