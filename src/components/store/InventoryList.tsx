@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import type { InventarioFisico } from '../../types/database';
 import {
@@ -32,6 +32,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
   // Carregar inventário da loja real via Supabase
   const fetchInventory = useCallback(async () => {
     setIsLoading(true);
+    if (!isSupabaseConfigured()) {
+      setItems([]);
+      onShowToast('error', 'Supabase não está configurada. O inventário não está disponível.');
+      setIsLoading(false);
+      return;
+    }
     try {
       // RLS já filtra por loja_id automaticamente
       let query = supabase
@@ -52,6 +58,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
 
   useEffect(() => {
     fetchInventory();
+    if (!isSupabaseConfigured()) return;
 
     const channel = supabase
       .channel('inventario-realtime-feed')
@@ -67,6 +74,10 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
 
   // Ação: Marcar como enviado para a sede
   const handleMarkAsSent = async (itemId: string, codigoUnico: string) => {
+    if (!isSupabaseConfigured()) {
+      onShowToast('error', 'Supabase não está configurada. O estado do lote não foi alterado.');
+      return;
+    }
     setUpdatingId(itemId);
     try {
       const { error } = await supabase
