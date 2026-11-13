@@ -1118,7 +1118,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
 
                 <div className="flex justify-end pt-4">
                   <button
-                    onClick={handleSaveSettings}
+                    onClick={() => triggerToast('As preferências de notificação ainda não estão ligadas à persistência. Nenhuma alteração foi guardada.')}
                     className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all cursor-pointer shadow-md shadow-[#D4AF37]/20"
                   >
                     <Save className="w-4 h-4 stroke-[2.5]" />
@@ -1166,6 +1166,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                       onChange={(e) =>
                         setSecurity({ ...security, twoFactorEnforced: e.target.checked })
                       }
+                      disabled
                       className="sr-only peer"
                     />
                     <div className="w-9 h-5 bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500" />
