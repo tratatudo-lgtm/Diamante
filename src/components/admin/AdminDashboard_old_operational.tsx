@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth';
 import type { Loja, LojaComKpi, Transacao, KpiLojaDiaria, GlobalKpiData } from '../../types/database';
 import { KPICard } from '../common/KPICard';
 import { LiveFeed } from './LiveFeed';
+import { DiamanteSidebar } from './DiamanteSidebar';
 import { StoreHeatMap } from './StoreHeatMap';
 import { StoreTable } from './StoreTable';
 import { StoreDetailDrawer } from './StoreDetailDrawer';
@@ -218,13 +219,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     : 0;
 
   return (
-    <div className="min-h-screen bg-[#111827] text-gray-100 flex flex-col selection:bg-[#D4AF37]/30 selection:text-white">
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_rgba(212,175,55,0.10),_transparent_42%),#080d18] text-gray-100 flex flex-col lg:pl-64 selection:bg-[#D4AF37]/30 selection:text-white">
+      <DiamanteSidebar currentPath="/dashboard-admin" onNavigate={onNavigate} />
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
       {/* REQUISITO 2.A: HEADER */}
       {/* Top Bar Contract: 3 zones separated by gap-8 (Brand Wordmark, Nav items, 1 Primary Action) */}
-      <header className="sticky top-0 z-40 bg-[#1F2937]/90 backdrop-blur-md border-b border-gray-800">
+      <header className="sticky top-0 z-40 bg-[#0d1422]/85 backdrop-blur-xl border-b border-white/10 shadow-lg shadow-black/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
           {/* Zone 1: Brand Wordmark & Section */}
           <div className="flex items-center gap-3 shrink-0">
@@ -376,12 +378,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             />
 
             <KPICard
-              title="Transações registadas"
+              title="Transações recentes"
               value={recentTxs.length}
               icon={ReceiptText}
               isLoading={isLoading}
               onClick={() => onNavigate('/admin/transacoes')}
-              subtitle="Últimos registos · Abrir lista"
+              subtitle="Últimos 20 registos · Abrir lista"
             />
             {/* 3. Peso Rede (Hoje) */}
             <KPICard
