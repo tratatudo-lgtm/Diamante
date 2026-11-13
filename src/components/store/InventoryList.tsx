@@ -80,12 +80,14 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
     }
     setUpdatingId(itemId);
     try {
-      const { error } = await supabase
+      const { data: updatedRows, error } = await supabase
         .from('inventario_fisico')
         .update({ estado: 'enviado_sede' })
-        .eq('id', itemId);
+        .eq('id', itemId)
+        .select('id');
 
       if (error) throw error;
+      if (!updatedRows?.length) throw new Error('O artigo não foi encontrado ou não foi atualizado.');
 
       setItems((prev) =>
         prev.map((item) => (item.id === itemId ? { ...item, estado: 'enviado_sede' } : item))
