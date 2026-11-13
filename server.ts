@@ -7,6 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import authRouter from './auth.routes';
 import warroomRouter from './warroom.routes';
+import crmRouter from './crm.routes';
 
 
 import { createServer } from 'http';
@@ -129,6 +130,7 @@ app.use(bruteForceProtection);
 app.use('/auth', authRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/v1/admin/dashboard', warroomRouter);
+app.use('/api/admin/crm', crmRouter);
 
 // ENDPOINT: LISTAR TRANSAÇÕES PENDENTES PARA AUTORIZAÇÃO
 app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req, res) => {
