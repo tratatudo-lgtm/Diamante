@@ -41,7 +41,7 @@ export function useStores() {
           // Mapeia o registo da base de dados para o modelo Store do frontend
           const mapped: Store[] = (dbLojas || []).map((row: any) => ({
             id: String(row.id), codigo: row.codigo_loja || row.codigo || '',
-            nome: row.nome || '', status: row.ativo === false ? 'inativa' : 'ativa',
+            nome: row.nome || '', status: row.ativo === true ? 'ativa' : row.ativo === false ? 'inativa' : '',
             endereco: row.morada || row.endereco || '', cidade: row.cidade || '',
             gerente: row.gerente || '', telefone: row.telefone || '', email: row.email || '',
             horario: row.horario || '', nif: row.nif_loja || row.nif || '',
@@ -128,9 +128,9 @@ export function useEmployees() {
         if (dbError) throw dbError;
         {
           const mapped: Employee[] = (dbFuncs || []).map((row: any) => {
-            const roleStr = String(row.role || 'operador').toLowerCase();
-            const cargo: EmployeeRole = roleStr.includes('gerente') ? 'Gerente' : roleStr.includes('estag') ? 'Estagiário' : 'Operador';
-            const status: EmployeeStatus = row.status === 'ausente' ? 'ausente' : row.status === 'ferias' ? 'ferias' : 'em_servico';
+            const roleStr = String(row.role || '').toLowerCase();
+            const cargo: EmployeeRole = roleStr.includes('gerente') ? 'Gerente' : roleStr.includes('estag') ? 'Estagiário' : roleStr.includes('operador') ? 'Operador' : '';
+            const status: EmployeeStatus = row.status === 'ausente' ? 'ausente' : row.status === 'ferias' ? 'ferias' : row.status === 'em_servico' ? 'em_servico' : '';
 
             return {
               id: String(row.id),
@@ -243,7 +243,7 @@ export function useClients() {
             cidade: row.cidade || '',
             lojaOrigemId: row.loja_origem_id || '',
             lojaOrigemNome: row.loja_origem_nome || '',
-            status: (row.status as ClientStatus) || 'normal',
+            status: row.status === 'vip' || row.status === 'bloqueado' || row.status === 'normal' ? row.status as ClientStatus : '',
             totalTransacoes: Number(row.total_transacoes) || 0,
             totalCompradoEUR: Number(row.total_comprado_eur) || 0.0,
             ultimaVisita: row.ultima_visita || '',
@@ -337,7 +337,7 @@ export function useFinanceTransactions() {
             beneficiarioNif: row.beneficiario_nif || '',
             beneficiarioIban: row.beneficiario_iban || '',
             valor: Number(row.valor) || 0,
-            estado: (row.estado as PaymentStatus) || 'pendente',
+            estado: row.estado === 'pago' || row.estado === 'rejeitado' || row.estado === 'pendente' ? row.estado as PaymentStatus : '',
             data: row.data || new Date(row.created_at || Date.now()).toLocaleDateString('pt-PT'),
             hora: row.hora || '',
             metodo: (row.metodo as PaymentMethod) || '',
