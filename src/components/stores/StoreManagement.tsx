@@ -47,7 +47,7 @@ export interface Store {
 }
 
 export const StoreManagement: React.FC = () => {
-  const { data: stores, loading, createStore, updateStore, deleteStore } = useStores();
+  const { data: stores, loading, error: dataError, createStore, updateStore, deleteStore } = useStores();
   const [actionError, setActionError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todas' | 'ativa' | 'inativa'>('todas');
@@ -169,6 +169,7 @@ export const StoreManagement: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-white p-4 sm:p-6 lg:p-8 font-sans selection:bg-[#D4AF37]/30 selection:text-white">
+      {dataError && <div role="alert" className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{dataError}</div>}
       {actionError && (
         <div role="alert" className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
           <div className="flex items-center justify-between gap-3">
