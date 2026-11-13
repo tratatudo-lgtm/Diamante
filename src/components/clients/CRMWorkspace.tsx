@@ -4,7 +4,7 @@ import { Search, Users, Building2, ArrowLeft, RefreshCw, FileText, Image as Imag
 type Client = {
   id: string; nome: string; bi_cc?: string | null; telemovel?: string | null; email?: string | null;
   morada?: string | null; contacto?: string | null; total_transacoes?: number; total_volume?: number;
-  ultima_transacao?: string | null; loja_nome?: string | null;
+  ultima_transacao?: string | null; loja_nome?: string | null; created_at?: string | null;
 };
 type Transaction = {
   id: string; created_at: string; estado: string; valor_final: number | null; peso_gramas: number | null;
