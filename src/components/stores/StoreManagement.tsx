@@ -60,11 +60,11 @@ export const StoreManagement: React.FC = () => {
     endereco: '',
     cidade: '',
     gerente: '',
-    telefone: '+351 ',
+    telefone: '',
     email: '',
-    horario: 'Seg - Sáb: 09:30 - 19:00',
+    horario: '',
     nif: '',
-    metaMes: 30000,
+    metaMes: 0,
     status: 'ativa' as 'ativa' | 'inativa',
   });
 
@@ -132,13 +132,13 @@ export const StoreManagement: React.FC = () => {
       nome: newStore.nome.trim(),
       status: newStore.status,
       endereco: newStore.endereco.trim(),
-      cidade: newStore.cidade.trim() || 'Lisboa',
-      gerente: newStore.gerente.trim() || 'Responsável a Designar',
-      telefone: newStore.telefone.trim() || '+351 210 000 000',
-      email: newStore.email.trim() || 'contacto@diamantedouro.pt',
-      horario: newStore.horario.trim() || 'Seg - Sáb: 09:30 - 19:00',
-      nif: newStore.nif.trim() || '509999999',
-      metaMes: Number(newStore.metaMes) || 30000,
+      cidade: newStore.cidade.trim(),
+      gerente: newStore.gerente.trim(),
+      telefone: newStore.telefone.trim(),
+      email: newStore.email.trim(),
+      horario: newStore.horario.trim(),
+      nif: newStore.nif.trim(),
+      metaMes: Number(newStore.metaMes) || 0,
     });
 
     setIsCreateModalOpen(false);
@@ -147,11 +147,11 @@ export const StoreManagement: React.FC = () => {
       endereco: '',
       cidade: '',
       gerente: '',
-      telefone: '+351 ',
+      telefone: '',
       email: '',
-      horario: 'Seg - Sáb: 09:30 - 19:00',
+      horario: '',
       nif: '',
-      metaMes: 30000,
+      metaMes: 0,
       status: 'ativa',
     });
   };
