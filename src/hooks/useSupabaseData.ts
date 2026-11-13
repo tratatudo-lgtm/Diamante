@@ -90,22 +90,22 @@ export function useStores() {
 
   const updateStore = async (id: string, updates: Partial<Store>) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi atualizada.');
-    const { error } = await supabase.from('lojas').update({
+    const { data: updatedRows, error } = await supabase.from('lojas').update({
       nome: updates.nome, morada: updates.endereco, cidade: updates.cidade, gerente: updates.gerente,
       telefone: updates.telefone, email: updates.email, horario: updates.horario,
       nif_loja: updates.nif, meta_mes: updates.metaMes,
       ativo: updates.status === 'ativa' ? true : updates.status === 'inativa' ? false : undefined,
     }).eq('id', id).select('id');
     if (error) throw error;
-    if (!data?.length) throw new Error('A loja não foi encontrada ou não foi atualizada.');
+    if (!updatedRows?.length) throw new Error('A loja não foi encontrada ou não foi atualizada.');
     setData((prev) => prev.map((store) => store.id === id ? { ...store, ...updates } : store));
   };
 
   const deleteStore = async (id: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi eliminada.');
-    const { error } = await supabase.from('lojas').delete().eq('id', id).select('id');
+    const { data: deletedRows, error } = await supabase.from('lojas').delete().eq('id', id).select('id');
     if (error) throw error;
-    if (!data?.length) throw new Error('A loja não foi encontrada ou não foi eliminada.');
+    if (!deletedRows?.length) throw new Error('A loja não foi encontrada ou não foi eliminada.');
     setData((prev) => prev.filter((store) => store.id !== id));
   };
 
@@ -195,7 +195,7 @@ export function useEmployees() {
 
   const updateEmployee = async (id: string, updates: Partial<Employee>) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi atualizado.');
-    const { error } = await supabase.from('funcionarios').update({
+    const { data: updatedRows, error } = await supabase.from('funcionarios').update({
       nome_completo: updates.nome, nif: updates.nif, telemovel: updates.telemovel,
       email: updates.email, loja_id: updates.lojaId,
       role: updates.cargo ? updates.cargo.toLowerCase() : undefined,
@@ -203,15 +203,15 @@ export function useEmployees() {
       especialidade: updates.especialidade, status: updates.status || undefined,
     }).eq('id', id).select('id');
     if (error) throw error;
-    if (!data?.length) throw new Error('O funcionário não foi encontrado ou não foi atualizado.');
+    if (!updatedRows?.length) throw new Error('O funcionário não foi encontrado ou não foi atualizado.');
     setData((prev) => prev.map((employee) => employee.id === id ? { ...employee, ...updates } : employee));
   };
 
   const deleteEmployee = async (id: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi eliminado.');
-    const { error } = await supabase.from('funcionarios').delete().eq('id', id).select('id');
+    const { data: deletedRows, error } = await supabase.from('funcionarios').delete().eq('id', id).select('id');
     if (error) throw error;
-    if (!data?.length) throw new Error('O funcionário não foi encontrado ou não foi eliminado.');
+    if (!deletedRows?.length) throw new Error('O funcionário não foi encontrado ou não foi eliminado.');
     setData((prev) => prev.filter((employee) => employee.id !== id));
   };
 
@@ -298,9 +298,9 @@ export function useClients() {
     const target = data.find((client) => client.id === clientId);
     if (!target) throw new Error('Cliente não encontrado.');
     const nextStatus: ClientStatus = target.status === 'bloqueado' ? 'normal' : 'bloqueado';
-    const { error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId).select('id');
+    const { data: updatedRows, error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId).select('id');
     if (error) throw error;
-    if (!data?.length) throw new Error('O cliente não foi encontrado ou não foi atualizado.');
+    if (!updatedRows?.length) throw new Error('O cliente não foi encontrado ou não foi atualizado.');
     setData((prev) => prev.map((client) => client.id === clientId ? { ...client, status: nextStatus } : client));
   };
 
@@ -309,8 +309,9 @@ export function useClients() {
     const target = data.find((client) => client.id === clientId);
     if (!target) throw new Error('Cliente não encontrado.');
     const nextStatus: ClientStatus = target.status === 'vip' ? 'normal' : 'vip';
-    const { error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId);
+    const { data: updatedRows, error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId).select('id');
     if (error) throw error;
+    if (!updatedRows?.length) throw new Error('O cliente não foi encontrado ou não foi atualizado.');
     setData((prev) => prev.map((client) => client.id === clientId ? { ...client, status: nextStatus } : client));
   };
 
@@ -381,15 +382,15 @@ export function useFinanceTransactions() {
 
   const confirmPayment = async (txId: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi confirmado.');
-    const { error } = await supabase.from('transacoes_financeiras').update({ estado: 'pago' }).eq('id', txId).select('id');
+    const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'pago' }).eq('id', txId).select('id');
     if (error) throw error;
-    if (!data?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
+    if (!updatedRows?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
     setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'pago' } : tx));
   };
 
   const rejectPayment = async (txId: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi rejeitado.');
-    const { error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado' }).eq('id', txId).select('id');
+    const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado' }).eq('id', txId).select('id');
     if (error) throw error;
     if (!data?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
     setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'rejeitado' } : tx));
