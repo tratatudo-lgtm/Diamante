@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import type { Transacao, KpiLojaDiaria, RegistoPonto, Loja } from '../../types/database';
 import {
@@ -73,6 +73,11 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
   // Buscar dados reais da loja respeitando RLS
   const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
+    if (!isSupabaseConfigured()) {
+      onShowToast('error', 'Supabase não está configurada. Os dados da loja não estão disponíveis.');
+      setIsLoading(false);
+      return;
+    }
     try {
       const todayStr = new Date().toISOString().split('T')[0];
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -194,6 +199,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
 
   useEffect(() => {
     loadDashboardData();
+    if (!isSupabaseConfigured()) return;
 
     // Subscrição em tempo real para transações e registos de ponto
     const channel = supabase
@@ -216,6 +222,10 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
 
   // REQUISITO TÉCNICO: Geolocalização ao fazer Clock In/Out
   const handleToggleClock = async () => {
+    if (!isSupabaseConfigured()) {
+      onShowToast('error', 'Supabase não está configurada. O registo de ponto não foi efetuado.');
+      return;
+    }
     setIsClocking(true);
     const novoTipo: 'entrada' | 'saida' = isClockedIn ? 'saida' : 'entrada';
 
