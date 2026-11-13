@@ -584,7 +584,7 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
                     type="text"
                     value={formData.codigo_loja}
                     onChange={(e) => setFormData({ ...formData, codigo_loja: e.target.value.toUpperCase() })}
-                    placeholder="LOJ-025"
+                    placeholder="Código da loja"
                     className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white font-mono uppercase focus:outline-hidden focus:border-[#D4AF37]"
                     required
                   />
@@ -675,7 +675,7 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
                     type="text"
                     value={formData.nif_loja}
                     onChange={(e) => setFormData({ ...formData, nif_loja: e.target.value })}
-                    placeholder="509123456"
+                    placeholder="NIF (9 dígitos)"
                     maxLength={9}
                     className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-hidden focus:border-[#D4AF37]"
                   />
