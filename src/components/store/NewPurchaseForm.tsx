@@ -1,5 +1,5 @@
 import React, { useState, useId } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Sparkles,
@@ -117,6 +117,11 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       return;
     }
 
+    if (!isSupabaseConfigured()) {
+      setErrorMessage('Supabase não está configurada. A compra não foi registada.');
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -155,9 +160,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
           estado: 'em_loja',
         });
 
-      if (invError) {
-        console.warn('[Compra] Aviso: não foi possível atualizar o inventário.');
-      }
+      if (invError) throw invError;
 
       // 3. Toast: "Compra registada! Aguarda aprovação."
       onShowToast(
