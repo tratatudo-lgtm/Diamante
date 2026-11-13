@@ -22,7 +22,12 @@ import {
   PlusCircle,
   HelpCircle,
   Users,
-  ReceiptText
+  ReceiptText,
+  Activity,
+  ArrowUpRight,
+  ShieldCheck,
+  Radio,
+  Zap
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -222,26 +227,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     : 0;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_rgba(212,175,55,0.10),_transparent_42%),#080d18] text-gray-100 flex flex-col lg:pl-64 selection:bg-[#D4AF37]/30 selection:text-white">
+    <div className="relative isolate min-h-screen overflow-hidden bg-[#070d18] text-slate-100 flex flex-col lg:pl-64 selection:bg-[#D4AF37]/30 selection:text-white">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="aurora-drift absolute -left-40 -top-40 h-[30rem] w-[30rem] rounded-full bg-cyan-500/[0.07] blur-[100px]" />
+        <div className="aurora-drift absolute -right-40 top-24 h-[34rem] w-[34rem] rounded-full bg-amber-400/[0.07] blur-[120px]" />
+        <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_78%)]" />
+      </div>
       <DiamanteSidebar currentPath="/dashboard-admin" onNavigate={onNavigate} />
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
       {/* REQUISITO 2.A: HEADER */}
       {/* Top Bar Contract: 3 zones separated by gap-8 (Brand Wordmark, Nav items, 1 Primary Action) */}
-      <header className="sticky top-0 z-40 bg-[#0d1422]/85 backdrop-blur-xl border-b border-white/10 shadow-lg shadow-black/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-8">
+      <header className="sticky top-0 z-40 border-b border-white/[0.08] bg-[#081322]/75 shadow-[0_12px_50px_-28px_rgba(0,0,0,.9)] backdrop-blur-2xl">
+        <div className="mx-auto flex h-[76px] max-w-[1600px] items-center justify-between gap-3 px-4 pl-16 sm:px-6 sm:pl-16 lg:px-8 lg:pl-8">
           {/* Zone 1: Brand Wordmark & Section */}
           <div className="flex items-center gap-3 shrink-0">
-            <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-[#1F2937] to-[#111827] border border-[#D4AF37]/50 shadow-sm">
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-2xl border border-[#e5c66d]/40 bg-gradient-to-br from-[#f3d77f]/20 via-[#18263a] to-[#091321] shadow-[0_0_28px_rgba(212,175,55,.16)]">
               <Sparkles className="w-5 h-5 text-[#D4AF37]" />
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="text-base font-bold tracking-tight text-white whitespace-nowrap">
+              <span className="text-[15px] font-extrabold tracking-[0.04em] text-white whitespace-nowrap">
                 Diamante OS
               </span>
               <span className="text-xs text-gray-400 font-medium">/</span>
-              <span className="text-xs font-semibold text-[#D4AF37] uppercase tracking-wider whitespace-nowrap">
+              <span className="text-[10px] font-bold text-[#e7c76b] uppercase tracking-[0.22em] whitespace-nowrap">
                 Painel Central
               </span>
             </div>
@@ -318,7 +328,35 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+      <main className="relative z-10 mx-auto w-full max-w-[1600px] flex-1 space-y-8 px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+        <section aria-label="Centro de comando Diamante" className="relative isolate overflow-hidden rounded-[28px] border border-[#d8b85d]/20 bg-[linear-gradient(112deg,rgba(18,34,55,.98),rgba(10,20,36,.96)_55%,rgba(35,29,18,.86))] p-5 shadow-[0_28px_90px_-48px_rgba(0,0,0,.95)] sm:p-8 lg:p-9">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_78%_45%,rgba(212,175,55,.16),transparent_34%),linear-gradient(120deg,transparent_30%,rgba(255,255,255,.035),transparent_72%)]" />
+          <div className="pointer-events-none absolute -right-10 -top-28 h-80 w-80 rounded-full border border-[#e4c76f]/10" />
+          <div className="orbit-spin pointer-events-none absolute -right-2 top-[-5.5rem] hidden h-[23rem] w-[23rem] rounded-full border border-dashed border-[#e4c76f]/20 lg:block" />
+          <div className="pointer-events-none absolute right-16 top-12 hidden h-56 w-56 rounded-full border border-[#e4c76f]/15 shadow-[inset_0_0_55px_rgba(212,175,55,.08),0_0_65px_rgba(212,175,55,.08)] lg:block" />
+          <div className="pointer-events-none absolute right-[7.7rem] top-[7.7rem] hidden h-24 w-24 rounded-full bg-gradient-to-br from-[#f4dc8c]/25 to-cyan-300/5 blur-xl lg:block" />
+          <div className="relative grid gap-8 lg:grid-cols-[1fr_330px] lg:items-center">
+            <div className="max-w-3xl">
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[0.07] px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200">
+                <span className={`signal-pulse h-2 w-2 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                {isOnline ? 'Sistema operacional · sincronização activa' : 'Ligação indisponível · a aguardar sincronização'}
+              </div>
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.32em] text-[#e4c76f]">DIAMANTE D’OURO / INTELLIGENCE</p>
+              <h1 className="max-w-2xl text-3xl font-semibold leading-[1.08] tracking-[-0.045em] text-white sm:text-4xl lg:text-[3.35rem]">Centro de <span className="bg-gradient-to-r from-[#f7e6a9] via-[#d8b85d] to-[#a98432] bg-clip-text text-transparent">comando</span></h1>
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300/80 sm:text-[15px]">Visão global da operação, actividade da rede e controlo administrativo num único espaço inteligente.</p>
+              <div className="mt-7 flex flex-wrap gap-2.5">
+                <button onClick={() => onNavigate('/admin/transacoes')} className="group inline-flex items-center gap-2 rounded-xl border border-[#e7ca78]/40 bg-gradient-to-r from-[#d4af37] to-[#a9822d] px-4 py-3 text-xs font-extrabold text-[#101827] shadow-[0_10px_28px_-12px_rgba(212,175,55,.65)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_35px_-12px_rgba(212,175,55,.65)]"><ReceiptText className="h-4 w-4" /> Explorar transacções <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" /></button>
+                <button onClick={() => onNavigate('/stores')} className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-4 py-3 text-xs font-semibold text-slate-200 transition-all hover:border-white/20 hover:bg-white/[0.08]"><Building2 className="h-4 w-4 text-[#e4c76f]" /> Gestão da rede</button>
+              </div>
+            </div>
+            <div className="relative grid grid-cols-2 gap-3 lg:max-w-[330px]">
+              <div className="rounded-2xl border border-white/10 bg-[#071321]/55 p-4 backdrop-blur-xl"><div className="mb-3 flex items-center justify-between"><Radio className="h-4 w-4 text-emerald-300" /><span className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">Estado</span></div><p className="text-lg font-semibold text-white">{isOnline ? 'Online' : 'Offline'}</p><p className="mt-1 text-[10px] text-slate-400">API administrativa</p></div>
+              <div className="rounded-2xl border border-white/10 bg-[#071321]/55 p-4 backdrop-blur-xl"><div className="mb-3 flex items-center justify-between"><Building2 className="h-4 w-4 text-[#e4c76f]" /><span className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-500">Rede</span></div><p className="text-lg font-semibold text-white tabular-nums">{globalKpis.totalLojas}</p><p className="mt-1 text-[10px] text-slate-400">Lojas registadas</p></div>
+              <div className="col-span-2 flex items-center justify-between rounded-2xl border border-[#d8b85d]/15 bg-gradient-to-r from-[#d8b85d]/[0.09] to-transparent px-4 py-3"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[#d8b85d]/20 bg-[#d8b85d]/10"><ShieldCheck className="h-4 w-4 text-[#e7ca78]" /></div><div><p className="text-xs font-semibold text-slate-100">Ambiente protegido</p><p className="mt-0.5 text-[10px] text-slate-400">Acesso administrativo autenticado</p></div></div><Zap className="h-4 w-4 text-[#d8b85d]" /></div>
+            </div>
+          </div>
+          <div className="scan-line pointer-events-none absolute left-0 right-0 top-0 h-20 bg-gradient-to-b from-transparent via-white/[0.025] to-transparent" />
+        </section>
         {/* Estados explícitos da API administrativa */}
         {dataError && (
           <div role="alert" className="p-4 rounded-xl bg-rose-950/40 border border-rose-600/40 text-rose-200 text-xs">
@@ -339,8 +377,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         )}
 
         {/* REQUISITO 2.B: KPIS GLOBAIS (Grid 4 cols) */}
-        <section aria-label="KPIs Globais da Rede">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+        <section aria-label="KPIs Globais da Rede" className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Inteligência operacional</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Indicadores da rede</h2></div><div className="flex items-center gap-2 text-[10px] font-medium text-slate-500"><Activity className="h-3.5 w-3.5 text-[#d8b85d]" /> Actualização automática · 30 segundos</div></div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {/* 1. Volume Hoje */}
             <KPICard
               title="Volume Compras Hoje"
@@ -415,7 +454,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         </section>
 
         {/* REQUISITO 2.C & 2.D: SALA DE GUERRA (HEAT MAP + REALTIME FEED) */}
-        <section aria-label="Sala de Guerra Operacional">
+        <section aria-label="Sala de Guerra Operacional" className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Monitorização em directo</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Radar operacional</h2></div><span className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[10px] text-slate-400"><span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-rose-400'}`} /> {isOnline ? 'Feed ligado' : 'Feed sem ligação'}</span></div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* MAPA CALOR LOJAS (7 Cols) */}
             <div className="lg:col-span-7">
@@ -444,7 +484,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         </section>
 
         {/* REQUISITO 2.E: TABELA GESTÃO LOJAS */}
-        <section aria-label="Tabela de Gestão de Lojas">
+        <section aria-label="Tabela de Gestão de Lojas" className="space-y-4">
+          <div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Controlo da rede</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Lojas e desempenho</h2></div>
           <StoreTable
             lojas={lojas}
             isLoading={isLoading}
@@ -462,7 +503,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       />
 
       {/* Footer */}
-      <footer className="border-t border-gray-800 bg-[#1F2937]/50 py-4 mt-auto">
+      <footer className="mt-auto border-t border-white/[0.07] bg-[#081322]/65 py-5 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-400 gap-2">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-gray-300">Diamante OS v2</span>
