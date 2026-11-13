@@ -25,6 +25,7 @@ export function useStores() {
     try {
       setLoading(true);
       setError(null);
+      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
 
       if (isSupabaseConfigured()) {
         const { data: dbLojas, error: dbError } = await supabase
@@ -69,67 +70,36 @@ export function useStores() {
 
   // Mutations
   const createStore = async (newStoreData: Omit<Store, 'id' | 'codigo' | 'volumeMes' | 'progressoMeta' | 'totalTransacoesMes' | 'ouroCompradoGramas' | 'dataAbertura'>) => {
-    const id = `loj-${Date.now()}`;
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi criada.');
     const codigo = `LOJ-${String(data.length + 1).padStart(3, '0')}`;
-    const newStore: Store = {
-      ...newStoreData,
-      id,
-      codigo,
-      volumeMes: 0,
-      progressoMeta: 0,
-      totalTransacoesMes: 0,
-      ouroCompradoGramas: 0,
-      dataAbertura: new Date().toLocaleDateString('pt-PT'),
+    const { data: inserted, error } = await supabase.from('lojas').insert({
+      codigo_loja: codigo, nome: newStoreData.nome, morada: newStoreData.endereco,
+      telefone: newStoreData.telefone, nif_loja: newStoreData.nif, ativo: newStoreData.status === 'ativa',
+    }).select('id').single();
+    if (error) throw error;
+    const created: Store = {
+      ...newStoreData, id: String(inserted.id), codigo, volumeMes: 0, metaMes: 0,
+      progressoMeta: 0, totalTransacoesMes: 0, ouroCompradoGramas: 0, dataAbertura: '',
     };
-
-    // Atualiza estado local de imediato
-    setData((prev) => [newStore, ...prev]);
-
-    // Tenta persistir na Supabase
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('lojas').insert({
-          codigo_loja: codigo,
-          nome: newStore.nome,
-          morada: newStore.endereco,
-          telefone: newStore.telefone,
-          nif_loja: newStore.nif,
-          ativo: newStore.status === 'ativa',
-        });
-      } catch {
-        // Ignora erros de escrita remota para não bloquear a UI
-      }
-    }
-    return newStore;
+    setData((prev) => [created, ...prev]);
+    return created;
   };
 
   const updateStore = async (id: string, updates: Partial<Store>) => {
-    setData((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('lojas').update({
-          nome: updates.nome,
-          morada: updates.endereco,
-          telefone: updates.telefone,
-          nif_loja: updates.nif,
-          ativo: updates.status ? updates.status === 'ativa' : undefined,
-        }).eq('id', id);
-      } catch {
-        // Ignora falhas de escrita
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi atualizada.');
+    const { error } = await supabase.from('lojas').update({
+      nome: updates.nome, morada: updates.endereco, telefone: updates.telefone,
+      nif_loja: updates.nif, ativo: updates.status ? updates.status === 'ativa' : undefined,
+    }).eq('id', id);
+    if (error) throw error;
+    setData((prev) => prev.map((store) => store.id === id ? { ...store, ...updates } : store));
   };
 
   const deleteStore = async (id: string) => {
-    setData((prev) => prev.filter((s) => s.id !== id));
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('lojas').delete().eq('id', id);
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi eliminada.');
+    const { error } = await supabase.from('lojas').delete().eq('id', id);
+    if (error) throw error;
+    setData((prev) => prev.filter((store) => store.id !== id));
   };
 
   return { data, loading, error, refetch: fetchStores, createStore, updateStore, deleteStore };
@@ -147,6 +117,7 @@ export function useEmployees() {
     try {
       setLoading(true);
       setError(null);
+      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
 
       if (isSupabaseConfigured()) {
         const { data: dbFuncs, error: dbError } = await supabase
@@ -199,61 +170,39 @@ export function useEmployees() {
   }, [fetchEmployees]);
 
   const createEmployee = async (newEmp: Omit<Employee, 'id' | 'codigo' | 'avatarColor'>) => {
-    const id = `emp-${Date.now()}`;
-    const codigo = `COL-${String(data.length + 1).padStart(3, '0')}`;
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi criado.');
+    const { data: inserted, error } = await supabase.from('funcionarios').insert({
+      nome_completo: newEmp.nome, nif: newEmp.nif, telemovel: newEmp.telemovel,
+      email: newEmp.email, loja_id: newEmp.lojaId, role: newEmp.cargo.toLowerCase(),
+      salario_base: newEmp.salarioBase, data_admissao: newEmp.dataAdmissao,
+      especialidade: newEmp.especialidade, ativo: true,
+    }).select('id').single();
+    if (error) throw error;
     const created: Employee = {
-      ...newEmp,
-      id,
-      codigo,
-      avatarColor: 'from-[#D4AF37] to-amber-700',
+      ...newEmp, id: String(inserted.id), codigo: '', avatarColor: 'from-[#D4AF37] to-amber-700',
     };
-
     setData((prev) => [created, ...prev]);
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('funcionarios').insert({
-          nome_completo: created.nome,
-          telemovel: created.telemovel,
-          email: created.email,
-          loja_id: created.lojaId,
-          role: created.cargo.toLowerCase(),
-          ativo: true,
-        });
-      } catch {
-        // Silêncio
-      }
-    }
     return created;
   };
 
   const updateEmployee = async (id: string, updates: Partial<Employee>) => {
-    setData((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('funcionarios').update({
-          nome_completo: updates.nome,
-          telemovel: updates.telemovel,
-          email: updates.email,
-          loja_id: updates.lojaId,
-          role: updates.cargo ? updates.cargo.toLowerCase() : undefined,
-        }).eq('id', id);
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi atualizado.');
+    const { error } = await supabase.from('funcionarios').update({
+      nome_completo: updates.nome, nif: updates.nif, telemovel: updates.telemovel,
+      email: updates.email, loja_id: updates.lojaId,
+      role: updates.cargo ? updates.cargo.toLowerCase() : undefined,
+      salario_base: updates.salarioBase, data_admissao: updates.dataAdmissao,
+      especialidade: updates.especialidade,
+    }).eq('id', id);
+    if (error) throw error;
+    setData((prev) => prev.map((employee) => employee.id === id ? { ...employee, ...updates } : employee));
   };
 
   const deleteEmployee = async (id: string) => {
-    setData((prev) => prev.filter((e) => e.id !== id));
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('funcionarios').delete().eq('id', id);
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi eliminado.');
+    const { error } = await supabase.from('funcionarios').delete().eq('id', id);
+    if (error) throw error;
+    setData((prev) => prev.filter((employee) => employee.id !== id));
   };
 
   return { data, loading, error, refetch: fetchEmployees, createEmployee, updateEmployee, deleteEmployee };
@@ -271,6 +220,7 @@ export function useClients() {
     try {
       setLoading(true);
       setError(null);
+      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
 
       if (isSupabaseConfigured()) {
         const { data: dbClients, error: dbError } = await supabase
@@ -321,71 +271,35 @@ export function useClients() {
   }, [fetchClients]);
 
   const createClient = async (newCli: Client) => {
-    setData((prev) => [newCli, ...prev]);
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('clientes').insert({
-          codigo_cliente: newCli.codigoCliente,
-          nome: newCli.nome,
-          nif: newCli.nif,
-          telemovel: newCli.telemovel,
-          email: newCli.email,
-          doc_identificacao: newCli.docIdentificacao,
-          morada: newCli.morada,
-          cidade: newCli.cidade,
-          loja_origem_id: newCli.lojaOrigemId,
-          status: newCli.status,
-          notas_internas: newCli.notasInternas,
-        });
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O cliente não foi criado.');
+    const { data: inserted, error } = await supabase.from('clientes').insert({
+      codigo_cliente: newCli.codigoCliente, nome: newCli.nome, nif: newCli.nif,
+      telemovel: newCli.telemovel, email: newCli.email, doc_identificacao: newCli.docIdentificacao,
+      data_nascimento: newCli.dataNascimento, morada: newCli.morada, cidade: newCli.cidade,
+      loja_origem_id: newCli.lojaOrigemId, status: newCli.status, notas_internas: newCli.notasInternas,
+    }).select('id').single();
+    if (error) throw error;
+    setData((prev) => [{ ...newCli, id: String(inserted.id) }, ...prev]);
   };
 
   const toggleBlockClient = async (clientId: string) => {
-    setData((prev) =>
-      prev.map((c) => {
-        if (c.id === clientId) {
-          const nextStatus: ClientStatus = c.status === 'bloqueado' ? 'normal' : 'bloqueado';
-          return { ...c, status: nextStatus };
-        }
-        return c;
-      })
-    );
-
-    if (isSupabaseConfigured()) {
-      try {
-        const target = data.find((c) => c.id === clientId);
-        const nextStatus = target?.status === 'bloqueado' ? 'normal' : 'bloqueado';
-        await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId);
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O estado do cliente não foi alterado.');
+    const target = data.find((client) => client.id === clientId);
+    if (!target) throw new Error('Cliente não encontrado.');
+    const nextStatus: ClientStatus = target.status === 'bloqueado' ? 'normal' : 'bloqueado';
+    const { error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId);
+    if (error) throw error;
+    setData((prev) => prev.map((client) => client.id === clientId ? { ...client, status: nextStatus } : client));
   };
 
   const toggleVipClient = async (clientId: string) => {
-    setData((prev) =>
-      prev.map((c) => {
-        if (c.id === clientId) {
-          const nextStatus: ClientStatus = c.status === 'vip' ? 'normal' : 'vip';
-          return { ...c, status: nextStatus };
-        }
-        return c;
-      })
-    );
-
-    if (isSupabaseConfigured()) {
-      try {
-        const target = data.find((c) => c.id === clientId);
-        const nextStatus = target?.status === 'vip' ? 'normal' : 'vip';
-        await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId);
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O estado VIP não foi alterado.');
+    const target = data.find((client) => client.id === clientId);
+    if (!target) throw new Error('Cliente não encontrado.');
+    const nextStatus: ClientStatus = target.status === 'vip' ? 'normal' : 'vip';
+    const { error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId);
+    if (error) throw error;
+    setData((prev) => prev.map((client) => client.id === clientId ? { ...client, status: nextStatus } : client));
   };
 
   return { data, loading, error, refetch: fetchClients, createClient, toggleBlockClient, toggleVipClient };
@@ -403,6 +317,7 @@ export function useFinanceTransactions() {
     try {
       setLoading(true);
       setError(null);
+      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
 
       if (isSupabaseConfigured()) {
         // Tenta 'transacoes_financeiras' ou tabela 'transacoes' existente
@@ -453,64 +368,31 @@ export function useFinanceTransactions() {
   }, [fetchTransactions]);
 
   const confirmPayment = async (txId: string) => {
-    setData((prev) =>
-      prev.map((t) => (t.id === txId ? { ...t, estado: 'pago' as PaymentStatus } : t))
-    );
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase
-          .from('transacoes_financeiras')
-          .update({ estado: 'pago' })
-          .eq('id', txId);
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi confirmado.');
+    const { error } = await supabase.from('transacoes_financeiras').update({ estado: 'pago' }).eq('id', txId);
+    if (error) throw error;
+    setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'pago' } : tx));
   };
 
   const rejectPayment = async (txId: string) => {
-    setData((prev) =>
-      prev.map((t) => (t.id === txId ? { ...t, estado: 'rejeitado' as PaymentStatus } : t))
-    );
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase
-          .from('transacoes_financeiras')
-          .update({ estado: 'rejeitado' })
-          .eq('id', txId);
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi rejeitado.');
+    const { error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado' }).eq('id', txId);
+    if (error) throw error;
+    setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'rejeitado' } : tx));
   };
 
   const createPayment = async (newTx: FinancialTransaction) => {
-    setData((prev) => [newTx, ...prev]);
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('transacoes_financeiras').insert({
-          referencia: newTx.referencia,
-          loja_id: newTx.lojaId,
-          loja_nome: newTx.lojaNome,
-          beneficiario_nome: newTx.beneficiarioNome,
-          beneficiario_nif: newTx.beneficiarioNif,
-          beneficiario_iban: newTx.beneficiarioIban,
-          valor: newTx.valor,
-          estado: newTx.estado,
-          metodo: newTx.metodo,
-          conta_origem: newTx.contaOrigem,
-          descricao: newTx.descricao,
-          peso_ouro_gramas: newTx.pesoOuroGramas,
-          tipo_metal: newTx.tipoMetal,
-          operador_nome: newTx.operadorNome,
-        });
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi criado.');
+    const { data: inserted, error } = await supabase.from('transacoes_financeiras').insert({
+      referencia: newTx.referencia, loja_id: newTx.lojaId, loja_nome: newTx.lojaNome,
+      beneficiario_nome: newTx.beneficiarioNome, beneficiario_nif: newTx.beneficiarioNif,
+      beneficiario_iban: newTx.beneficiarioIban, valor: newTx.valor, estado: newTx.estado,
+      metodo: newTx.metodo, conta_origem: newTx.contaOrigem, descricao: newTx.descricao,
+      peso_ouro_gramas: newTx.pesoOuroGramas, tipo_metal: newTx.tipoMetal,
+      operador_nome: newTx.operadorNome,
+    }).select('id').single();
+    if (error) throw error;
+    setData((prev) => [{ ...newTx, id: String(inserted.id) }, ...prev]);
   };
 
   return { data, loading, error, refetch: fetchTransactions, confirmPayment, rejectPayment, createPayment };
@@ -561,6 +443,7 @@ export function useSystemSettings() {
     try {
       setLoading(true);
       setError(null);
+      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
 
       if (isSupabaseConfigured()) {
         const { data: dbConfig, error: dbError } = await supabase
@@ -590,19 +473,13 @@ export function useSystemSettings() {
   }, [fetchSettings]);
 
   const saveSettings = async (newConfig: Partial<SystemConfigData>) => {
-    setData((prev) => ({ ...prev, ...newConfig }));
-
-    if (isSupabaseConfigured()) {
-      try {
-        await supabase.from('configuracoes_sistema').upsert({
-          chave: 'geral_sistema',
-          valor: { ...data, ...newConfig },
-          updated_at: new Date().toISOString(),
-        });
-      } catch {
-        // Silêncio
-      }
-    }
+    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. As definições não foram guardadas.');
+    const updated = { ...data, ...newConfig };
+    const { error } = await supabase.from('configuracoes_sistema').upsert({
+      chave: 'geral_sistema', valor: updated, updated_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    setData(updated);
   };
 
   return { data, loading, error, refetch: fetchSettings, saveSettings };
