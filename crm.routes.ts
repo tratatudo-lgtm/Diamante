@@ -93,7 +93,7 @@ router.get('/clients/:id', async (req: Request, res: Response) => {
     const articlesWithPhotos = await Promise.all((articles || []).map(async (article: any) => {
       const photo = typeof article.foto_url === 'string' ? article.foto_url.trim() : '';
       if (!photo) return { ...article, foto_signed_url: null };
-      if (/^https?:\\/\\//i.test(photo)) return { ...article, foto_signed_url: photo };
+      if (photo.startsWith('https://') || photo.startsWith('http://')) return { ...article, foto_signed_url: photo };
       const result = await supabaseAdmin.storage.from('fotos-artigos').createSignedUrl(photo, 300);
       return { ...article, foto_signed_url: result.error ? null : result.data?.signedUrl || null };
     }));
