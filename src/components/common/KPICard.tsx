@@ -13,6 +13,7 @@ interface KPICardProps {
   };
   highlight?: boolean;
   isLoading?: boolean;
+  onClick?: () => void;
 }
 
 export const KPICard: React.FC<KPICardProps> = ({
@@ -23,6 +24,7 @@ export const KPICard: React.FC<KPICardProps> = ({
   delta,
   highlight = false,
   isLoading = false,
+  onClick,
 }) => {
   if (isLoading) {
     return (
@@ -50,8 +52,12 @@ export const KPICard: React.FC<KPICardProps> = ({
   };
 
   return (
-    <div
-      className={`bg-[#1F2937] border transition-all duration-150 rounded-xl p-5 shadow-sm relative overflow-hidden ${
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      aria-label={onClick ? `${title}: abrir detalhes` : title}
+      className={`w-full text-left bg-[#1F2937] border transition-all duration-300 rounded-xl p-5 shadow-sm relative overflow-hidden ${onClick ? 'cursor-pointer hover:-translate-y-1 hover:shadow-xl hover:shadow-[#D4AF37]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]' : 'cursor-default'} ${
         highlight
           ? 'border-[#D4AF37]/50 shadow-md shadow-[#D4AF37]/5'
           : 'border-gray-800 hover:border-gray-700'
@@ -107,6 +113,6 @@ export const KPICard: React.FC<KPICardProps> = ({
           </span>
         )}
       </div>
-    </div>
+    </button>
   );
 };
