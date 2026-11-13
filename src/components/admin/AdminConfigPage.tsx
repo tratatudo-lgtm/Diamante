@@ -37,28 +37,12 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
 
   // Estados de Configuração
   const [margens, setMargens] = useState<MargemMetalConfig[]>([]);
-  const [tetos, setTetos] = useState<TetoAprovacaoConfig>({
-    id: 'teto-global',
-    loja_id: null,
-    valor_limite_sem_aprovacao: 1000,
-    peso_limite_sem_aprovacao_g: 50.0,
-    exigir_dupla_assinatura_acima: 5000,
-    notificar_whatsapp_master: true,
-    telemovel_alerta: '+351937230116',
-    ativo: true,
-  });
+  const [tetos, setTetos] = useState<TetoAprovacaoConfig>({ id: '', loja_id: null, valor_limite_sem_aprovacao: 0, peso_limite_sem_aprovacao_g: 0, exigir_dupla_assinatura_acima: 0, notificar_whatsapp_master: false, telemovel_alerta: '', ativo: false });
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaConfig[]>([]);
 
   // Modal / Formulário Nova Conta Bancária
   const [isNewAccountOpen, setIsNewAccountOpen] = useState(false);
-  const [newAccount, setNewAccount] = useState<Omit<ContaBancariaConfig, 'id'>>({
-    banco: 'Millennium BCP',
-    iban: 'PT50 ',
-    titular: "Diamante D'ouro Lda",
-    descricao: 'Conta de Liquidação Imediata',
-    ativo: true,
-    padrao: false,
-  });
+  const [newAccount, setNewAccount] = useState<Omit<ContaBancariaConfig, 'id'>>({ banco: '', iban: '', titular: '', descricao: '', ativo: false, padrao: false });
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -86,17 +70,16 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
         signal: AbortSignal.timeout(4000),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.success) {
-          if (Array.isArray(data.margens)) setMargens(data.margens);
-          if (data.tetos) setTetos(data.tetos);
-          if (Array.isArray(data.contasBancarias)) setContasBancarias(data.contasBancarias);
-        }
-      }
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.message || 'As configurações não estão disponíveis.');
+      if (Array.isArray(data.margens)) setMargens(data.margens);
+      if (data.tetos) setTetos(data.tetos);
+      if (Array.isArray(data.contasBancarias)) setContasBancarias(data.contasBancarias);
     } catch (err: any) {
       console.warn('[AdminConfig] Falha ao carregar configurações.');
-      addToast('info', 'A carregar valores padrão de margens do sistema.');
+      setMargens([]);
+      setContasBancarias([]);
+      addToast('error', err?.message || 'Não foi possível carregar as configurações.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -152,59 +135,15 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
       addToast('success', 'Margens e parâmetros de negócio gravados com sucesso.', 'Configuração Guardada');
     } catch (err: any) {
       console.warn('[AdminConfig] Falha ao gravar configurações.');
-      addToast('error', 'Não foi possível gravar as configurações. Tente novamente.');
+      addToast('error', err?.message || 'Não foi possível gravar as configurações.');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Adicionar Conta Bancária
-  const handleAddAccount = () => {
-    if (!newAccount.iban.trim() || newAccount.iban.replace(/\s/g, '').length < 15) {
-      addToast('error', 'Por favor introduza um IBAN português válido.');
-      return;
-    }
-
-    const created: ContaBancariaConfig = {
-      id: `banc-${Date.now()}`,
-      ...newAccount,
-      iban: newAccount.iban.trim().toUpperCase(),
-    };
-
-    setContasBancarias((prev) => {
-      if (created.padrao) {
-        return [...prev.map((c) => ({ ...c, padrao: false })), created];
-      }
-      return [...prev, created];
-    });
-
-    setIsNewAccountOpen(false);
-    setNewAccount({
-      banco: 'Millennium BCP',
-      iban: 'PT50 ',
-      titular: "Diamante D'ouro Lda",
-      descricao: 'Conta de Liquidação Imediata',
-      ativo: true,
-      padrao: false,
-    });
-    addToast('success', 'Nova conta bancária adicionada à lista.', 'Conta Criada');
-  };
-
-  // Remover Conta Bancária
-  const handleDeleteAccount = (id: string) => {
-    setContasBancarias((prev) => prev.filter((c) => c.id !== id));
-    addToast('info', 'Conta bancária removida da lista.');
-  };
-
-  // Marcar como Padrão
-  const handleSetDefaultAccount = (id: string) => {
-    setContasBancarias((prev) =>
-      prev.map((c) => ({
-        ...c,
-        padrao: c.id === id,
-      }))
-    );
-  };
+  const handleAddAccount = () => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma conta foi adicionada.');
+  const handleDeleteAccount = (_id: string) => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma conta foi removida.');
+  const handleSetDefaultAccount = (_id: string) => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma alteração foi guardada.');
 
   return (
     <div className="min-h-screen bg-[#070b14] text-slate-100 flex flex-col lg:flex-row font-sans selection:bg-[#D4AF37]/30 selection:text-white">
@@ -648,17 +587,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                         <label className="block text-[11px] font-mono text-slate-400 mb-1">
                           Instituição Bancária
                         </label>
-                        <select
-                          value={newAccount.banco}
-                          onChange={(e) => setNewAccount({ ...newAccount, banco: e.target.value })}
-                          className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white"
-                        >
-                          <option value="Millennium BCP">Millennium BCP</option>
-                          <option value="Caixa Geral de Depósitos">Caixa Geral de Depósitos (CGD)</option>
-                          <option value="Santander Totta">Santander Totta</option>
-                          <option value="Novo Banco">Novo Banco</option>
-                          <option value="Banco BPI">Banco BPI</option>
-                        </select>
+                        <input type="text" value={newAccount.banco} onChange={(e) => setNewAccount({ ...newAccount, banco: e.target.value })} placeholder="Nome do banco" className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white" />
                       </div>
 
                       <div>
@@ -669,7 +598,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                           type="text"
                           value={newAccount.iban}
                           onChange={(e) => setNewAccount({ ...newAccount, iban: e.target.value })}
-                          placeholder="PT50 0033 0000 1234 5678 9012 3"
+                          placeholder="IBAN da conta"
                           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white font-mono uppercase"
                         />
                       </div>
