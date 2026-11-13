@@ -416,7 +416,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                 onChange={(e) => setStoreFilter(e.target.value)}
                 className="w-full px-3 py-2.5 bg-[#0b0f19] border border-slate-700/70 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
               >
-                <option value="todas">Todos os Balcões (24 Lojas)</option>
+                <option value="todas">Todas as Lojas ({storeOptions.length})</option>
                 {storeOptions.map((st) => (
                   <option key={st.id} value={st.id}>
                     {st.nome}
