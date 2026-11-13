@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { useTransactionRealtime } from '../../hooks/useTransactionRealtime';
 
 import { useAuth } from '../../hooks/useAuth';
 import type { Loja, LojaComKpi, Transacao, KpiLojaDiaria, GlobalKpiData } from '../../types/database';
@@ -198,6 +199,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
     return () => window.clearInterval(refreshInterval);
   }, [fetchWarRoomData]);
+
+  // Atualização imediata quando uma loja regista uma nova transação.
+  useTransactionRealtime(fetchWarRoomData, 'admin');
 
   const handleOpenLojaDetails = (loja: LojaComKpi) => {
     setSelectedLoja(loja);
