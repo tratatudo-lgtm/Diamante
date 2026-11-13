@@ -230,7 +230,7 @@ export function useClients() {
 
         if (dbError) throw dbError;
         {
-          const mapped: Client[] = dbClients.map((row: any, idx: number) => ({
+          const mapped: Client[] = (dbClients || []).map((row: any) => ({
             id: String(row.id),
             codigoCliente: row.codigo_cliente || '',
             nome: row.nome,
@@ -328,7 +328,7 @@ export function useFinanceTransactions() {
 
         if (dbError) throw dbError;
         {
-          const mapped: FinancialTransaction[] = dbTx.map((row: any) => ({
+          const mapped: FinancialTransaction[] = (dbTx || []).map((row: any) => ({
             id: String(row.id),
             referencia: row.referencia || '',
             lojaId: row.loja_id || '',
