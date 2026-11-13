@@ -143,7 +143,7 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
       codigo_loja: nextCode,
       morada: '',
       nif_loja: '',
-      telefone: '+351 ',
+      telefone: '',
       ativo: true,
     });
     setPreviewCoords(null);
@@ -159,7 +159,7 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
       codigo_loja: loja.codigo_loja || '',
       morada: loja.morada || '',
       nif_loja: loja.nif_loja || '',
-      telefone: loja.telefone || '+351 ',
+      telefone: loja.telefone || '',
       ativo: loja.ativo !== false,
     });
     if (loja.latitude && loja.longitude) {
