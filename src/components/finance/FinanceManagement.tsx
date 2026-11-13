@@ -29,7 +29,7 @@ import {
   TrendingUp,
 } from 'lucide-react';
 
-export type PaymentStatus = 'pago' | 'pendente' | 'rejeitado';
+export type PaymentStatus = 'pago' | 'pendente' | 'rejeitado' | '';
 export type PaymentMethod =
   | 'Transferência Imediata'
   | 'Transferência SEPA'
@@ -259,6 +259,8 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
             Rejeitado
           </span>
         );
+      default:
+        return <span className="text-[11px] text-slate-400">Não definido</span>;
     }
   };
 
