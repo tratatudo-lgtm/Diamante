@@ -1069,7 +1069,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                   <div className="p-3.5 rounded-xl bg-[#0b0f19] border border-slate-800 flex items-center justify-between gap-3">
                     <div>
                       <p className="font-semibold text-white">
-                        Alerta de Acumulação Física de Ouro (500g/dia)
+                        Alerta de Acumulação Física de Ouro
                       </p>
                       <p className="text-slate-400 text-[11px]">
                         Sinaliza a necessidade de recolha de valores pela transportadora blindada
@@ -1096,7 +1096,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                     <div>
                       <p className="font-semibold text-white">Relatório Consolidado Diário por Email</p>
                       <p className="text-slate-400 text-[11px]">
-                        Enviado às 20h00 com o resumo de fecho das 24 lojas para {notifications.emailDestinatario}
+                        A configuração de destinatários e envio de relatórios ainda não está ligada à base de dados.
                       </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -1143,8 +1143,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                       Políticas de autenticação, chaves de integração e retenção de registos
                     </p>
                   </div>
-                  <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                    Nível 3 (Bancário)
+                  <span className="text-[11px] font-mono text-slate-400 bg-slate-800 px-2.5 py-1 rounded-full border border-slate-700">
+                    Não configurado
                   </span>
                 </div>
 
@@ -1156,7 +1156,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                       Autenticação de Dois Fatores (2FA) via WhatsApp / OTP
                     </p>
                     <p className="text-slate-400 text-[11px]">
-                      Exige código aleatório de 6 dígitos para todos os logins no Diamante OS
+                      A política de autenticação é gerida no servidor e não pode ser alterada nesta página.
                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
@@ -1188,7 +1188,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                         sessionTimeoutMinutes: parseInt(e.target.value) || 30,
                       })
                     }
-                    className="px-3 py-1.5 bg-[#151b2b] border border-slate-700 rounded-lg text-white font-mono cursor-pointer"
+                    className="px-3 py-1.5 bg-[#151b2b] border border-slate-700 rounded-lg text-white font-mono cursor-not-allowed opacity-60"
+                    disabled
                   >
                     <option value={15}>15 minutos</option>
                     <option value={30}>30 minutos (Recomendado)</option>
@@ -1204,25 +1205,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                       <Key className="w-4 h-4 text-[#D4AF37]" />
                       <span>Chaves de Serviço & Segredos de Integração</span>
                     </h3>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSecurity({ ...security, showApiKeys: !security.showApiKeys })
-                      }
-                      className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
-                    >
-                      {security.showApiKeys ? (
-                        <>
-                          <EyeOff className="w-3.5 h-3.5" />
-                          <span>Ocultar Chaves</span>
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Revelar Chaves</span>
-                        </>
-                      )}
-                    </button>
+                    <span className="text-[11px] text-slate-400">Segredos geridos exclusivamente no servidor; não são expostos no browser.</span>
                   </div>
 
                   <div className="space-y-2">
@@ -1233,7 +1216,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                       <input
                         type={security.showApiKeys ? 'text' : 'password'}
                         readOnly
-                        value={security.evolutionApiKey}
+                        value="Gerida no servidor — não exposta no browser"
                         className="w-full px-3 py-2 bg-[#151b2b] border border-slate-700 rounded-lg text-slate-200 font-mono text-[11px]"
                       />
                     </div>
@@ -1245,7 +1228,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                       <input
                         type={security.showApiKeys ? 'text' : 'password'}
                         readOnly
-                        value={security.webhookSecret}
+                        value="Gerida no servidor — não exposta no browser"
                         className="w-full px-3 py-2 bg-[#151b2b] border border-slate-700 rounded-lg text-slate-200 font-mono text-[11px]"
                       />
                     </div>
@@ -1257,7 +1240,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                   <div className="space-y-0.5">
                     <p className="font-bold text-white">Retenção de Logs de Auditoria Legal</p>
                     <p className="text-slate-400 text-[11px]">
-                      Histórico imutável de aprovações, acessos e alterações de preço (mínimo 365 dias)
+                      A retenção e integridade dos registos devem ser configuradas no serviço de auditoria.
                     </p>
                   </div>
                   <button
@@ -1276,15 +1259,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                   </button>
                 </div>
 
-                <div className="flex justify-end pt-4">
-                  <button
-                    onClick={handleSaveSettings}
-                    className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all cursor-pointer shadow-md shadow-[#D4AF37]/20"
-                  >
-                    <Save className="w-4 h-4 stroke-[2.5]" />
-                    <span>Guardar Segurança & Tokens</span>
-                  </button>
-                </div>
+                <p className="text-xs text-slate-400 border-t border-slate-800 pt-4">
+                  As definições de segurança e os segredos de integração ainda não têm gestão persistente nesta interface.
+                </p>
               </section>
             )}
           </main>
