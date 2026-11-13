@@ -1053,7 +1053,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                     onChange={(e) =>
                       setNewPayment({ ...newPayment, beneficiarioIban: e.target.value })
                     }
-                    placeholder="PT50 0033 0000 1234 5678 9012 3"
+                    placeholder="IBAN do beneficiário"
                     className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono uppercase focus:outline-hidden focus:border-[#D4AF37]"
                   />
                 </div>
