@@ -9,11 +9,27 @@ router.get('/kpis', verifyAdmin, async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     
     // Buscar registos e somar localmente (evita .sum() inexistente no JS Client)
-    const [transacoesRes, pendentesRes, lojasRes] = await Promise.all([
+    const [transacoesRes, pendentesRes, lojasRes, totalLojasRes] = await Promise.all([
       supabase.from('transacoes').select('valor_total, peso_ouro').eq('data_compra', today),
       supabase.from('transacoes').select('id', { count: 'exact', head: true }).eq('estado', 'pendente_aprovacao'),
-      supabase.from('lojas').select('id', { count: 'exact', head: true }).eq('ativo', true)
+      supabase.from('lojas').select('id', { count: 'exact', head: true }).eq('ativo', true),
+      supabase.from('lojas').select('id', { count: 'exact', head: true })
     ]);
+
+    if (
+      transacoesRes.error ||
+      pendentesRes.error ||
+      lojasRes.error ||
+      totalLojasRes.error ||
+      !transacoesRes.data ||
+      pendentesRes.count === null ||
+      lojasRes.count === null ||
+      totalLojasRes.count === null
+    ) {
+      console.error('[WarRoom KPIs] Uma ou mais consultas não foram concluídas.');
+      res.status(503).json({ error: 'Indicadores temporariamente indisponíveis.' });
+      return;
+    }
 
     let volumeTotal = 0;
     let pesoTotal = 0;
@@ -27,10 +43,10 @@ router.get('/kpis', verifyAdmin, async (req, res) => {
 
     res.json({
       volume: volumeTotal,
-      pendentes: pendentesRes.count || 0,
+      pendentes: pendentesRes.count,
       peso: pesoTotal,
-      lojasAtivas: lojasRes.count || 0,
-      totalLojas: 24
+      lojasAtivas: lojasRes.count,
+      totalLojas: totalLojasRes.count
     });
   } catch {
     console.error('[WarRoom KPIs] Falha ao carregar indicadores.');

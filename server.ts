@@ -61,8 +61,12 @@ const rateLimitMap = new Map<string, RateLimitRecord>();
 let rateLimitCleanupCounter = 0;
 
 function bruteForceProtection(req: Request, res: Response, next: NextFunction): void {
-  // Aplicado exclusivamente em endpoints de autenticação sensíveis
-  if (!req.path.startsWith('/auth') && !req.path.startsWith('/api/auth')) {
+  // Os routers de autenticação também estão montados em /admin e /api/admin.
+  // Aplicar o limite por IP em todos os aliases dos mesmos endpoints sensíveis.
+  const isSensitiveAuthEndpoint =
+    /^\/(?:auth|api\/auth|admin|api\/admin)\/(?:request-otp|send-otp|verify-otp|login|register|session)\/?$/.test(req.path);
+
+  if (!isSensitiveAuthEndpoint) {
     return next();
   }
 
@@ -394,14 +398,78 @@ io.use(async (socket, next) => {
 
 io.on('connection', (socket) => {
   console.log('[Chat WS] Ligação estabelecida.');
-  
-  const employee = socket.data.employee as { id: string; role: string; loja_id: string | null };
-  const allowedRooms = new Set([employee.id, ...(employee.loja_id ? [`store:${employee.loja_id}`] : [])]);
-  if (employee.role === 'admin') allowedRooms.add('admin');
+
+  const refreshSocketEmployee = async (): Promise<boolean> => {
+    const current = socket.data.employee as { id: string } | undefined;
+    if (!current?.id) return false;
+
+    const { data: employee, error } = await supabaseAdmin
+      .from('funcionarios')
+      .select('id, role, loja_id, ativo')
+      .eq('id', current.id)
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (error || !employee || employee.ativo !== true ||
+        typeof employee.role !== 'string' || !employee.role.trim()) {
+      return false;
+    }
+
+    socket.data.employee = employee;
+    const allowedRooms = new Set([
+      employee.id,
+      ...(employee.loja_id ? [`store:${employee.loja_id}`] : []),
+      ...(employee.role === 'admin' ? ['admin'] : []),
+    ]);
+
+    // Remove salas antigas se a loja ou as permissões tiverem sido alteradas.
+    for (const room of socket.rooms) {
+      if (room !== socket.id && !allowedRooms.has(room)) {
+        await socket.leave(room);
+      }
+    }
+    return true;
+  };
+
+  // Revalidar antes de processar qualquer evento enviado pelo cliente.
+  socket.use((_packet, next) => {
+    void refreshSocketEmployee().then((valid) => {
+      if (!valid) {
+        socket.disconnect(true);
+        next(new Error('Sessão revogada ou utilizador não autorizado.'));
+        return;
+      }
+      next();
+    }).catch(() => {
+      socket.disconnect(true);
+      next(new Error('Não foi possível revalidar a sessão.'));
+    });
+  });
+
+  // Também revoga ligações inativas pouco depois de uma conta ser desativada.
+  const permissionRefresh = setInterval(() => {
+    void refreshSocketEmployee().then((valid) => {
+      if (!valid) socket.disconnect(true);
+    }).catch(() => socket.disconnect(true));
+  }, 30000);
+
   socket.on('join_room', (room: unknown) => {
+    const employee = socket.data.employee as { id: string; role: string; loja_id: string | null };
+    const allowedRooms = new Set([
+      employee.id,
+      ...(employee.loja_id ? [`store:${employee.loja_id}`] : []),
+      ...(employee.role === 'admin' ? ['admin'] : []),
+    ]);
     if (typeof room === 'string' && allowedRooms.has(room)) socket.join(room);
   });
+
   socket.on('send_message', (data: any) => {
+    const employee = socket.data.employee as { id: string; role: string; loja_id: string | null };
+    const allowedRooms = new Set([
+      employee.id,
+      ...(employee.loja_id ? [`store:${employee.loja_id}`] : []),
+      ...(employee.role === 'admin' ? ['admin'] : []),
+    ]);
     if (!data || typeof data.room !== 'string' || !allowedRooms.has(data.room)) return;
     if (typeof data.text !== 'string' || !data.text.trim() || data.text.length > 4000) return;
     io.to(data.room).emit('receive_message', {
@@ -410,6 +478,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    clearInterval(permissionRefresh);
     console.log('[Chat WS] Ligação terminada.');
   });
 });

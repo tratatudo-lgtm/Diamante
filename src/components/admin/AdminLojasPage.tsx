@@ -1,6 +1,5 @@
 // PATH: src/components/admin/AdminLojasPage.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { AdminSidebar } from './AdminSidebar';
 import { ToastContainer, ToastMessage } from '../common/Toast';
 import type { AdminLoja, CreateLojaDTO, UpdateLojaDTO } from '../../types/admin';
@@ -79,48 +78,30 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
     return parseInt(clean.charAt(8), 10) === checkDigit;
   };
 
-  // Carregar lista de lojas (backend proxy ou Supabase direto)
+  // Carregar lojas exclusivamente através da API administrativa protegida.
   const fetchLojas = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      let loadedLojas: AdminLoja[] = [];
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão administrativa não encontrada.');
 
-      // 1. Tentar endpoint da API
-      try {
-        const token = sessionStorage.getItem('diamante_jwt_token');
-        const res = await fetch('/api/admin/lojas', {
-          headers: {
-            Accept: 'application/json',
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          signal: AbortSignal.timeout(4000),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && Array.isArray(data.lojas)) {
-            loadedLojas = data.lojas;
-          }
-        }
-      } catch {
-        // Fallback para Supabase direto
+      const res = await fetch('/api/admin/lojas', {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !Array.isArray(data?.lojas)) {
+        throw new Error('Não foi possível carregar as lojas através da API protegida.');
       }
 
-      // 2. Se vazio e Supabase estiver configurado no cliente
-      if (loadedLojas.length === 0 && isSupabaseConfigured()) {
-        const { data, error } = await supabase
-          .from('lojas')
-          .select('*')
-          .order('nome', { ascending: true });
-
-        if (!error && data) {
-          loadedLojas = data as AdminLoja[];
-        }
-      }
-
-      setLojas(loadedLojas);
-    } catch (err: any) {
-      console.warn('[AdminLojas] Falha ao carregar lojas.');
-      addToast('error', 'Não foi possível atualizar a lista de lojas.');
+      setLojas(data.lojas as AdminLoja[]);
+    } catch {
+      console.warn('[AdminLojas] Falha ao carregar lojas pela API protegida.');
+      addToast('error', 'Não foi possível atualizar a lista de lojas. Verifique a sessão e tente novamente.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);

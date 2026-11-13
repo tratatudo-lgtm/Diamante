@@ -8,7 +8,6 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './components/landing/LandingPage';
 import { LoginPage } from './components/auth/LoginPage';
-import { RegisterPage } from './components/auth/RegisterPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminDashboard as AdminWarRoomDashboard } from './components/admin/AdminDashboard_old_operational';
 import { AdminLojasPage } from './components/admin/AdminLojasPage';
@@ -85,6 +84,10 @@ function AppRouter() {
   // Redirecionamento e proteção de rotas
   useEffect(() => {
     if (!isLoading) {
+      if (currentPath === '/register') {
+        navigate('/login');
+        return;
+      }
       const isAdminRoute = currentPath.startsWith('/admin') || currentPath === '/dashboard-admin';
 
       if (isAuthenticated) {
@@ -118,11 +121,6 @@ function AppRouter() {
         </p>
       </div>
     );
-  }
-
-  // 1. Ecrã de Registo
-  if (currentPath === '/register') {
-    return <RegisterPage onNavigate={navigate} />;
   }
 
   // 2. Ecrã de Login Centralizado

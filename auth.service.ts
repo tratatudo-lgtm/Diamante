@@ -13,10 +13,10 @@ const JWT_SECRET: string = (() => {
   return secret;
 })();
 
-const supabaseUrl =
-  process.env.SUPABASE_URL ||
-  process.env.VITE_SUPABASE_URL ||
-  'https://ytpetuvvxbmlafsisfaf.supabase.co';
+const supabaseUrl = process.env.SUPABASE_URL;
+if (!supabaseUrl) {
+  throw new Error('SUPABASE_URL tem de estar configurada explicitamente no servidor.');
+}
 
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!supabaseKey) {

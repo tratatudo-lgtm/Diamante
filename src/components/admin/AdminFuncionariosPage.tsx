@@ -1,6 +1,5 @@
 // PATH: src/components/admin/AdminFuncionariosPage.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { AdminSidebar } from './AdminSidebar';
 import { ToastContainer, ToastMessage } from '../common/Toast';
 import type { AdminFuncionario, AdminLoja, CreateFuncionarioDTO, UpdateFuncionarioDTO } from '../../types/admin';
@@ -82,66 +81,38 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
     return { isValid: false };
   };
 
-  // Carregar dados (Lojas e Funcionárias)
+  // Carregar lojas e funcionários exclusivamente pelas APIs administrativas protegidas.
   const fetchData = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      let loadedLojas: AdminLoja[] = [];
-      let loadedFuncs: AdminFuncionario[] = [];
-
       const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão administrativa não encontrada.');
+
       const headers = {
         Accept: 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        Authorization: `Bearer ${token}`,
       };
+      const [resLojas, resFuncs] = await Promise.all([
+        fetch('/api/admin/lojas', { headers, signal: AbortSignal.timeout(8000) }),
+        fetch('/api/admin/funcionarios', { headers, signal: AbortSignal.timeout(8000) }),
+      ]);
+      const [lojasData, funcsData] = await Promise.all([
+        resLojas.json().catch(() => null),
+        resFuncs.json().catch(() => null),
+      ]);
 
-      // 1. Carregar Lojas
-      try {
-        const resLojas = await fetch('/api/admin/lojas', { headers, signal: AbortSignal.timeout(4000) });
-        if (resLojas.ok) {
-          const data = await resLojas.json();
-          if (Array.isArray(data.lojas)) loadedLojas = data.lojas;
-        }
-      } catch {}
-
-      if (loadedLojas.length === 0 && isSupabaseConfigured()) {
-        const { data } = await supabase.from('lojas').select('*').order('nome', { ascending: true });
-        if (data) loadedLojas = data as AdminLoja[];
+      if (!resLojas.ok || !Array.isArray(lojasData?.lojas) ||
+          !resFuncs.ok || !Array.isArray(funcsData?.funcionarios)) {
+        throw new Error('Não foi possível carregar os dados através das APIs protegidas.');
       }
+
+      const loadedLojas = lojasData.lojas as AdminLoja[];
+      const loadedFuncs = funcsData.funcionarios as AdminFuncionario[];
       setLojas(loadedLojas);
-
-      // Mapa de lojas para associar nome
-      const lojaMap = new Map<string, AdminLoja>();
-      loadedLojas.forEach((l) => lojaMap.set(l.id, l));
-
-      // 2. Carregar Funcionárias
-      try {
-        const resFuncs = await fetch('/api/admin/funcionarios', { headers, signal: AbortSignal.timeout(4000) });
-        if (resFuncs.ok) {
-          const data = await resFuncs.json();
-          if (Array.isArray(data.funcionarios)) loadedFuncs = data.funcionarios;
-        }
-      } catch {}
-
-      if (loadedFuncs.length === 0 && isSupabaseConfigured()) {
-        const { data } = await supabase
-          .from('funcionarios')
-          .select('*, lojas(nome, codigo_loja)')
-          .order('nome_completo', { ascending: true });
-
-        if (data) {
-          loadedFuncs = data.map((f: any) => ({
-            ...f,
-            loja_nome: f.lojas?.nome || (f.loja_id ? lojaMap.get(f.loja_id)?.nome : null),
-            codigo_loja: f.lojas?.codigo_loja || (f.loja_id ? lojaMap.get(f.loja_id)?.codigo_loja : null),
-          }));
-        }
-      }
-
       setFuncionarios(loadedFuncs);
-    } catch (err: any) {
-      console.warn('[AdminFuncionarios] Falha ao carregar funcionários.');
-      addToast('error', 'Não foi possível atualizar a lista de funcionárias.');
+    } catch {
+      console.warn('[AdminFuncionarios] Falha ao carregar dados pela API protegida.');
+      addToast('error', 'Não foi possível atualizar os dados. Verifique a sessão e tente novamente.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
