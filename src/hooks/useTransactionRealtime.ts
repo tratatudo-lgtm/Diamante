@@ -18,7 +18,7 @@ interface RoomAcknowledgement {
  * O JWT é usado apenas no handshake autenticado.
  */
 export function useTransactionRealtime(
-  onTransactionCreated: (event: TransactionCreatedEvent) => void,
+  onTransactionCreated: (event?: TransactionCreatedEvent) => void,
   room: string | null
 ): void {
   const callbackRef = useRef(onTransactionCreated);
@@ -43,6 +43,24 @@ export function useTransactionRealtime(
       reconnectionDelayMax: 10000,
     });
 
+    // Recuperar dados quando o browser regressa ao primeiro plano
+    // ou quando a conectividade de rede é restabelecida.
+    const syncOnResume = () => {
+      if (document.visibilityState === 'visible') {
+        void callbackRef.current();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncOnResume();
+      }
+    };
+
+    window.addEventListener('online', syncOnResume);
+    window.addEventListener('pageshow', syncOnResume);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     socket.on('connect', () => {
       console.info('[Diamante Realtime] Ligação estabelecida; a solicitar sala autorizada.');
       socket.emit('join_room', room);
@@ -51,6 +69,8 @@ export function useTransactionRealtime(
     socket.on('room_joined', (ack: RoomAcknowledgement) => {
       if (ack?.room === room) {
         console.info('[Diamante Realtime] Entrada na sala confirmada.');
+        // Sincronização imediata após ligação inicial ou reconexão.
+        void callbackRef.current();
       }
     });
 
@@ -73,6 +93,9 @@ export function useTransactionRealtime(
     });
 
     return () => {
+      window.removeEventListener('online', syncOnResume);
+      window.removeEventListener('pageshow', syncOnResume);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.removeAllListeners();
       socket.disconnect();
     };
