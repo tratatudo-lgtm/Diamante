@@ -384,12 +384,17 @@ io.use(async (socket, next) => {
     const secret = process.env.JWT_SECRET;
     if (!secret || !token) return next(new Error('Autenticação obrigatória.'));
     const claims = jwt.verify(token, secret) as jwt.JwtPayload;
+    const tokenExpiresAt = typeof claims.exp === 'number' ? claims.exp * 1000 : 0;
+    if (!Number.isFinite(tokenExpiresAt) || tokenExpiresAt <= Date.now()) {
+      return next(new Error('Sessão inválida ou expirada.'));
+    }
     const userId = typeof claims.id === 'string' ? claims.id : '';
     if (!userId) return next(new Error('Sessão inválida.'));
     const { data: employee, error } = await supabaseAdmin.from('funcionarios')
       .select('id, role, loja_id, ativo').eq('id', userId).eq('ativo', true).maybeSingle();
     if (error || !employee) return next(new Error('Utilizador inativo ou não autorizado.'));
     socket.data.employee = employee;
+    socket.data.tokenExpiresAt = tokenExpiresAt;
     next();
   } catch {
     next(new Error('Sessão inválida ou expirada.'));
@@ -400,6 +405,12 @@ io.on('connection', (socket) => {
   console.log('[Chat WS] Ligação estabelecida.');
 
   const refreshSocketEmployee = async (): Promise<boolean> => {
+    const tokenExpiresAt = socket.data.tokenExpiresAt;
+    if (typeof tokenExpiresAt !== 'number' ||
+        !Number.isFinite(tokenExpiresAt) || Date.now() >= tokenExpiresAt) {
+      return false;
+    }
+
     const current = socket.data.employee as { id: string } | undefined;
     if (!current?.id) return false;
 
