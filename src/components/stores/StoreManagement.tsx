@@ -46,7 +46,6 @@ export interface Store {
   dataAbertura: string;
 }
 
-// Array inicial com as 24 lojas reais "Diamante D'ouro" em Portugal
 export const StoreManagement: React.FC = () => {
   const { data: stores, loading, createStore, updateStore, deleteStore } = useStores();
   const [actionError, setActionError] = useState<string | null>(null);
