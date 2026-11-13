@@ -164,7 +164,7 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
                     ? 'border-[#D4AF37]/25 bg-[#D4AF37]/[0.13] text-[#f0d27a]'
                     : 'border-white/[0.055] bg-white/[0.025] text-slate-500 group-hover:border-white/10 group-hover:bg-white/[0.07] group-hover:text-slate-200'
                 }`}>
-                  <Icon className="h-[17px] w-[17px]" strokeWidth={1.8} />
+                  <Icon className="h-[17px] w-[17px]" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-[11px] font-semibold tracking-[0.015em] ${active ? 'text-white' : ''}`}>{item.label}</span>
