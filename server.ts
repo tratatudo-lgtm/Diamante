@@ -12,6 +12,7 @@ import warroomRouter from './warroom.routes';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
+import { isSocketTokenActive } from './socket-session';
 import { verifyAdmin } from './middleware/verifyAdmin';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -385,7 +386,7 @@ io.use(async (socket, next) => {
     if (!secret || !token) return next(new Error('Autenticação obrigatória.'));
     const claims = jwt.verify(token, secret) as jwt.JwtPayload;
     const tokenExpiresAt = typeof claims.exp === 'number' ? claims.exp * 1000 : 0;
-    if (!Number.isFinite(tokenExpiresAt) || tokenExpiresAt <= Date.now()) {
+    if (!isSocketTokenActive(tokenExpiresAt)) {
       return next(new Error('Sessão inválida ou expirada.'));
     }
     const userId = typeof claims.id === 'string' ? claims.id : '';
@@ -406,8 +407,7 @@ io.on('connection', (socket) => {
 
   const refreshSocketEmployee = async (): Promise<boolean> => {
     const tokenExpiresAt = socket.data.tokenExpiresAt;
-    if (typeof tokenExpiresAt !== 'number' ||
-        !Number.isFinite(tokenExpiresAt) || Date.now() >= tokenExpiresAt) {
+    if (!isSocketTokenActive(tokenExpiresAt)) {
       return false;
     }
 
