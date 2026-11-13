@@ -70,7 +70,7 @@ export const EmployeeManagement: React.FC = () => {
   const [formData, setFormData] = useState<Omit<Employee, 'id' | 'codigo' | 'avatarColor'>>({
     nome: '',
     nif: '',
-    telemovel: '+351 ',
+    telemovel: '',
     email: '',
     lojaId: '',
     lojaNome: '',
@@ -234,7 +234,7 @@ export const EmployeeManagement: React.FC = () => {
     setFormData({
       nome: '',
       nif: '',
-      telemovel: '+351 ',
+      telemovel: '',
       email: '',
       lojaId: storeOptions[0]?.id || '',
       lojaNome: storeOptions[0]?.nome || '',
