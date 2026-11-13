@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import {
   User,
@@ -43,6 +43,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout, onShowToast 
 
     if (newPassword !== confirmPassword) {
       setPasswordError('As palavras-passe introduzidas não coincidem.');
+      return;
+    }
+
+    if (!isSupabaseConfigured()) {
+      setPasswordError('Supabase não está configurada. A palavra-passe não foi alterada.');
       return;
     }
 
