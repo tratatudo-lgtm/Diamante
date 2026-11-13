@@ -14,100 +14,102 @@ import type {
 } from '../types/supabase-schema';
 
 // =========================================================================
-// HOOK 1: useStores (Lojas)
+// HOOK 1: useStores (Lojas) — API administrativa protegida
 // =========================================================================
 export function useStores() {
   const [data, setData] = useState<Store[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStores = useCallback(async () => {
+  const mapStore = (row: any): Store => ({
+    id: String(row.id),
+    codigo: row.codigo_loja || '',
+    nome: row.nome || '',
+    status: row.ativo === true ? 'ativa' : 'inativa',
+    endereco: row.morada || '',
+    nif: row.nif_loja || '',
+    telefone: row.telefone || '',
+    latitude: row.latitude === null || row.latitude === undefined ? null : Number(row.latitude),
+    longitude: row.longitude === null || row.longitude === undefined ? null : Number(row.longitude),
+  });
+
+  const request = async (path: string, init: RequestInit = {}) => {
+    const token = typeof window !== 'undefined' ? sessionStorage.getItem('diamante_jwt_token') : null;
+    if (!token) throw new Error('Sessão administrativa não encontrada. Volte a iniciar sessão.');
+    const response = await fetch(path, {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...(init.headers || {}),
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.success === false) {
+      throw new Error(result?.message || 'Não foi possível concluir a operação.');
+    }
+    return result;
+  };
+
+  const fetchStores = useCallback(async (): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
-
-      if (isSupabaseConfigured()) {
-        const { data: dbLojas, error: dbError } = await supabase
-          .from('lojas')
-          .select('*')
-          .order('nome', { ascending: true });
-
-        if (dbError) {
-          throw dbError;
-        }
-
-        if (dbLojas && dbLojas.length > 0) {
-          // Mapeia o registo da base de dados para o modelo Store do frontend
-          const mapped: Store[] = (dbLojas || []).map((row: any) => ({
-            id: String(row.id), codigo: row.codigo_loja || row.codigo || '',
-            nome: row.nome || '', status: row.ativo === true ? 'ativa' : row.ativo === false ? 'inativa' : '',
-            endereco: row.morada || row.endereco || '', cidade: row.cidade || '',
-            gerente: row.gerente || '', telefone: row.telefone || '', email: row.email || '',
-            horario: row.horario || '', nif: row.nif_loja || row.nif || '',
-            volumeMes: Number(row.volume_mes) || 0, metaMes: Number(row.meta_mes) || 0,
-            progressoMeta: Number(row.progresso_meta) || 0, totalTransacoesMes: Number(row.total_transacoes) || 0,
-            ouroCompradoGramas: Number(row.peso_ouro_g) || 0, dataAbertura: row.data_abertura || '',
-          }));
-
-          setData(mapped);
-          return;
-        }
-      }
-
-      setData([]);
+      const result = await request('/api/admin/lojas');
+      if (!Array.isArray(result?.lojas)) throw new Error('A resposta da API de lojas é inválida.');
+      setData(result.lojas.map(mapStore));
+      return true;
     } catch (err: any) {
-      setError(err?.message || 'Falha ao sincronizar lojas com Supabase');
-      setData([]);
+      setError(err?.message || 'Falha ao sincronizar lojas.');
+      return false;
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchStores();
+    void fetchStores();
   }, [fetchStores]);
 
-  // Mutations
-  const createStore = async (newStoreData: Omit<Store, 'id' | 'codigo' | 'volumeMes' | 'progressoMeta' | 'totalTransacoesMes' | 'ouroCompradoGramas' | 'dataAbertura'>) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi criada.');
-    const codigo = `LOJ-${String(data.length + 1).padStart(3, '0')}`;
-    const { data: inserted, error } = await supabase.from('lojas').insert({
-      codigo_loja: codigo, nome: newStoreData.nome, morada: newStoreData.endereco,
-      cidade: newStoreData.cidade, gerente: newStoreData.gerente, telefone: newStoreData.telefone,
-      email: newStoreData.email, horario: newStoreData.horario, nif_loja: newStoreData.nif,
-      meta_mes: newStoreData.metaMes, ativo: newStoreData.status === 'ativa',
-    }).select('id').single();
-    if (error) throw error;
-    if (!inserted?.id) throw new Error('A base de dados não devolveu o identificador da loja criada.');
-    const created: Store = {
-      ...newStoreData, id: String(inserted.id), codigo, volumeMes: 0, metaMes: 0,
-      progressoMeta: 0, totalTransacoesMes: 0, ouroCompradoGramas: 0, dataAbertura: '',
-    };
-    setData((prev) => [created, ...prev]);
+  const createStore = async (newStoreData: Omit<Store, 'id' | 'status' | 'latitude' | 'longitude'>) => {
+    const result = await request('/api/admin/lojas', {
+      method: 'POST',
+      body: JSON.stringify({
+        nome: newStoreData.nome,
+        codigo_loja: newStoreData.codigo,
+        morada: newStoreData.endereco,
+        nif_loja: newStoreData.nif,
+        telefone: newStoreData.telefone,
+      }),
+    });
+    if (!result?.loja?.id) throw new Error('A API não devolveu a loja criada.');
+    const created = mapStore(result.loja);
+    setData((previous) => [...previous.filter((store) => store.id !== created.id), created].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-PT')));
     return created;
   };
 
   const updateStore = async (id: string, updates: Partial<Store>) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi atualizada.');
-    const { data: updatedRows, error } = await supabase.from('lojas').update({
-      nome: updates.nome, morada: updates.endereco, cidade: updates.cidade, gerente: updates.gerente,
-      telefone: updates.telefone, email: updates.email, horario: updates.horario,
-      nif_loja: updates.nif, meta_mes: updates.metaMes,
-      ativo: updates.status === 'ativa' ? true : updates.status === 'inativa' ? false : undefined,
-    }).eq('id', id).select('id');
-    if (error) throw error;
-    if (!updatedRows?.length) throw new Error('A loja não foi encontrada ou não foi atualizada.');
-    setData((prev) => prev.map((store) => store.id === id ? { ...store, ...updates } : store));
+    const payload: Record<string, unknown> = {};
+    if (updates.nome !== undefined) payload.nome = updates.nome;
+    if (updates.codigo !== undefined) payload.codigo_loja = updates.codigo;
+    if (updates.endereco !== undefined) payload.morada = updates.endereco;
+    if (updates.nif !== undefined) payload.nif_loja = updates.nif;
+    if (updates.telefone !== undefined) payload.telefone = updates.telefone;
+    if (updates.status !== undefined) payload.ativo = updates.status === 'ativa';
+    const result = await request(`/api/admin/lojas/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    if (!result?.loja?.id) throw new Error('A API não devolveu a loja atualizada.');
+    const updated = mapStore(result.loja);
+    setData((previous) => previous.map((store) => store.id === id ? updated : store));
+    return updated;
   };
 
-  const deleteStore = async (id: string) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi eliminada.');
-    const { data: deletedRows, error } = await supabase.from('lojas').delete().eq('id', id).select('id');
-    if (error) throw error;
-    if (!deletedRows?.length) throw new Error('A loja não foi encontrada ou não foi eliminada.');
-    setData((prev) => prev.filter((store) => store.id !== id));
-  };
+  // Desativar preserva as relações e o histórico da loja.
+  const deleteStore = async (id: string) => updateStore(id, { status: 'inativa' });
 
   return { data, loading, error, refetch: fetchStores, createStore, updateStore, deleteStore };
 }
