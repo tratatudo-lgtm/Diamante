@@ -42,6 +42,11 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
   const instanceName = process.env.EVOLUTION_INSTANCE || 'diamante-os';
 
   const formattedNumber = formatPortuguesePhone(phone);
+
+  if (!formattedNumber) {
+    return { success: false, error: 'Número de telefone inválido.' };
+  }
+
   const messageText = `*Diamante OS v2*\n\nO seu código de segurança é: *${otpCode}*\n\nEste código é pessoal, confidencial e expira dentro de 5 minutos.\nSe não solicitou este código, ignore esta mensagem.`;
 
   console.log('[WhatsApp Service] A preparar envio de OTP.');
@@ -70,7 +75,7 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
           presence: 'composing',
         },
       }),
-      signal: AbortSignal.timeout(2000),
+      signal: AbortSignal.timeout(10000),
     });
 
     const data = await response.json().catch(() => ({}));
