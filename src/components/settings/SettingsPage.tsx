@@ -108,7 +108,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   // =========================================================
   // 6. ESTADO: SEGURANÇA & ACESSOS
   // =========================================================
-  const [security, setSecurity] = useState({ twoFactorEnforced: false, twoFactorMethod: '', sessionTimeoutMinutes: 0, ipAllowlistOnly: false, showApiKeys: false, evolutionApiKey: '', webhookSecret: '', logsAuditRetentionDays: 0 });
+  const [security, setSecurity] = useState({ twoFactorEnforced: false, twoFactorMethod: '', sessionTimeoutMinutes: 0, ipAllowlistOnly: false, evolutionApiKey: '', webhookSecret: '', logsAuditRetentionDays: 0 });
 
   // Sincronização quando as configurações do Supabase são carregadas
   useEffect(() => {
@@ -1219,7 +1219,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                         Evolution API Key (Instância diamante-os):
                       </span>
                       <input
-                        type={security.showApiKeys ? 'text' : 'password'}
+                        type="text"
                         readOnly
                         value="Gerida no servidor — não exposta no browser"
                         className="w-full px-3 py-2 bg-[#151b2b] border border-slate-700 rounded-lg text-slate-200 font-mono text-[11px]"
@@ -1231,7 +1231,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                         Webhook Verification Signature:
                       </span>
                       <input
-                        type={security.showApiKeys ? 'text' : 'password'}
+                        type="text"
                         readOnly
                         value="Gerida no servidor — não exposta no browser"
                         className="w-full px-3 py-2 bg-[#151b2b] border border-slate-700 rounded-lg text-slate-200 font-mono text-[11px]"
