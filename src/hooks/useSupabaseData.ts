@@ -127,7 +127,7 @@ export function useEmployees() {
 
         if (dbError) throw dbError;
         {
-          const mapped: Employee[] = dbFuncs.map((row: any, idx: number) => {
+          const mapped: Employee[] = (dbFuncs || []).map((row: any) => {
             const roleStr = String(row.role || 'operador').toLowerCase();
             const cargo: EmployeeRole = roleStr.includes('gerente') ? 'Gerente' : roleStr.includes('estag') ? 'Estagiário' : 'Operador';
             const status: EmployeeStatus = row.status === 'ausente' ? 'ausente' : row.status === 'ferias' ? 'ferias' : 'em_servico';
