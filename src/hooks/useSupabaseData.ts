@@ -93,7 +93,7 @@ export function useStores() {
       nome: updates.nome, morada: updates.endereco, cidade: updates.cidade, gerente: updates.gerente,
       telefone: updates.telefone, email: updates.email, horario: updates.horario,
       nif_loja: updates.nif, meta_mes: updates.metaMes,
-      ativo: updates.status !== undefined ? updates.status === 'ativa' : undefined,
+      ativo: updates.status === 'ativa' ? true : updates.status === 'inativa' ? false : undefined,
     }).eq('id', id);
     if (error) throw error;
     setData((prev) => prev.map((store) => store.id === id ? { ...store, ...updates } : store));
@@ -196,7 +196,7 @@ export function useEmployees() {
       email: updates.email, loja_id: updates.lojaId,
       role: updates.cargo ? updates.cargo.toLowerCase() : undefined,
       salario_base: updates.salarioBase, data_admissao: updates.dataAdmissao,
-      especialidade: updates.especialidade, status: updates.status,
+      especialidade: updates.especialidade, status: updates.status || undefined,
     }).eq('id', id);
     if (error) throw error;
     setData((prev) => prev.map((employee) => employee.id === id ? { ...employee, ...updates } : employee));
