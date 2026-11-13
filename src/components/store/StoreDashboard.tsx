@@ -85,20 +85,22 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
 
       // 1. Informações da Loja
       if (lojaId) {
-        const { data: lojaData } = await supabase
+        const { data: lojaData, error: lojaError } = await supabase
           .from('lojas')
           .select('*')
           .eq('id', lojaId)
           .maybeSingle();
+        if (lojaError) throw lojaError;
         if (lojaData) setLojaInfo(lojaData);
       }
 
       // 2. Registos de Ponto Hoje (para determinar status Online / Offline)
-      const { data: pontosData } = await supabase
+      const { data: pontosData, error: pontosError } = await supabase
         .from('registos_ponto')
         .select('*')
         .order('timestamp', { ascending: false })
         .limit(10);
+      if (pontosError) throw pontosError;
 
       if (pontosData && pontosData.length > 0) {
         // Encontrar o ponto mais recente de hoje deste funcionário se disponível
@@ -115,17 +117,19 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
 
       // 3. KPIs do Dia e Ontem
       // RLS filtra automaticamente por loja_id
-      const { data: kpiHojeData } = await supabase
+      const { data: kpiHojeData, error: kpiHojeError } = await supabase
         .from('kpi_loja_diaria')
         .select('*')
         .eq('data', todayStr)
         .maybeSingle();
+      if (kpiHojeError) throw kpiHojeError;
 
-      const { data: kpiOntemData } = await supabase
+      const { data: kpiOntemData, error: kpiOntemError } = await supabase
         .from('kpi_loja_diaria')
         .select('*')
         .eq('data', yesterdayStr)
         .maybeSingle();
+      if (kpiOntemError) throw kpiOntemError;
 
       setKpiHoje(kpiHojeData || null);
       setKpiOntem(kpiOntemData || null);
@@ -137,16 +141,18 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
         .select('*', { count: 'exact', head: true })
         .eq('estado', 'em_loja');
 
-      if (!stockErr && stockCount !== null) {
+      if (stockErr) throw stockErr;
+      if (stockCount !== null) {
         setStockEmLojaCount(stockCount);
       }
 
       // 5. Feed de Atividades: Últimas transações + Registos de Ponto
-      const { data: txsData } = await supabase
+      const { data: txsData, error: txsError } = await supabase
         .from('transacoes')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(5);
+      if (txsError) throw txsError;
 
       const combined: FeedActivity[] = [];
 
@@ -289,15 +295,11 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
 
     setIsSendingIncident(true);
     try {
-      // Inserir alerta ou registo operacional no Supabase
-      // Usamos registos de ponto ou tabela equivalente com payload
       onShowToast(
-        'info',
-        `Alerta "${incidentPriority.toUpperCase()}" transmitido diretamente à Sala de Guerra da Sede.`,
-        'Incidente Reportado'
+        'error',
+        'O envio de incidentes ainda não está ligado ao backend. Nenhum alerta foi enviado.',
+        'Funcionalidade indisponível'
       );
-      setShowIncidentModal(false);
-      setIncidentDescription('');
     } catch {
       onShowToast('error', 'Não foi possível transmitir o alerta.');
     } finally {
