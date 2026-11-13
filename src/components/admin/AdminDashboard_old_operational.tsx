@@ -20,7 +20,8 @@ import {
   SlidersHorizontal,
   PlusCircle,
   HelpCircle,
-  Users
+  Users,
+  ReceiptText
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -334,7 +335,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
         {/* REQUISITO 2.B: KPIS GLOBAIS (Grid 4 cols) */}
         <section aria-label="KPIs Globais da Rede">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
             {/* 1. Volume Hoje */}
             <KPICard
               title="Volume Compras Hoje"
@@ -347,6 +348,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 label: 'vs ontem',
                 isPositiveGood: true,
               }}
+              onClick={() => onNavigate('/finance')}
               subtitle={
                 globalKpis.volumeOntem > 0
                   ? `Ontem: ${formatCurrency(globalKpis.volumeOntem)}`
@@ -369,9 +371,18 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                     }
                   : undefined
               }
-              subtitle="A aguardar transferência bancária"
+              onClick={() => onNavigate('/admin/transacoes-pendentes')}
+              subtitle="A aguardar transferência bancária · Abrir lista"
             />
 
+            <KPICard
+              title="Transações registadas"
+              value={recentTxs.length}
+              icon={ReceiptText}
+              isLoading={isLoading}
+              onClick={() => onNavigate('/admin/transacoes')}
+              subtitle="Últimos registos · Abrir lista"
+            />
             {/* 3. Peso Rede (Hoje) */}
             <KPICard
               title="Peso Total da Rede"
@@ -382,7 +393,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               }
               icon={Scale}
               isLoading={isLoading}
-              subtitle="Ouro comprado hoje"
+              onClick={() => onNavigate('/admin/transacoes')}
+              subtitle="Ouro comprado hoje · Ver transações"
             />
 
             {/* 4. Lojas Ativas */}
@@ -391,7 +403,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               value={`${globalKpis.lojasAtivas} / ${globalKpis.totalLojas}`}
               icon={Building2}
               isLoading={isLoading}
-              subtitle="Lojas em operação no sistema"
+              onClick={() => onNavigate('/stores')}
+              subtitle="Lojas em operação · Abrir gestão"
             />
           </div>
         </section>
