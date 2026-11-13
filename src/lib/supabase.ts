@@ -1,58 +1,57 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-// Resolve URL and Anon Key from environment variables or localStorage
 export const getSupabaseConfig = () => {
-  const envUrl = import.meta.env.VITE_SUPABASE_URL;
-  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-  const localUrl = typeof window !== 'undefined' ? localStorage.getItem('diamante_supabase_url') : null;
-  const localKey = typeof window !== 'undefined' ? localStorage.getItem('diamante_supabase_key') : null;
-
-  const url = (envUrl && envUrl !== 'https://your-project.supabase.co' ? envUrl : localUrl) || '';
-  const key = (envKey && envKey !== 'your-anon-key' ? envKey : localKey) || '';
-
-  return { url: url.trim(), key: key.trim() };
+  const url = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+  const key = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+  return { url, key };
 };
-
-const initialConfig = getSupabaseConfig();
-
-// URL real do projeto Supabase conectado
-const fallbackUrl = 'https://ytpetuvvxbmlafsisfaf.supabase.co';
-const fallbackKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder';
 
 export const isSupabaseConfigured = (): boolean => {
   const { url, key } = getSupabaseConfig();
-  return Boolean(url && key && url.startsWith('http') && !url.includes('placeholder-instance'));
+  if (!url || !key || key === 'your-anon-key') return false;
+
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
 };
 
-export let supabase = createClient(
-  initialConfig.url || fallbackUrl,
-  initialConfig.key || fallbackKey,
-  {
+let activeClient: SupabaseClient | null = null;
+
+if (isSupabaseConfigured()) {
+  const { url, key } = getSupabaseConfig();
+  activeClient = createClient(url, key, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
     },
     realtime: {
-      params: {
-        eventsPerSecond: 10,
-      },
-    },
-  }
-);
-
-export const updateSupabaseClient = (url: string, key: string) => {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem('diamante_supabase_url', url.trim());
-    localStorage.setItem('diamante_supabase_key', key.trim());
-  }
-  supabase = createClient(url.trim(), key.trim(), {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
+      params: { eventsPerSecond: 10 },
     },
   });
-  return supabase;
-};
+}
+
+const unavailableMessage =
+  'Supabase não está configurada. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY antes de utilizar esta operação.';
+
+function guardedProxy<T extends object>(getTarget: () => T): T {
+  return new Proxy({} as T, {
+    get(_target, property) {
+      const target = getTarget();
+      const value = Reflect.get(target, property, target);
+      if (typeof value === 'function') return value.bind(target);
+      if (value !== null && typeof value === 'object') {
+        return guardedProxy(() => value as object) as typeof value;
+      }
+      return value;
+    },
+  });
+}
+
+export const supabase = guardedProxy<SupabaseClient>(() => {
+  if (!activeClient) throw new Error(unavailableMessage);
+  return activeClient;
+});
