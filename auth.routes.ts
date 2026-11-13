@@ -255,6 +255,375 @@ export async function geocodePortugueseAddress(morada: string): Promise<{ latitu
   return { latitude: null, longitude: null };
 }
 
+// a) POST /admin/lojas - Criar Loja
+// -------------------------------------------------------------------------
+async function handleCreateLoja(req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { nome, morada, nif_loja, telefone, codigo_loja } = req.body || {};
+    if (!nome || !morada || !codigo_loja || !nif_loja) {
+      res.status(400).json({ success: false, message: 'Nome, morada, código e NIF são obrigatórios.' });
+      return;
+    }
+    const nifValidation = validatePortugueseNIF(String(nif_loja));
+    if (!nifValidation.isValid) {
+      res.status(400).json({ success: false, message: nifValidation.message || 'NIF inválido.' });
+      return;
+    }
+    let normalizedPhone: string | null = null;
+    if (telefone) {
+      normalizedPhone = normalizePortuguesePhone(String(telefone));
+      if (!normalizedPhone) {
+        res.status(400).json({ success: false, message: 'Telefone português inválido.' });
+        return;
+      }
+    }
+    const { latitude, longitude } = await geocodePortugueseAddress(String(morada));
+    const payload = {
+      nome: String(nome).trim(),
+      morada: String(morada).trim(),
+      codigo_loja: String(codigo_loja).trim().toUpperCase(),
+      nif_loja: String(nif_loja).trim(),
+      telefone: normalizedPhone,
+      latitude,
+      longitude,
+      ativo: true,
+    };
+    const { data, error } = await supabaseAdmin
+      .from('lojas')
+      .insert(payload)
+      .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo')
+      .single();
+    if (error) {
+      console.error('[handleCreateLoja] Falha na gravação da loja.');
+      res.status(400).json({ success: false, message: 'Não foi possível criar a loja.' });
+      return;
+    }
+    res.status(201).json({ success: true, message: 'Loja criada.', loja: data });
+  } catch (err: any) {
+    console.error('[handleCreateLoja] Falha interna.');
+    res.status(500).json({ success: false, message: 'Erro interno ao criar loja.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// b) PUT /admin/lojas/:id - Editar Loja
+// -------------------------------------------------------------------------
+async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ success: false, message: 'ID da loja obrigatório.' });
+      return;
+    }
+    const { nome, morada, nif_loja, telefone, codigo_loja, ativo } = req.body || {};
+    const updates: any = {};
+    if (nome !== undefined) updates.nome = String(nome).trim();
+    if (codigo_loja !== undefined) updates.codigo_loja = String(codigo_loja).trim().toUpperCase();
+    if (nif_loja !== undefined) {
+      const validation = validatePortugueseNIF(String(nif_loja));
+      if (!validation.isValid) {
+        res.status(400).json({ success: false, message: validation.message || 'NIF inválido.' });
+        return;
+      }
+      updates.nif_loja = String(nif_loja).trim();
+    }
+    if (telefone !== undefined) {
+      if (telefone === null || telefone === '') updates.telefone = null;
+      else {
+        const normalized = normalizePortuguesePhone(String(telefone));
+        if (!normalized) {
+          res.status(400).json({ success: false, message: 'Telefone português inválido.' });
+          return;
+        }
+        updates.telefone = normalized;
+      }
+    }
+    if (ativo !== undefined) {
+      if (typeof ativo !== 'boolean') {
+        res.status(400).json({
+          success: false,
+          message: 'O campo ativo tem de ser um valor booleano.',
+        });
+        return;
+      }
+      updates.ativo = ativo;
+    }
+    if (morada !== undefined) {
+      updates.morada = String(morada).trim();
+      const coords = await geocodePortugueseAddress(updates.morada);
+      if (coords.latitude !== null && coords.longitude !== null) {
+        updates.latitude = coords.latitude;
+        updates.longitude = coords.longitude;
+      }
+    }
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ success: false, message: 'Não foram enviados campos para atualizar.' });
+      return;
+    }
+    const { data, error } = await supabaseAdmin
+      .from('lojas')
+      .update(updates)
+      .eq('id', id)
+      .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo')
+      .maybeSingle();
+    if (error) {
+      res.status(400).json({ success: false, message: 'Não foi possível atualizar a loja.' });
+      return;
+    }
+    if (!data) {
+      res.status(404).json({ success: false, message: 'Loja não encontrada.' });
+      return;
+    }
+    res.status(200).json({ success: true, message: 'Loja atualizada.', loja: data });
+  } catch (err: any) {
+    console.error('[handleUpdateLoja] Falha interna.');
+    res.status(500).json({ success: false, message: 'Erro interno ao atualizar loja.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// GET /admin/lojas - Listar todas as lojas
+// -------------------------------------------------------------------------
+async function handleGetLojas(_req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('lojas')
+      .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo, admin_id')
+      .order('nome', { ascending: true });
+    if (error) {
+      console.error('[handleGetLojas] Falha na consulta de lojas.');
+      res.status(503).json({ success: false, message: 'Não foi possível consultar as lojas.' });
+      return;
+    }
+    res.status(200).json({ success: true, lojas: data || [], total: data?.length || 0 });
+  } catch (err: any) {
+    console.error('[handleGetLojas] Falha interna.');
+    res.status(500).json({ success: false, message: 'Erro ao listar lojas.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// c) POST /admin/funcionarios - Registar Funcionária
+// -------------------------------------------------------------------------
+async function handleCreateFuncionario(req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { nome_completo, telemovel, loja_id, role, email } = req.body || {};
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!nome_completo || !normalizedEmail) {
+      res.status(400).json({ success: false, message: 'Nome completo e email são obrigatórios.' });
+      return;
+    }
+    const assignedRole = String(role || 'funcionario').toLowerCase();
+    if (!['admin', 'funcionario', 'aprovador'].includes(assignedRole)) {
+      res.status(400).json({
+        success: false,
+        message: 'Papel inválido. A base de dados aceita atualmente: admin, funcionario ou aprovador. A equivalência gerente/operador carece de aprovação.',
+      });
+      return;
+    }
+    let normalizedPhone: string | null = null;
+    if (telemovel) {
+      normalizedPhone = normalizePortuguesePhone(String(telemovel));
+      if (!normalizedPhone) {
+        res.status(400).json({ success: false, message: 'Número de telemóvel português inválido.' });
+        return;
+      }
+    }
+    if (loja_id) {
+      const { data: store, error: storeError } = await supabaseAdmin
+        .from('lojas').select('id').eq('id', loja_id).maybeSingle();
+      if (storeError || !store) {
+        res.status(400).json({ success: false, message: 'A loja indicada não existe.' });
+        return;
+      }
+    }
+    const { data: existing } = await supabaseAdmin
+      .from('funcionarios').select('id').eq('email', normalizedEmail).maybeSingle();
+    if (existing) {
+      res.status(409).json({ success: false, message: 'Já existe um funcionário com esse email.' });
+      return;
+    }
+
+    // Criar primeiro a identidade Auth por convite; o trigger existente associa-a pelo email.
+    const { data: invited, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+      normalizedEmail,
+      { data: { nome_completo: String(nome_completo).trim() } }
+    );
+    if (inviteError || !invited.user) {
+      console.error('[handleCreateFuncionario] Falha ao criar convite Auth.');
+      res.status(400).json({
+        success: false,
+        message: 'Não foi possível convidar o utilizador.',
+      });
+      return;
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('funcionarios')
+      .insert({
+        id: invited.user.id,
+        nome_completo: String(nome_completo).trim(),
+        email: normalizedEmail,
+        telemovel: normalizedPhone,
+        loja_id: loja_id || null,
+        role: assignedRole,
+        ativo: true,
+      })
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
+      .single();
+
+    if (error || !data) {
+      const { error: rollbackError } =
+        await supabaseAdmin.auth.admin.deleteUser(invited.user.id);
+
+      if (rollbackError) {
+        console.error('[handleCreateFuncionario] Falha ao reverter identidade Auth.');
+        res.status(500).json({
+          success: false,
+          message: 'A gravação falhou e a reversão automática requer intervenção.',
+        });
+        return;
+      }
+
+      res.status(400).json({
+        success: false,
+        message: 'Não foi possível gravar o funcionário. O convite Auth foi revertido.',
+      });
+      return;
+    }
+    if (data.id !== invited.user.id) {
+      console.error('[handleCreateFuncionario] Divergência entre identidade Auth e funcionário; requer reconciliação.');
+      res.status(409).json({
+        success: false,
+        message: 'A associação Auth/funcionário não ficou consistente. É necessária reconciliação manual.',
+      });
+      return;
+    }
+    res.status(201).json({ success: true, message: 'Funcionário criado e convite enviado.', funcionario: data });
+  } catch (err: any) {
+    console.error('[handleCreateFuncionario] Falha interna.');
+    res.status(500).json({ success: false, message: 'Erro interno ao registar funcionário.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// d) PUT /admin/funcionarios/:id - Editar Funcionária (mudar loja, role, ativar/desativar)
+// -------------------------------------------------------------------------
+async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ success: false, message: 'ID do funcionário obrigatório.' });
+      return;
+    }
+    const { nome_completo, telemovel, loja_id, role, ativo, email } = req.body || {};
+    if (email !== undefined) {
+      res.status(409).json({
+        success: false,
+        message: 'A alteração de email está temporariamente bloqueada para evitar dessincronização entre Auth e funcionarios. Requer fluxo próprio de alteração de identidade.',
+      });
+      return;
+    }
+    const updates: any = {};
+    if (nome_completo !== undefined) updates.nome_completo = String(nome_completo).trim();
+    if (loja_id !== undefined) updates.loja_id = loja_id || null;
+    if (role !== undefined) {
+      const normalizedRole = String(role).toLowerCase();
+      if (!['admin', 'funcionario', 'aprovador'].includes(normalizedRole)) {
+        res.status(400).json({ success: false, message: 'Papel inválido para a constraint atual da base de dados.' });
+        return;
+      }
+      updates.role = normalizedRole;
+    }
+    if (ativo !== undefined) {
+      if (typeof ativo !== 'boolean') {
+        res.status(400).json({
+          success: false,
+          message: 'O campo ativo tem de ser um valor booleano.',
+        });
+        return;
+      }
+      updates.ativo = ativo;
+    }
+    if (telemovel !== undefined) {
+      if (telemovel === null || telemovel === '') updates.telemovel = null;
+      else {
+        const normalizedPhone = normalizePortuguesePhone(String(telemovel));
+        if (!normalizedPhone) {
+          res.status(400).json({ success: false, message: 'Número de telemóvel português inválido.' });
+          return;
+        }
+        updates.telemovel = normalizedPhone;
+      }
+    }
+    if (loja_id) {
+      const { data: store, error: storeError } = await supabaseAdmin
+        .from('lojas').select('id').eq('id', loja_id).maybeSingle();
+      if (storeError || !store) {
+        res.status(400).json({ success: false, message: 'A loja indicada não existe.' });
+        return;
+      }
+    }
+    if (Object.keys(updates).length === 0) {
+      res.status(400).json({ success: false, message: 'Não foram enviados campos para atualizar.' });
+      return;
+    }
+    const { data, error } = await supabaseAdmin
+      .from('funcionarios')
+      .update(updates)
+      .eq('id', id)
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
+      .maybeSingle();
+    if (error) {
+      res.status(400).json({ success: false, message: 'Não foi possível atualizar o funcionário.' });
+      return;
+    }
+    if (!data) {
+      res.status(404).json({ success: false, message: 'Funcionário não encontrado.' });
+      return;
+    }
+    res.status(200).json({ success: true, message: 'Funcionário atualizado.', funcionario: data });
+  } catch (err: any) {
+    console.error('[handleUpdateFuncionario] Falha interna.');
+    res.status(500).json({ success: false, message: 'Erro interno ao atualizar funcionário.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// GET /admin/funcionarios - Listar todas as funcionárias
+// -------------------------------------------------------------------------
+async function handleGetFuncionarios(_req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('funcionarios')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
+      .order('nome_completo', { ascending: true });
+    if (error) {
+      console.error('[handleGetFuncionarios] Falha na consulta de funcionários.');
+      res.status(503).json({ success: false, message: 'Não foi possível consultar os funcionários.' });
+      return;
+    }
+    const funcionarios = (data || []).map((f: any) => ({
+      id: f.id,
+      nome_completo: f.nome_completo,
+      email: f.email,
+      role: f.role,
+      loja_id: f.loja_id,
+      telemovel: f.telemovel,
+      ativo: f.ativo,
+      loja_nome: f.lojas?.nome || null,
+      codigo_loja: f.lojas?.codigo_loja || null,
+    }));
+    res.status(200).json({ success: true, funcionarios, total: funcionarios.length });
+  } catch (err: any) {
+    console.error('[handleGetFuncionarios] Falha interna.');
+    res.status(500).json({ success: false, message: 'Erro ao listar funcionários.' });
+  }
+}
+
+// -------------------------------------------------------------------------
+// e) GET /admin/config/margens - Ler configurações e margens
+// -------------------------------------------------------------------------
 // A persistência das configurações financeiras ainda não está implementada.
 // Não devolver valores de demonstração nem aceitar gravações apenas em memória.
 function handleGetMargensConfig(_req: Request, res: Response): void {
