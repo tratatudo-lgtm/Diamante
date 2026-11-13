@@ -128,58 +128,44 @@ export const StoreManagement: React.FC = () => {
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStore.nome.trim() || !newStore.endereco.trim()) return;
-
     try {
-    await createStore({
-      nome: newStore.nome.trim(),
-      status: newStore.status,
-      endereco: newStore.endereco.trim(),
-      cidade: newStore.cidade.trim(),
-      gerente: newStore.gerente.trim(),
-      telefone: newStore.telefone.trim(),
-      email: newStore.email.trim(),
-      horario: newStore.horario.trim(),
-      nif: newStore.nif.trim(),
-      metaMes: Number(newStore.metaMes) || 0,
-    });
+      await createStore({
+        nome: newStore.nome.trim(), status: newStore.status,
+        endereco: newStore.endereco.trim(), cidade: newStore.cidade.trim(),
+        gerente: newStore.gerente.trim(), telefone: newStore.telefone.trim(),
+        email: newStore.email.trim(), horario: newStore.horario.trim(),
+        nif: newStore.nif.trim(), metaMes: Number(newStore.metaMes) || 0,
+      });
+      setIsCreateModalOpen(false);
+      setNewStore({ nome: '', endereco: '', cidade: '', gerente: '', telefone: '', email: '', horario: '', nif: '', metaMes: 0, status: 'ativa' });
     } catch (err: any) {
       setActionError(err?.message || 'Falha ao criar a loja.');
-      return;
     }
-
-    setIsCreateModalOpen(false);
-    setNewStore({
-      nome: '',
-      endereco: '',
-      cidade: '',
-      gerente: '',
-      telefone: '',
-      email: '',
-      horario: '',
-      nif: '',
-      metaMes: 0,
-      status: 'ativa',
-    });
   };
 
   // Guardar Edição (Supabase)
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingStore) return;
-
-    if (selectedStore?.id === editingStore.id) {
-    if (selectedStore?.id === editingStore.id) {
-      setSelectedStore(editingStore);
+    try {
+      await updateStore(editingStore.id, editingStore);
+      if (selectedStore?.id === editingStore.id) setSelectedStore(editingStore);
+      setIsEditModalOpen(false);
+      setEditingStore(null);
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao atualizar a loja.');
     }
-    setIsEditModalOpen(false);
-    setEditingStore(null);
   };
 
   // Eliminar / Desativar Loja (Supabase)
   const handleDeleteStore = async (id: string) => {
-    setIsDeletingId(null);
-    setIsDeletingId(null);
-    setSelectedStore(null);
+    try {
+      await deleteStore(id);
+      setIsDeletingId(null);
+      setSelectedStore(null);
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao eliminar a loja.');
+    }
   };
 
   return (
