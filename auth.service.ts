@@ -8,20 +8,20 @@ import { isOtpActive } from './otp-session';
 
 const JWT_SECRET: string = (() => {
   const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    throw new Error('JWT_SECRET tem de estar configurado no servidor.');
+  if (!secret || secret.length < 32 || secret.startsWith('GERAR_SEGREDO_ALEATORIO')) {
+    throw new Error('JWT_SECRET tem de ser um segredo real com pelo menos 32 caracteres.');
   }
   return secret;
 })();
 
 const supabaseUrl = process.env.SUPABASE_URL;
-if (!supabaseUrl) {
-  throw new Error('SUPABASE_URL tem de estar configurada explicitamente no servidor.');
+if (!supabaseUrl || supabaseUrl.includes('your-project.supabase.co')) {
+  throw new Error('SUPABASE_URL tem de conter o endereço real do projeto configurado no servidor.');
 }
 
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-if (!supabaseKey) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY tem de estar configurada no servidor; nunca usar anon key como cliente admin.');
+if (!supabaseKey || supabaseKey === 'SUPABASE_SERVICE_ROLE_SECRET' || supabaseKey.toLowerCase().includes('placeholder')) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY tem de conter uma chave real do servidor; nunca usar anon key como cliente admin.');
 }
 
 // Cliente Supabase com privilégios de administração (Service Role ou Anon Key)
