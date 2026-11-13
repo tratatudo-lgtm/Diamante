@@ -4,6 +4,18 @@
  * Tabelas: 'lojas', 'funcionarios', 'clientes', 'transacoes_financeiras', 'configuracoes_sistema'
  */
 
+export interface Store {
+  id: string;
+  codigo: string;
+  nome: string;
+  status: 'ativa' | 'inativa';
+  endereco: string;
+  nif: string;
+  telefone: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export interface DatabaseLoja {
   id: string;
   nome: string;
