@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTransactionRealtime } from '../../hooks/useTransactionRealtime';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import type { Transacao, KpiLojaDiaria, RegistoPonto, Loja } from '../../types/database';
@@ -210,9 +211,6 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
     // Subscrição em tempo real para transações e registos de ponto
     const channel = supabase
       .channel('store-dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'transacoes' }, () => {
-        loadDashboardData();
-      })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'registos_ponto' }, () => {
         loadDashboardData();
       })
@@ -225,6 +223,9 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
       supabase.removeChannel(channel);
     };
   }, [loadDashboardData]);
+
+  // A sala é atribuída pelo servidor com base no JWT e na loja do funcionário.
+  useTransactionRealtime(loadDashboardData, lojaId ? `store:${lojaId}` : null);
 
   // REQUISITO TÉCNICO: Geolocalização ao fazer Clock In/Out
   const handleToggleClock = async () => {
