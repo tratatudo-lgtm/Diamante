@@ -1,5 +1,4 @@
 import React, { useState, useId } from 'react';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Sparkles,
@@ -149,32 +148,19 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         }),
       });
       const txResult = await txResponse.json().catch(() => null);
+      if (txResult?.partial) {
+        const partialMessage = txResult.message || 'A transação foi criada, mas o inventário não ficou registado. Não repita a compra; contacte a sede.';
+        setErrorMessage(partialMessage);
+        onShowToast('error', partialMessage);
+        return;
+      }
       if (!txResponse.ok || !txResult?.success) {
         throw new Error(txResult?.message || 'Não foi possível registar a transação.');
       }
       const novaTransacao = txResult.transacao;
       if (!novaTransacao?.id) throw new Error('A API não devolveu o identificador da transação.');
 
-      // 2. INSERT INTO inventario_fisico (transacao_origem_id, estado='em_loja', ...)
-      const codigoUnico = `INV-${Date.now().toString(36).toUpperCase()}-${Math.floor(Math.random() * 900 + 100)}`;
-
-      const { error: invError } = await supabase
-        .from('inventario_fisico')
-        .insert({
-          loja_atual_id: lojaId,
-          transacao_origem_id: novaTransacao?.id || null,
-          codigo_unico: codigoUnico,
-          metal: metal,
-          peso_gramas: pesoNum,
-          estado: 'em_loja',
-        });
-
-      if (invError) {
-        const partialMessage = 'A transação foi criada, mas o registo no inventário falhou. Não repita a compra; contacte a sede para verificar a transação.';
-        setErrorMessage(partialMessage);
-        onShowToast('error', partialMessage);
-        return;
-      }
+      // O endpoint protegido também cria o registo de inventário físico.
 
       // 3. Toast: "Compra registada! Aguarda aprovação."
       onShowToast(
