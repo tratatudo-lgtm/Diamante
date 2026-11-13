@@ -183,6 +183,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
    */
   const login = async (email: string, password: string): Promise<{ success: boolean; redirectPath: string }> => {
     setErrorMessage(null);
+    if (!isSupabaseConfigured()) {
+      setErrorMessage('Serviço de autenticação não configurado.');
+      return { success: false, redirectPath: '/login' };
+    }
     setIsLoading(true);
 
     try {
