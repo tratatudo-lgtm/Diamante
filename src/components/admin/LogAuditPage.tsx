@@ -29,8 +29,6 @@ import {
   Copy,
   Check,
   X,
-  Play,
-  Pause,
   ArrowUpDown,
   Terminal,
   Activity,
@@ -83,8 +81,7 @@ interface LogAuditPageProps {
 export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLiveStreaming] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<string>('Agora');
+  const [lastSyncTime, setLastSyncTime] = useState<string>('');
 
   // Filtros
   const [searchQuery, setSearchQuery] = useState('');
@@ -410,7 +407,7 @@ export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
                   {totalCount}
                 </p>
                 <p className="text-[10px] text-slate-400">
-                  Sincronizado: <span className="font-mono text-slate-300">{lastSyncTime}</span>
+                  Sincronizado: <span className="font-mono text-slate-300">{lastSyncTime || '—'}</span>
                 </p>
               </div>
               <div className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-[#D4AF37]">
