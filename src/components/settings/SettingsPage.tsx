@@ -1306,7 +1306,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                     required
                     value={newBank.bancoNome}
                     onChange={(e) => setNewBank({ ...newBank, bancoNome: e.target.value })}
-                    placeholder="Ex: Santander Totta / Novo Banco"
+                    placeholder="Nome do banco"
                     className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]"
                   />
                 </div>
@@ -1331,7 +1331,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                     onChange={(e) =>
                       setNewBank({ ...newBank, iban: e.target.value.toUpperCase() })
                     }
-                    placeholder="PT50 0033 0000 1234 5678 9012 3"
+                    placeholder="IBAN da conta"
                     className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono uppercase focus:outline-hidden focus:border-[#D4AF37]"
                   />
                 </div>
@@ -1404,7 +1404,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                     required
                     value={newApprover.nome}
                     onChange={(e) => setNewApprover({ ...newApprover, nome: e.target.value })}
-                    placeholder="Ex: Dr. Miguel Valente"
+                    placeholder="Nome do aprovador"
                     className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]"
                   />
                 </div>
