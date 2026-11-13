@@ -9,3 +9,6 @@ coverage/
 *.bak
 *.bak_*
 package-lock.json
+
+# Local safety backups
+.safe-backups/
