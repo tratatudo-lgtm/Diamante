@@ -469,13 +469,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
                       <span>Preço Base do Ouro & Margens Comerciais</span>
                     </h2>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Tabelas de compra aplicadas aos 24 balcões em tempo real
+                      Tabelas de compra sem valores configurados
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      Live Feed Ativo
+                      Sem cotações configuradas
                     </span>
                   </div>
                 </div>
