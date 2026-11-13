@@ -107,7 +107,8 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
     let pendenteQtd = 0;
     let pagoHojeVal = 0;
 
-    const dataHoje = '06/11/2026';
+    const hoje = new Date();
+    const dataHoje = hoje.toLocaleDateString('pt-PT');
 
     transactions.forEach((tx) => {
       if (tx.estado === 'pendente') {
@@ -151,14 +152,14 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
       }
 
       // Filtro por Data
-      if (dateFilter === 'hoje' && tx.data !== '06/11/2026') {
+      if (dateFilter === 'hoje' && tx.data !== new Date().toLocaleDateString('pt-PT')) {
         return false;
       }
-      if (
-        dateFilter === '7dias' &&
-        !['06/11/2026', '05/11/2026', '04/11/2026', '03/11/2026'].includes(tx.data)
-      ) {
-        return false;
+      if (dateFilter === '7dias') {
+        const [day, month, year] = tx.data.split('/').map(Number);
+        const transactionDate = new Date(year, month - 1, day);
+        const age = Date.now() - transactionDate.getTime();
+        if (!day || !month || !year || age < 0 || age > 7 * 24 * 60 * 60 * 1000) return false;
       }
 
       // Pesquisa por Texto
