@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomInt } from 'crypto';
 import { sendWhatsAppOtp, formatPortuguesePhone } from './whatsapp.service';
+import { isOtpActive } from './otp-session';
 
 const JWT_SECRET: string = (() => {
   const secret = process.env.JWT_SECRET;
@@ -320,7 +321,7 @@ export async function verifyOtpAndAuthenticate(
     };
   }
 
-  if (Date.now() > stored.expiresAt) {
+  if (!isOtpActive(stored.expiresAt)) {
     otpStore.delete(formatted);
     return {
       success: false,
