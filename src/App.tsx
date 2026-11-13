@@ -17,7 +17,6 @@ import { AdminFuncionariosPage } from './components/admin/AdminFuncionariosPage'
 import { AdminConfigPage } from './components/admin/AdminConfigPage';
 import { StoreOperatorView } from './components/store/StoreOperatorView';
 import { StoreManagement } from './components/stores/StoreManagement';
-import { EmployeeManagement } from './components/employees/EmployeeManagement';
 import { FinanceManagement } from './components/finance/FinanceManagement';
 import { ClientManagement } from './components/clients/ClientManagement';
 import { CRMWorkspace } from './components/clients/CRMWorkspace';
