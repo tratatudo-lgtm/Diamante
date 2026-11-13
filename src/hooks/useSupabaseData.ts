@@ -79,6 +79,7 @@ export function useStores() {
       meta_mes: newStoreData.metaMes, ativo: newStoreData.status === 'ativa',
     }).select('id').single();
     if (error) throw error;
+    if (!inserted?.id) throw new Error('A base de dados não devolveu o identificador da loja criada.');
     const created: Store = {
       ...newStoreData, id: String(inserted.id), codigo, volumeMes: 0, metaMes: 0,
       progressoMeta: 0, totalTransacoesMes: 0, ouroCompradoGramas: 0, dataAbertura: '',
@@ -94,15 +95,17 @@ export function useStores() {
       telefone: updates.telefone, email: updates.email, horario: updates.horario,
       nif_loja: updates.nif, meta_mes: updates.metaMes,
       ativo: updates.status === 'ativa' ? true : updates.status === 'inativa' ? false : undefined,
-    }).eq('id', id);
+    }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('A loja não foi encontrada ou não foi atualizada.');
     setData((prev) => prev.map((store) => store.id === id ? { ...store, ...updates } : store));
   };
 
   const deleteStore = async (id: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi eliminada.');
-    const { error } = await supabase.from('lojas').delete().eq('id', id);
+    const { error } = await supabase.from('lojas').delete().eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('A loja não foi encontrada ou não foi eliminada.');
     setData((prev) => prev.filter((store) => store.id !== id));
   };
 
@@ -182,6 +185,7 @@ export function useEmployees() {
       especialidade: newEmp.especialidade, status: newEmp.status, ativo: true,
     }).select('id').single();
     if (error) throw error;
+    if (!inserted?.id) throw new Error('A base de dados não devolveu o identificador do funcionário criado.');
     const created: Employee = {
       ...newEmp, id: String(inserted.id), codigo: '', avatarColor: 'from-[#D4AF37] to-amber-700',
     };
@@ -197,15 +201,17 @@ export function useEmployees() {
       role: updates.cargo ? updates.cargo.toLowerCase() : undefined,
       salario_base: updates.salarioBase, data_admissao: updates.dataAdmissao,
       especialidade: updates.especialidade, status: updates.status || undefined,
-    }).eq('id', id);
+    }).eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('O funcionário não foi encontrado ou não foi atualizado.');
     setData((prev) => prev.map((employee) => employee.id === id ? { ...employee, ...updates } : employee));
   };
 
   const deleteEmployee = async (id: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi eliminado.');
-    const { error } = await supabase.from('funcionarios').delete().eq('id', id);
+    const { error } = await supabase.from('funcionarios').delete().eq('id', id).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('O funcionário não foi encontrado ou não foi eliminado.');
     setData((prev) => prev.filter((employee) => employee.id !== id));
   };
 
@@ -283,6 +289,7 @@ export function useClients() {
       loja_origem_id: newCli.lojaOrigemId, status: newCli.status, notas_internas: newCli.notasInternas,
     }).select('id').single();
     if (error) throw error;
+    if (!inserted?.id) throw new Error('A base de dados não devolveu o identificador do cliente criado.');
     setData((prev) => [{ ...newCli, id: String(inserted.id) }, ...prev]);
   };
 
@@ -291,8 +298,9 @@ export function useClients() {
     const target = data.find((client) => client.id === clientId);
     if (!target) throw new Error('Cliente não encontrado.');
     const nextStatus: ClientStatus = target.status === 'bloqueado' ? 'normal' : 'bloqueado';
-    const { error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId);
+    const { error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('O cliente não foi encontrado ou não foi atualizado.');
     setData((prev) => prev.map((client) => client.id === clientId ? { ...client, status: nextStatus } : client));
   };
 
@@ -373,15 +381,17 @@ export function useFinanceTransactions() {
 
   const confirmPayment = async (txId: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi confirmado.');
-    const { error } = await supabase.from('transacoes_financeiras').update({ estado: 'pago' }).eq('id', txId);
+    const { error } = await supabase.from('transacoes_financeiras').update({ estado: 'pago' }).eq('id', txId).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
     setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'pago' } : tx));
   };
 
   const rejectPayment = async (txId: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi rejeitado.');
-    const { error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado' }).eq('id', txId);
+    const { error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado' }).eq('id', txId).select('id');
     if (error) throw error;
+    if (!data?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
     setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'rejeitado' } : tx));
   };
 
@@ -397,6 +407,7 @@ export function useFinanceTransactions() {
       comprovativo_ref: newTx.comprovativoRef,
     }).select('id').single();
     if (error) throw error;
+    if (!inserted?.id) throw new Error('A base de dados não devolveu o identificador do pagamento criado.');
     setData((prev) => [{ ...newTx, id: String(inserted.id) }, ...prev]);
   };
 
