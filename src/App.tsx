@@ -10,6 +10,7 @@ import { LandingPage } from './components/landing/LandingPage';
 import { LoginPage } from './components/auth/LoginPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminDashboard as AdminWarRoomDashboard } from './components/admin/AdminDashboard_old_operational';
+import { AdminTransactionsPage } from './components/admin/AdminTransactionsPage';
 import { AdminLojasPage } from './components/admin/AdminLojasPage';
 import { AdminFuncionariosPage } from './components/admin/AdminFuncionariosPage';
 import { AdminConfigPage } from './components/admin/AdminConfigPage';
@@ -40,6 +41,8 @@ function AppRouter() {
         p === '/admin/lojas' ||
         p === '/admin/funcionarios' ||
         p === '/admin/config' ||
+        p === '/admin/transacoes' ||
+        p === '/admin/transacoes-pendentes' ||
         p === '/admin/logs' ||
         p === '/logs' ||
         p === '/auditoria' ||
@@ -145,6 +148,12 @@ function AppRouter() {
 
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
   if (isAdmin) {
+    if (currentPath === '/admin/transacoes') {
+      return <AdminTransactionsPage onNavigate={navigate} />;
+    }
+    if (currentPath === '/admin/transacoes-pendentes') {
+      return <AdminTransactionsPage onNavigate={navigate} initialStatus="pendente_aprovacao" />;
+    }
     if (currentPath === '/dashboard-admin') {
       return <AdminWarRoomDashboard onNavigate={navigate} />;
     }
