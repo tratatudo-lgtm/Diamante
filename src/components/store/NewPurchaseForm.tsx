@@ -115,11 +115,6 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       return;
     }
 
-    if (!isSupabaseConfigured()) {
-      setErrorMessage('Supabase não está configurada. A compra não foi registada.');
-      return;
-    }
-
     setIsSubmitting(true);
 
     try {
