@@ -102,7 +102,7 @@ router.get('/clients/:id', async (req: Request, res: Response) => {
       success: true,
       client,
       transactions: transactions.map((tx: any) => ({ ...tx, loja_nome: storeNames.get(tx.loja_id) || null })),
-      articles: articles || [],
+      articles: articlesWithPhotos,
       attachments: signed
     });
   } catch {
