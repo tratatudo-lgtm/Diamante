@@ -49,6 +49,7 @@ export interface Store {
 // Array inicial com as 24 lojas reais "Diamante D'ouro" em Portugal
 export const StoreManagement: React.FC = () => {
   const { data: stores, loading, createStore, updateStore, deleteStore } = useStores();
+  const [actionError, setActionError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'todas' | 'ativa' | 'inativa'>('todas');
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -128,6 +129,7 @@ export const StoreManagement: React.FC = () => {
     e.preventDefault();
     if (!newStore.nome.trim() || !newStore.endereco.trim()) return;
 
+    try {
     await createStore({
       nome: newStore.nome.trim(),
       status: newStore.status,
@@ -140,6 +142,10 @@ export const StoreManagement: React.FC = () => {
       nif: newStore.nif.trim(),
       metaMes: Number(newStore.metaMes) || 0,
     });
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao criar a loja.');
+      return;
+    }
 
     setIsCreateModalOpen(false);
     setNewStore({
@@ -161,7 +167,7 @@ export const StoreManagement: React.FC = () => {
     e.preventDefault();
     if (!editingStore) return;
 
-    await updateStore(editingStore.id, editingStore);
+    if (selectedStore?.id === editingStore.id) {
     if (selectedStore?.id === editingStore.id) {
       setSelectedStore(editingStore);
     }
@@ -171,13 +177,21 @@ export const StoreManagement: React.FC = () => {
 
   // Eliminar / Desativar Loja (Supabase)
   const handleDeleteStore = async (id: string) => {
-    await deleteStore(id);
+    setIsDeletingId(null);
     setIsDeletingId(null);
     setSelectedStore(null);
   };
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-white p-4 sm:p-6 lg:p-8 font-sans selection:bg-[#D4AF37]/30 selection:text-white">
+      {actionError && (
+        <div role="alert" className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+          <div className="flex items-center justify-between gap-3">
+            <span>{actionError}</span>
+            <button type="button" onClick={() => setActionError(null)} aria-label="Fechar aviso">×</button>
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         {/* =========================================================
             1. HEADER
