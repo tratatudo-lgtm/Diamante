@@ -266,47 +266,39 @@ export const EmployeeManagement: React.FC = () => {
   const handleSaveCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nome.trim() || !formData.nif.trim()) return;
-
-    const storeObj = storeOptions.find((s) => s.id === formData.lojaId);
-    const lojaNome = storeObj ? storeObj.nome : formData.lojaNome;
-
+    const storeObj = storeOptions.find((store) => store.id === formData.lojaId);
     try {
-    await createEmployee({
-      ...formData,
-      lojaNome,
-      transacoesMes: 0,
-    });
+      await createEmployee({ ...formData, lojaNome: storeObj?.nome || '', transacoesMes: 0 });
+      setIsCreateModalOpen(false);
     } catch (err: any) {
       setActionError(err?.message || 'Falha ao criar o funcionário.');
-      return;
     }
-
-    setIsCreateModalOpen(false);
   };
 
   // Submeter Edição (Supabase)
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmployee) return;
-
-    const storeObj = storeOptions.find((s) => s.id === formData.lojaId);
-    const lojaNome = storeObj ? storeObj.nome : formData.lojaNome;
-
-    const updated: Partial<Employee> = {
-      ...formData,
-      lojaNome,
-    };
-
-    setSelectedEmployee({ ...selectedEmployee, ...updated });
-    setSelectedEmployee({ ...selectedEmployee, ...updated });
-    setIsEditModalOpen(false);
+    const storeObj = storeOptions.find((store) => store.id === formData.lojaId);
+    const updated: Partial<Employee> = { ...formData, lojaNome: storeObj?.nome || '' };
+    try {
+      await updateEmployee(selectedEmployee.id, updated);
+      setSelectedEmployee({ ...selectedEmployee, ...updated });
+      setIsEditModalOpen(false);
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao atualizar o funcionário.');
+    }
   };
 
   // Eliminar Funcionário (Supabase)
   const handleDeleteEmployee = async (id: string) => {
-    setIsDeletingId(null);
-    setIsDeletingId(null);
-    setSelectedEmployee(null);
+    try {
+      await deleteEmployee(id);
+      setIsDeletingId(null);
+      setSelectedEmployee(null);
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao eliminar o funcionário.');
+    }
   };
 
   return (
