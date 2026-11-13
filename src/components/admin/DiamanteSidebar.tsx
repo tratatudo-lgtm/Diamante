@@ -13,6 +13,7 @@ import {
   Phone,
   Store,
   Wallet,
+  ReceiptText,
   UserCheck,
   Terminal,
   ChevronRight,
@@ -38,6 +39,7 @@ export const menuItems: MenuItem[] = [
   { id: 'stores', label: 'Gestão de Lojas', path: '/stores', icon: Building2, badge: 'REDE' },
   { id: 'employees', label: 'Equipa & Funcionários', path: '/employees', icon: Users, badge: null },
   { id: 'finance', label: 'Financeiro & Tesouraria', path: '/finance', icon: Wallet, badge: null },
+  { id: 'transactions', label: 'Transações', path: '/admin/transacoes', icon: ReceiptText, badge: null },
   { id: 'clients', label: 'Clientes & Fornecedores', path: '/clients', icon: UserCheck, badge: null },
   { id: 'settings', label: 'Configurações', path: '/settings', icon: SlidersHorizontal, badge: null },
   { id: 'logs', label: 'Logs & Auditoria', path: '/admin/logs', icon: Terminal, badge: null },
@@ -75,6 +77,7 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
     (path === '/stores' && ['/admin/lojas', '/gestao-lojas'].includes(currentPath)) ||
     (path === '/employees' && ['/admin/funcionarios', '/equipa', '/gestao-funcionarios'].includes(currentPath)) ||
     (path === '/finance' && ['/financeiro', '/tesouraria'].includes(currentPath)) ||
+    (path === '/admin/transacoes' && ['/admin/transacoes-pendentes'].includes(currentPath)) ||
     (path === '/clients' && ['/clientes', '/fornecedores'].includes(currentPath)) ||
     (path === '/settings' && ['/admin/config', '/configuracoes'].includes(currentPath)) ||
     (path === '/admin/logs' && ['/logs', '/auditoria'].includes(currentPath));
