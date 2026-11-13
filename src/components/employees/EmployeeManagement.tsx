@@ -330,7 +330,7 @@ export const EmployeeManagement: React.FC = () => {
                   Equipa & Funcionários
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-                  Recursos Humanos, Alocação aos 24 Balcões e Gestão de Escalas
+                  Recursos Humanos, Alocação às Lojas e Gestão de Escalas
                 </p>
               </div>
             </div>
@@ -362,7 +362,7 @@ export const EmployeeManagement: React.FC = () => {
                 {totalEmployees}
               </p>
               <p className="text-[11px] text-[#D4AF37] font-medium">
-                Alocados a 24 balcões ativos
+                Registos carregados da base de dados
               </p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center text-[#D4AF37] shrink-0">
@@ -386,7 +386,7 @@ export const EmployeeManagement: React.FC = () => {
               </div>
               <p className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                {Math.round((activeNow / totalEmployees) * 100)}% de taxa de presença
+                {totalEmployees > 0 ? `${Math.round((activeNow / totalEmployees) * 100)}% de taxa de presença` : 'Sem dados de presença'}
               </p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400 shrink-0">
@@ -405,7 +405,7 @@ export const EmployeeManagement: React.FC = () => {
                   {storesWithCompleteTeam}
                 </p>
                 <span className="text-xs font-mono text-slate-400">
-                  / 24 balcões
+                  / {stores.length} lojas
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 font-medium">
@@ -454,7 +454,7 @@ export const EmployeeManagement: React.FC = () => {
                 onChange={(e) => setStoreFilter(e.target.value)}
                 className="w-full px-3 py-2.5 bg-[#0b0f19] border border-slate-700/70 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
               >
-                <option value="todas">Todas as Lojas (24 Balcões)</option>
+                <option value="todas">Todas as Lojas ({storeOptions.length})</option>
                 {storeOptions.map((st) => (
                   <option key={st.id} value={st.id}>
                     {st.nome}
