@@ -58,7 +58,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
     nome_completo: '',
     telemovel: '+351 ',
     loja_id: null,
-    role: 'operador',
+    role: 'funcionario',
     email: '',
     ativo: true,
   });
@@ -163,7 +163,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
       nome_completo: '',
       telemovel: '+351 ',
       loja_id: lojas.length > 0 ? lojas[0].id : null,
-      role: 'operador',
+      role: 'funcionario',
       email: '',
       ativo: true,
     });
@@ -178,7 +178,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
       nome_completo: func.nome_completo || '',
       telemovel: func.telemovel || '+351 ',
       loja_id: func.loja_id || null,
-      role: func.role || 'operador',
+      role: ['admin', 'funcionario', 'aprovador'].includes(func.role) ? func.role : 'funcionario',
       email: func.email || '',
       ativo: func.ativo !== false,
     });
@@ -307,7 +307,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
       <AdminSidebar currentPath="/admin/funcionarios" onNavigate={onNavigate} />
 
       {/* Área Principal de Conteúdo */}
-      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
+      <div className="flex-1 lg:pl-[280px] flex flex-col min-w-0">
         {/* Cabeçalho */}
         <header className="sticky top-0 z-30 bg-[#0a0f1d]/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-8 py-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -327,7 +327,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 onClick={() => fetchData()}
                 disabled={isRefreshing}
@@ -357,19 +357,19 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
         </header>
 
         {/* Conteúdo Principal */}
-        <main className="p-4 sm:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        <main className="w-full max-w-[1440px] mx-auto px-3 py-4 sm:px-6 sm:py-7 lg:px-8 space-y-5 sm:space-y-7">
           {/* Cartões de Indicadores */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800/80 flex items-center justify-between">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/70 border border-slate-700/70 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                <p className="text-[11px] font-mono uppercase tracking-wider text-slate-400">
+                <p className="text-[9px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                   Total Funcionárias
                 </p>
-                <p className="text-2xl font-bold text-white mt-1">
+                <p className="text-xl sm:text-2xl font-bold text-white mt-1">
                   {totalFuncionarios}
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300 border border-slate-700/50">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300 border border-slate-700/50">
                 <Users className="w-5 h-5" />
               </div>
             </div>
@@ -383,7 +383,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
                   {ativasCount}
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-emerald-950/40 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
                 <UserCheck className="w-5 h-5" />
               </div>
             </div>
@@ -397,14 +397,14 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
                   {lojasComOperadorCount} <span className="text-xs text-slate-400 font-normal">/ {lojas.length}</span>
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-[#D4AF37]">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-[#D4AF37]">
                 <Building2 className="w-5 h-5" />
               </div>
             </div>
           </div>
 
           {/* Barra de Filtros: Filtro por Loja + Pesquisa + Estado */}
-          <div className="p-4 rounded-2xl bg-slate-900/70 border border-slate-800/80 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="p-3 sm:p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/70 border border-slate-700/70 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4">
             <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1 max-w-2xl">
               {/* Barra de Pesquisa */}
               <div className="relative w-full">
@@ -456,8 +456,66 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
             </div>
           </div>
 
+          {/* Cartões de Funcionários — apresentação optimizada para telemóvel */}
+          <div className="grid grid-cols-1 gap-3 md:hidden">
+            {isLoading ? (
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-8 text-center">
+                <Loader2 className="w-6 h-6 animate-spin text-[#D4AF37] mx-auto mb-2" />
+                <p className="text-xs text-slate-400">A carregar equipa...</p>
+              </div>
+            ) : filteredFuncionarios.length === 0 ? (
+              <div className="rounded-2xl border border-slate-700/70 bg-slate-900/70 p-8 text-center">
+                <Users className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-slate-200">Nenhum funcionário encontrado</p>
+                <p className="text-xs text-slate-400 mt-1">Experimente alterar a pesquisa ou os filtros.</p>
+              </div>
+            ) : filteredFuncionarios.map((func) => {
+              const isAtivo = func.ativo !== false;
+              const isAdmin = func.role === 'admin' || func.role === 'master';
+              return (
+                <article key={func.id} className="rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900 to-[#0b1220] p-4 shadow-lg shadow-black/10">
+                  <div className="flex items-start gap-3">
+                    <div className="w-11 h-11 shrink-0 rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 flex items-center justify-center text-[#E4C76B] text-lg font-bold">
+                      {func.nome_completo?.trim().charAt(0)?.toUpperCase() || '?'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-semibold text-white break-words">{func.nome_completo}</h3>
+                        {isAdmin && <span className="text-[9px] px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 border border-amber-500/25">Admin</span>}
+                      </div>
+                      <p className="text-[11px] text-slate-400 capitalize mt-1">{func.role || 'Funcionário'}</p>
+                    </div>
+                    <button type="button" onClick={() => handleToggleStatus(func)} className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-semibold border ${isAtivo ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isAtivo ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                      {isAtivo ? 'Ativo' : 'Inativo'}
+                    </button>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 gap-2 border-t border-slate-800/80 pt-3">
+                    <div className="flex items-center gap-2 text-xs text-slate-300 min-w-0">
+                      <Phone className="w-3.5 h-3.5 shrink-0 text-[#D4AF37]" />
+                      <span className="font-mono">{func.telemovel || 'Sem telemóvel'}</span>
+                    </div>
+                    {func.email && <div className="flex items-center gap-2 text-xs text-slate-400 min-w-0"><Mail className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{func.email}</span></div>}
+                    <div className="flex items-center gap-2 text-xs text-slate-300 min-w-0">
+                      <Building2 className="w-3.5 h-3.5 shrink-0 text-slate-400" />
+                      <span className="truncate">{func.loja_nome || 'Sede Central / Sem loja fixa'}</span>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[10px] capitalize ${isAdmin ? 'bg-amber-500/10 text-amber-300 border-amber-500/25' : func.role === 'aprovador' ? 'bg-purple-500/10 text-purple-300 border-purple-500/25' : 'bg-slate-800/70 text-slate-300 border-slate-700'}`}>
+                      <Shield className="w-3 h-3" />{func.role || 'funcionario'}
+                    </span>
+                    <button type="button" onClick={() => handleOpenEdit(func)} className="inline-flex items-center gap-2 rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-2 text-xs font-semibold text-[#E4C76B] active:bg-[#D4AF37]/20">
+                      <Edit2 className="w-3.5 h-3.5" />Editar
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
           {/* Tabela de Funcionárias */}
-          <div className="rounded-2xl bg-slate-900/60 border border-slate-800/80 overflow-hidden shadow-xl">
+          <div className="hidden md:block rounded-2xl bg-slate-900/60 border border-slate-700/70 overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-800/60 text-slate-400 border-b border-slate-800 font-mono uppercase text-[10px] tracking-wider">
@@ -550,7 +608,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
                               className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-mono capitalize ${
                                 isAdmin
                                   ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                                  : func.role === 'gerente'
+                                  : func.role === 'aprovador'
                                   ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                                   : 'bg-slate-800 text-slate-300 border border-slate-700'
                               }`}
@@ -700,8 +758,8 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                   className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
                 >
-                  <option value="operador">Operador de Balcão (Compra e Ponto)</option>
-                  <option value="gerente">Gerente de Loja (Aprovações Locais)</option>
+                  <option value="funcionario">Funcionário de Balcão</option>
+                  <option value="aprovador">Responsável por Aprovações</option>
                   <option value="admin">Administrador Master (Acesso Total)</option>
                 </select>
               </div>
