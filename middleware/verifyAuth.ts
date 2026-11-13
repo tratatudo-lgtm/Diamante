@@ -52,13 +52,34 @@ export async function verifyAuth(req: AuthenticatedRequest, res: Response, next:
       return;
     }
 
+    const fullName =
+      typeof data.nome_completo === 'string' ? data.nome_completo.trim() : '';
+    const userRole =
+      typeof data.role === 'string'
+        ? data.role.trim().toLowerCase()
+        : '';
+
+    if (
+      data.ativo !== true ||
+      data.id !== userId ||
+      !fullName ||
+      !userRole
+    ) {
+      res.status(401).json({
+        success: false,
+        message: 'Sessão inválida ou perfil de funcionário incompleto.',
+      });
+      return;
+    }
+
     req.authenticatedUser = {
       id: data.id,
-      nome_completo: data.nome_completo || '',
-      email: data.email || '',
-      role: String(data.role || '').toLowerCase(),
-      loja_id: data.loja_id || null,
-      telemovel: data.telemovel || undefined,
+      nome_completo: fullName,
+      email: typeof data.email === 'string' ? data.email : '',
+      role: userRole,
+      loja_id: data.loja_id ?? null,
+      telemovel:
+        typeof data.telemovel === 'string' ? data.telemovel : undefined,
       ativo: true,
     };
     next();

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+
 import { useAuth } from '../../hooks/useAuth';
 import type { Loja, LojaComKpi, Transacao, KpiLojaDiaria, GlobalKpiData } from '../../types/database';
 import { KPICard } from '../common/KPICard';
@@ -49,6 +49,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isOnline, setIsOnline] = useState(true);
+  const [recentTxs, setRecentTxs] = useState<Transacao[]>([]);
+  const [dataError, setDataError] = useState<string | null>(null);
 
   const addToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
     const newToast: ToastMessage = {
@@ -76,105 +78,56 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     return map;
   }, [lojas]);
 
-  // Fetch War Room data strictly from real Supabase tables via API or client
+  // Carregar dados exclusivamente pela API administrativa protegida
   const fetchWarRoomData = useCallback(async () => {
+    setIsRefreshing(true);
+
     try {
-      setIsRefreshing(true);
-
-      const now = new Date();
-      const todayStr = now.toISOString().split('T')[0];
-      const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-      const todayStartIso = `${todayStr}T00:00:00.000Z`;
-
-      let rawLojas: Loja[] = [];
-      let todayTxs: Transacao[] = [];
-      let allPendingTxs: Array<{ id: string; loja_id: string; valor_final: number; peso_gramas: number; estado: string }> = [];
-      let kpiToday: KpiLojaDiaria[] = [];
-      let kpiYesterday: KpiLojaDiaria[] = [];
-      let connected = false;
-
-      // 1. Tentar primeiro através do endpoint server-side /api/admin/war-room (sem restrições de CORS/Iframe)
-      try {
-        const res = await fetch('/api/admin/war-room', {
-          headers: { Accept: 'application/json' },
-          signal: AbortSignal.timeout(4000),
-        });
-        if (res.ok) {
-          const apiData = await res.json();
-          if (apiData && apiData.success) {
-            rawLojas = Array.isArray(apiData.lojas) ? apiData.lojas : [];
-            todayTxs = Array.isArray(apiData.todayTxs) ? apiData.todayTxs : [];
-            allPendingTxs = Array.isArray(apiData.allPendingTxs) ? apiData.allPendingTxs : [];
-            kpiToday = Array.isArray(apiData.kpiToday) ? apiData.kpiToday : [];
-            kpiYesterday = Array.isArray(apiData.kpiYesterday) ? apiData.kpiYesterday : [];
-            connected = Boolean(apiData.isConnected);
-          }
-        }
-      } catch {
-        // Fallback silencioso para consulta direta caso o proxy esteja offline
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) {
+        throw new Error('Sessão administrativa não encontrada. Inicia sessão novamente.');
       }
 
-      // 2. Se a API não tiver retornado lojas e o Supabase estiver configurado diretamente no cliente
-      if (rawLojas.length === 0 && isSupabaseConfigured()) {
-        try {
-          const { data: lojasData, error: lojasErr } = await supabase
-            .from('lojas')
-            .select('*')
-            .order('nome', { ascending: true });
+      const res = await fetch('/api/admin/war-room', {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: AbortSignal.timeout(8000),
+      });
 
-          if (!lojasErr && lojasData) {
-            rawLojas = lojasData;
-            connected = true;
-
-            const { data: txData } = await supabase
-              .from('transacoes')
-              .select('*')
-              .gte('created_at', todayStartIso);
-            if (txData) todayTxs = txData;
-
-            const { data: pendingData } = await supabase
-              .from('transacoes')
-              .select('id, loja_id, valor_final, peso_gramas, estado')
-              .eq('estado', 'pendente_aprovacao');
-            if (pendingData) allPendingTxs = pendingData as any;
-
-            const { data: kToday } = await supabase
-              .from('kpi_loja_diaria')
-              .select('*')
-              .eq('data', todayStr);
-            if (kToday) kpiToday = kToday;
-
-            const { data: kYesterday } = await supabase
-              .from('kpi_loja_diaria')
-              .select('*')
-              .eq('data', yesterdayStr);
-            if (kYesterday) kpiYesterday = kYesterday;
-          }
-        } catch (supabaseErr) {
-          console.warn('[Sala de Guerra] Acesso direto Supabase:', supabaseErr);
-        }
+      const apiData = await res.json().catch(() => null);
+      if (!res.ok || !apiData?.success) {
+        throw new Error(
+          typeof apiData?.error === 'string'
+            ? apiData.error
+            : `Não foi possível carregar a Sala de Guerra (HTTP ${res.status}).`
+        );
       }
 
-      // Compute Global KPIs:
-      // Volume Hoje: SUM(transacoes.valor_final) WHERE created_at::date = CURRENT_DATE AND estado != 'rascunho'
-      const nonDraftTodayTxs = (todayTxs || []).filter((tx) => tx.estado !== 'rascunho');
+      const rawLojas: Loja[] = Array.isArray(apiData.lojas) ? apiData.lojas : [];
+      const todayTxs: Transacao[] = Array.isArray(apiData.todayTxs) ? apiData.todayTxs : [];
+      const allPendingTxs: Array<{ id: string; loja_id: string; valor_final: number; peso_gramas: number; estado: string }> =
+        Array.isArray(apiData.allPendingTxs) ? apiData.allPendingTxs : [];
+      const kpiToday: KpiLojaDiaria[] = Array.isArray(apiData.kpiToday) ? apiData.kpiToday : [];
+      const kpiYesterday: KpiLojaDiaria[] = Array.isArray(apiData.kpiYesterday) ? apiData.kpiYesterday : [];
+      const recentTransactions: Transacao[] = Array.isArray(apiData.recentTxs) ? apiData.recentTxs : [];
+
+      const nonDraftTodayTxs = todayTxs.filter((tx) => tx.estado !== 'rascunho');
       const volumeHoje = nonDraftTodayTxs.reduce((sum, tx) => sum + (Number(tx.valor_final) || 0), 0);
       const pesoHoje = nonDraftTodayTxs.reduce((sum, tx) => sum + (Number(tx.peso_gramas) || 0), 0);
-      const pendentesHoje = (allPendingTxs || []).length;
+      const pendentesHoje = allPendingTxs.length;
 
-      // Yesterday values from kpi_loja_diaria
-      const volumeOntem = (kpiYesterday || []).reduce(
+      const volumeOntem = kpiYesterday.reduce(
         (sum, k) => sum + (Number(k.total_compras_valor) || 0),
         0
       );
-      const pendentesOntem = (kpiYesterday || []).reduce(
+      const pendentesOntem = kpiYesterday.reduce(
         (sum, k) => sum + (Number(k.pendentes_aprovacao_qtd) || 0),
         0
       );
-      const pesoOntem = 0; // Not tracked in kpi_loja_diaria table schema
 
-      const activeStores = (rawLojas || []).filter((l) => l.ativo !== false).length;
+      const activeStores = rawLojas.filter((l) => l.ativo !== false).length;
 
       setGlobalKpis({
         volumeHoje,
@@ -182,85 +135,58 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         pendentesHoje,
         pendentesOntem,
         pesoHoje,
-        pesoOntem,
+        pesoOntem: 0,
         lojasAtivas: activeStores,
-        totalLojas: rawLojas?.length || 0,
+        totalLojas: rawLojas.length,
       });
 
-      // Map today's KPIs by loja_id
       const kpiByLoja: Record<string, Partial<KpiLojaDiaria>> = {};
-      (kpiToday || []).forEach((k) => {
+      kpiToday.forEach((k) => {
         kpiByLoja[k.loja_id] = k;
       });
 
-      // Count pending transactions per store
       const pendingsByLoja: Record<string, number> = {};
-      (allPendingTxs || []).forEach((tx) => {
+      allPendingTxs.forEach((tx) => {
         pendingsByLoja[tx.loja_id] = (pendingsByLoja[tx.loja_id] || 0) + 1;
       });
 
-      // Calculate today's volume per store from todayTxs as live fallback if kpi_loja_diaria hasn't run yet
       const liveVolumeByLoja: Record<string, number> = {};
       nonDraftTodayTxs.forEach((tx) => {
         liveVolumeByLoja[tx.loja_id] = (liveVolumeByLoja[tx.loja_id] || 0) + (Number(tx.valor_final) || 0);
       });
 
-      // Build merged LojaComKpi list:
-      const mergedLojas: LojaComKpi[] = (rawLojas || []).map((loja) => {
+      const mergedLojas: LojaComKpi[] = rawLojas.map((loja) => {
         const kpi = kpiByLoja[loja.id];
-        const pendentesCount = pendingsByLoja[loja.id] ?? kpi?.pendentes_aprovacao_qtd ?? 0;
-        const totalValor = kpi?.total_compras_valor ?? liveVolumeByLoja[loja.id] ?? 0;
-
         return {
           ...loja,
-          total_compras_valor: totalValor,
-          pendentes_aprovacao_qtd: pendentesCount,
+          total_compras_valor: kpi?.total_compras_valor ?? liveVolumeByLoja[loja.id] ?? 0,
+          pendentes_aprovacao_qtd: pendingsByLoja[loja.id] ?? kpi?.pendentes_aprovacao_qtd ?? 0,
           total_compras_qtd: kpi?.total_compras_qtd || 0,
         };
       });
 
       setLojas(mergedLojas);
-      setIsOnline(connected);
+      setRecentTxs(recentTransactions);
+      setIsOnline(true);
+      setDataError(null);
     } catch (err: unknown) {
-      console.warn('[Sala de Guerra] A aguardar dados do Supabase:', err);
+      console.warn('[Sala de Guerra] Falha ao sincronizar dados administrativos.');
       setIsOnline(false);
+      setDataError('Não foi possível sincronizar os dados administrativos. Tente novamente.');
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   }, []);
 
-  // Initial load and periodic heartbeat/realtime listener
+  // Carregamento inicial e atualização periódica através da API protegida
   useEffect(() => {
-    fetchWarRoomData();
+    void fetchWarRoomData();
+    const refreshInterval = window.setInterval(() => {
+      void fetchWarRoomData();
+    }, 30000);
 
-    // Listen to changes in transacoes and kpi_loja_diaria to keep KPIs in sync
-    let channel: any = null;
-    try {
-      if (isSupabaseConfigured()) {
-        channel = supabase
-          .channel('admin-dashboard-sync')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'transacoes' }, () => {
-            fetchWarRoomData();
-          })
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'kpi_loja_diaria' }, () => {
-            fetchWarRoomData();
-          })
-          .subscribe();
-      }
-    } catch {
-      // Ignorar indisponibilidade de canal realtime em ambiente local/sandbox
-    }
-
-    return () => {
-      if (channel) {
-        try {
-          supabase.removeChannel(channel);
-        } catch {
-          // ignore
-        }
-      }
-    };
+    return () => window.clearInterval(refreshInterval);
   }, [fetchWarRoomData]);
 
   const handleOpenLojaDetails = (loja: LojaComKpi) => {
@@ -352,7 +278,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             <button
               onClick={() => fetchWarRoomData()}
               disabled={isRefreshing}
-              title="Sincronizar Dados Supabase"
+              title="Sincronizar dados"
               className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors cursor-pointer"
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#D4AF37]' : ''}`} />
@@ -387,17 +313,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Banner if stores or transactions are totally empty in real DB */}
-        {!isLoading && lojas.length === 0 && (
+        {/* Estados explícitos da API administrativa */}
+        {dataError && (
+          <div role="alert" className="p-4 rounded-xl bg-rose-950/40 border border-rose-600/40 text-rose-200 text-xs">
+            <strong className="block mb-1">Não foi possível carregar a Sala de Guerra</strong>
+            <span>{dataError}</span>
+          </div>
+        )}
+        {!isLoading && isOnline && lojas.length === 0 && (
           <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-600/40 text-amber-200 text-xs flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <Building2 className="w-4 h-4 text-amber-400 shrink-0" />
-              <span>
-                A base de dados Supabase não possui lojas registadas na tabela <code>lojas</code>.
-              </span>
+              <span>Não existem lojas registadas para apresentar.</span>
             </div>
             <span className="text-[11px] text-amber-300/80">
-              Empty State ativo · Nenhum dado falso gerado
+              Estado vazio · Nenhum dado fictício gerado
             </span>
           </div>
         )}
@@ -482,6 +412,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             <div className="lg:col-span-5">
               <LiveFeed
                 lojasMap={lojasMap}
+                transacoes={recentTxs}
+                isLoading={isLoading}
+                errorMessage={dataError}
+                onRefresh={fetchWarRoomData}
                 onSelectTransaction={(tx) => {
                   const loja = lojas.find((l) => l.id === tx.loja_id);
                   if (loja) handleOpenLojaDetails(loja);
@@ -520,7 +454,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             <span>Pagamento exclusivamente por transferência</span>
           </div>
           <div className="font-mono text-[11px] text-gray-400">
-            RLS Enforcement: Ativo · Supabase Client v2
+            API administrativa protegida · Autenticação JWT
           </div>
         </div>
       </footer>

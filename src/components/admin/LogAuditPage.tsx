@@ -482,7 +482,7 @@ export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
 
       setLastSyncTime(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
-      console.warn('[LogAudit] Aviso ao buscar logs:', err);
+      console.warn('[LogAudit] Falha ao consultar registos de auditoria.');
     } finally {
       setIsLoading(false);
     }

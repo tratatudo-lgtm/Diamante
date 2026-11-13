@@ -95,7 +95,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
         }
       }
     } catch (err: any) {
-      console.warn('[AdminConfig] Aviso ao carregar configs:', err?.message || err);
+      console.warn('[AdminConfig] Falha ao carregar configurações.');
       addToast('info', 'A carregar valores padrão de margens do sistema.');
     } finally {
       setIsLoading(false);
@@ -151,8 +151,8 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
 
       addToast('success', 'Margens e parâmetros de negócio gravados com sucesso.', 'Configuração Guardada');
     } catch (err: any) {
-      console.warn('[AdminConfig] Erro ao gravar:', err?.message || err);
-      addToast('error', err?.message || 'Erro ao comunicar com o servidor.');
+      console.warn('[AdminConfig] Falha ao gravar configurações.');
+      addToast('error', 'Não foi possível gravar as configurações. Tente novamente.');
     } finally {
       setIsSaving(false);
     }

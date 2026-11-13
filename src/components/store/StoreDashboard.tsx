@@ -185,7 +185,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
       combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setFeedActivities(combined.slice(0, 5));
     } catch (err) {
-      console.warn('Erro ao carregar dados do painel de controlo:', err);
+      console.warn('[Loja] Falha ao carregar dados do painel.');
       onShowToast('error', 'Não foi possível sincronizar todos os dados operacionais.');
     } finally {
       setIsLoading(false);
@@ -234,7 +234,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
           lng: position.coords.longitude,
         };
       } catch (geoErr) {
-        console.warn('Geolocalização não obtida:', geoErr);
+        console.warn('[Loja] Geolocalização não disponível.');
       }
     }
 
@@ -265,8 +265,8 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
       );
       loadDashboardData();
     } catch (err: unknown) {
-      console.warn('[Loja] Falha no registo de ponto:', err);
-      onShowToast('error', 'Falha ao gravar registo de ponto no Supabase.');
+      console.warn('[Loja] Falha ao registar ponto.');
+      onShowToast('error', 'Não foi possível registar o ponto. Tente novamente.');
     } finally {
       setIsClocking(false);
     }

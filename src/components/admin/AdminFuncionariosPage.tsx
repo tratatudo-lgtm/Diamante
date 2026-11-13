@@ -140,7 +140,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
 
       setFuncionarios(loadedFuncs);
     } catch (err: any) {
-      console.warn('[AdminFuncionarios] Aviso ao carregar:', err?.message || err);
+      console.warn('[AdminFuncionarios] Falha ao carregar funcionários.');
       addToast('error', 'Não foi possível atualizar a lista de funcionárias.');
     } finally {
       setIsLoading(false);
@@ -282,8 +282,8 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
       setIsModalOpen(false);
       await fetchData();
     } catch (err: any) {
-      console.warn('[AdminFuncionarios] Erro:', err?.message || err);
-      addToast('error', err?.message || 'Erro ao comunicar com o servidor.');
+      console.warn('[AdminFuncionarios] Falha ao gravar funcionário.');
+      addToast('error', 'Não foi possível gravar o funcionário. Verifique os dados e tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

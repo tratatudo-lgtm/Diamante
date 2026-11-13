@@ -1,99 +1,54 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Transacao, Loja } from '../../types/database';
 import { Radio, Clock, ArrowDownLeft, Inbox, RefreshCw, AlertTriangle } from 'lucide-react';
 
 interface LiveFeedProps {
   lojasMap: Record<string, Loja>;
+  transacoes: Transacao[];
+  isLoading: boolean;
+  errorMessage: string | null;
+  onRefresh: () => void;
   onSelectTransaction?: (tx: Transacao) => void;
 }
 
-export const LiveFeed: React.FC<LiveFeedProps> = ({ lojasMap, onSelectTransaction }) => {
-  const [transacoes, setTransacoes] = useState<Transacao[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastEventTime, setLastEventTime] = useState<string | null>(null);
+export const LiveFeed: React.FC<LiveFeedProps> = ({
+  lojasMap,
+  transacoes,
+  isLoading,
+  errorMessage,
+  onRefresh,
+  onSelectTransaction,
+}) => {
   const [newTxId, setNewTxId] = useState<string | null>(null);
+  const previousIdsRef = useRef<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const topAnchorRef = useRef<HTMLDivElement>(null);
 
-  // Fetch initial real transactions
-  const fetchTransacoes = useCallback(async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const { data, error } = await supabase
-        .from('transacoes')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
+  const lastEventTime = transacoes.length > 0
+    ? new Date(transacoes[0].created_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
-      if (error) {
-        throw error;
-      }
-
-      setTransacoes(data || []);
-      if (data && data.length > 0) {
-        setLastEventTime(new Date(data[0].created_at).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }));
-      }
-    } catch (err: unknown) {
-      console.warn('Erro ao carregar transações em tempo real:', err);
-      setErrorMessage('Não foi possível sincronizar o feed de transações.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
+  // Deteta novas transações recebidas pela API e preserva o destaque visual.
   useEffect(() => {
-    fetchTransacoes();
+    const currentIds = new Set(transacoes.map((tx) => tx.id));
+    const newTransaction = transacoes.find((tx) => !previousIdsRef.current.has(tx.id));
 
-    // Subscribe to realtime Postgres changes
-    const channel = supabase
-      .channel('realtime-transacoes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'transacoes',
-        },
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            const newRecord = payload.new as Transacao;
-            setTransacoes((prev) => {
-              const updated = [newRecord, ...prev.filter((t) => t.id !== newRecord.id)].slice(0, 20);
-              return updated;
-            });
-            setNewTxId(newRecord.id);
-            setLastEventTime(
-              new Date(newRecord.created_at).toLocaleTimeString('pt-PT', {
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            );
+    if (previousIdsRef.current.size > 0 && newTransaction) {
+      setNewTxId(newTransaction.id);
+      const scrollTimer = window.setTimeout(() => {
+        topAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+      const highlightTimer = window.setTimeout(() => setNewTxId(null), 3000);
 
-            // Smooth auto-scroll to top
-            setTimeout(() => {
-              topAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-              setTimeout(() => setNewTxId(null), 3000);
-            }, 100);
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedRecord = payload.new as Transacao;
-            setTransacoes((prev) =>
-              prev.map((t) => (t.id === updatedRecord.id ? updatedRecord : t))
-            );
-          } else if (payload.eventType === 'DELETE') {
-            const oldRecord = payload.old as { id: string };
-            setTransacoes((prev) => prev.filter((t) => t.id !== oldRecord.id));
-          }
-        }
-      )
-      .subscribe();
+      previousIdsRef.current = currentIds;
+      return () => {
+        window.clearTimeout(scrollTimer);
+        window.clearTimeout(highlightTimer);
+      };
+    }
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchTransacoes]);
+    previousIdsRef.current = currentIds;
+  }, [transacoes]);
 
   // Status badge styling helper
   const renderStatus = (estado: Transacao['estado']) => {
@@ -165,7 +120,7 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ lojasMap, onSelectTransactio
             </span>
           )}
           <button
-            onClick={fetchTransacoes}
+            onClick={onRefresh}
             title="Atualizar Feed"
             className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
           >

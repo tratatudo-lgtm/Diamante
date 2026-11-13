@@ -81,7 +81,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
         }
       }
     } catch (err: unknown) {
-      console.warn('Erro ao consultar v_clientes_protegidos:', err);
+      console.warn('[Clientes protegidos] Falha ao consultar a vista protegida.');
       setErrorMessage('Não foi possível aceder à vista protegida de clientes.');
     } finally {
       setIsLoading(false);

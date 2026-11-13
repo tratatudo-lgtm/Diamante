@@ -15,24 +15,22 @@ export interface SendOtpResult {
  * Normaliza números de telefone portugueses para o formato internacional exigido pela Evolution API (ex: 3519XXXXXXXX)
  */
 export function formatPortuguesePhone(rawPhone: string): string {
-  // Remove todos os caracteres não numéricos exceto '+'
-  let cleaned = rawPhone.replace(/[^\d+]/g, '');
+  const digits = String(rawPhone).replace(/\D/g, '');
+  let nationalNumber: string;
 
-  if (cleaned.startsWith('+')) {
-    cleaned = cleaned.substring(1);
+  if (digits.length === 9) {
+    nationalNumber = digits;
+  } else if (digits.length === 12 && digits.startsWith('351')) {
+    nationalNumber = digits.slice(3);
+  } else {
+    return '';
   }
 
-  // Se tem 9 dígitos e começa por 9, adiciona o indicativo de Portugal (351)
-  if (cleaned.length === 9 && cleaned.startsWith('9')) {
-    return `351${cleaned}`;
+  if (!/^[289]\d{8}$/.test(nationalNumber)) {
+    return '';
   }
 
-  // Se já tem o 351 mas sem o +, devolve como está
-  if (cleaned.startsWith('351') && cleaned.length >= 12) {
-    return cleaned;
-  }
-
-  return cleaned;
+  return `351${nationalNumber}`;
 }
 
 /**
@@ -46,7 +44,7 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
   const formattedNumber = formatPortuguesePhone(phone);
   const messageText = `*Diamante OS v2*\n\nO seu código de segurança é: *${otpCode}*\n\nEste código é pessoal, confidencial e expira dentro de 5 minutos.\nSe não solicitou este código, ignore esta mensagem.`;
 
-  console.log(`[WhatsApp Service] A preparar envio de OTP para ${formattedNumber} via instância '${instanceName}'`);
+  console.log('[WhatsApp Service] A preparar envio de OTP.');
 
   // Simulação só é permitida fora de produção e nunca regista o código OTP.
   if (!evolutionKey || !process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_INSTANCE) {
@@ -79,21 +77,20 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
 
     if (!response.ok) {
       const errMsg = data?.message || data?.error || `HTTP ${response.status}: Falha no envio Evolution API`;
-      console.error(`[WhatsApp Service] Erro na Evolution API (${response.status}):`, errMsg);
+      console.error(`[WhatsApp Service] Erro na Evolution API (HTTP ${response.status}).`);
       return {
         success: false,
-        error: errMsg,
+        error: 'Falha no envio pela Evolution API.',
       };
     }
 
-    console.log(`[WhatsApp Service] OTP entregue com sucesso à Evolution API para o número ${formattedNumber}`);
+    console.log('[WhatsApp Service] OTP aceite pela Evolution API.');
     return {
       success: true,
       messageId: data?.key?.id || data?.id || 'sent',
     };
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : 'Erro de conexão com a Evolution API';
-    console.error('[WhatsApp Service] Falha de comunicação de rede:', errMessage);
+    console.error('[WhatsApp Service] Falha de comunicação de rede.');
 
     // Em modo dev, não bloqueia o fluxo caso o container ainda esteja a subir
     if (process.env.NODE_ENV !== 'production') {
@@ -106,7 +103,7 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
 
     return {
       success: false,
-      error: errMessage,
+      error: 'Falha de comunicação com a Evolution API.',
     };
   }
 }

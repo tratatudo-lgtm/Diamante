@@ -20,6 +20,25 @@ interface AuthContextType {
   clearError: () => void;
 }
 
+type ValidUserSessionData = UserSessionData & {
+  id: string;
+  nome_completo: string;
+  role: string;
+  ativo: true;
+};
+
+function isValidSessionData(
+  data: UserSessionData | null
+): data is ValidUserSessionData {
+  return Boolean(
+    data &&
+    typeof data.id === 'string' && data.id.trim() &&
+    typeof data.nome_completo === 'string' && data.nome_completo.trim() &&
+    typeof data.role === 'string' && data.role.trim() &&
+    data.ativo === true
+  );
+}
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -70,21 +89,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (err instanceof Error && err.message === 'Conta inativa') {
         throw err;
       }
-      console.warn('Erro ao obter metadados de sessão:', err);
+      console.warn('[AuthContext] Falha ao obter metadados de sessão.');
     }
     return null;
   }, []);
 
-  const applySession = (data: UserSessionData) => {
+  const applySession = (data: ValidUserSessionData) => {
     setUserSession(data);
     setRole(data.role);
-    setLojaId(data.loja_id || null);
+    setLojaId(data.loja_id ?? null);
     setFuncionario({
       id: data.id,
       nome_completo: data.nome_completo,
       email: data.email,
       role: data.role,
-      loja_id: data.loja_id || null,
+      loja_id: data.loja_id ?? null,
       ativo: true,
     });
   };
@@ -99,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           headers: { Authorization: `Bearer ${apiToken}` },
         });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload?.user?.id || payload.user.ativo !== true) {
+        if (!response.ok || !isValidSessionData(payload?.user)) {
           sessionStorage.removeItem('diamante_jwt_token');
           setUserSession(null);
           setFuncionario(null);
@@ -107,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLojaId(null);
           return;
         }
-        applySession(payload.user as UserSessionData);
+        applySession(payload.user);
         return;
       }
 
@@ -129,7 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       const metadata = await fetchSessionMetadata(session.user.email || '', session.user.id);
-      if (!metadata || metadata.id !== session.user.id || metadata.ativo === false || !metadata.role) {
+      if (!isValidSessionData(metadata) || metadata.id !== session.user.id) {
         await supabase.auth.signOut();
         setUserSession(null);
         setFuncionario(null);
@@ -139,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       applySession(metadata);
     } catch (err) {
-      console.warn('[AuthContext] Falha ao restaurar sessão:', err);
+      console.warn('[AuthContext] Falha ao restaurar sessão.');
       sessionStorage.removeItem('diamante_jwt_token');
       setUserSession(null);
       setFuncionario(null);
@@ -188,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // If user is marked inactive in metadata or funcionarios
-      if (!sessionData || sessionData.id !== authData.user.id || sessionData.ativo === false || !sessionData.role) {
+      if (!isValidSessionData(sessionData) || sessionData.id !== authData.user.id) {
         await supabase.auth.signOut();
         throw new Error('Credenciais inválidas ou conta inativa');
       }
@@ -200,8 +219,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const fullSession: UserSessionData = {
         id: sessionData.id,
         user_id: authData.user.id,
-        email: authData.user.email || email,
-        nome_completo: sessionData.nome_completo || email.split('@')[0],
+        email: authData.user.email || sessionData.email || email,
+        nome_completo: sessionData.nome_completo,
         role: assignedRole,
         loja_id: assignedLojaId,
         ativo: true,
@@ -211,9 +230,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setRole(assignedRole);
       setLojaId(assignedLojaId);
       setFuncionario({
-        id: fullSession.id || authData.user.id,
-        nome_completo: fullSession.nome_completo || 'Utilizador',
-        email: fullSession.email || email,
+        id: sessionData.id,
+        nome_completo: sessionData.nome_completo,
+        email: fullSession.email,
         role: assignedRole,
         loja_id: assignedLojaId,
         ativo: true,
@@ -226,7 +245,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     } catch (err: unknown) {
       setIsLoading(false);
-      console.warn('Erro de autenticação:', err);
+      console.warn('[AuthContext] Falha no processo de autenticação.');
       // 5. Erros: Mensagem genérica estrita
       const msg = 'Credenciais inválidas ou conta inativa';
       setErrorMessage(msg);
@@ -235,14 +254,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setDirectSession = (user: Partial<UserSessionData>, assignedRole: string, token?: string) => {
-    if (!token || !user.id || !assignedRole) throw new Error('Sessão de API inválida.');
+    if (
+      !token ||
+      typeof user.id !== 'string' || !user.id.trim() ||
+      typeof user.nome_completo !== 'string' || !user.nome_completo.trim() ||
+      typeof assignedRole !== 'string' || !assignedRole.trim()
+    ) {
+      throw new Error('Sessão de API inválida ou incompleta.');
+    }
+
     const fullSession: UserSessionData = {
       id: user.id,
       user_id: user.user_id || user.id,
-      email: user.email || '',
-      nome_completo: user.nome_completo || 'Utilizador',
+      email: user.email,
+      nome_completo: user.nome_completo,
       role: assignedRole,
-      loja_id: user.loja_id || null,
+      loja_id: user.loja_id ?? null,
       ativo: true,
     };
 
@@ -250,11 +277,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setRole(assignedRole);
     setLojaId(user.loja_id || null);
     setFuncionario({
-      id: fullSession.id,
-      nome_completo: fullSession.nome_completo || 'Utilizador',
+      id: user.id,
+      nome_completo: user.nome_completo,
       email: fullSession.email,
       role: assignedRole,
-      loja_id: fullSession.loja_id || null,
+      loja_id: fullSession.loja_id ?? null,
       ativo: true,
     });
     setErrorMessage(null);
@@ -272,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.removeItem('otp_phone');
       await supabase.auth.signOut();
     } catch (err) {
-      console.warn('[AuthContext] Erro ao terminar sessão:', err);
+      console.warn('[AuthContext] Falha ao terminar sessão.');
     } finally {
       setUserSession(null);
       setFuncionario(null);

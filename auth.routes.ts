@@ -10,6 +10,15 @@ import {
 } from './auth.service';
 import { verifyAdmin, AdminRequest } from './middleware/verifyAdmin';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
+import { formatPortuguesePhone } from './whatsapp.service';
+
+/**
+ * Normaliza números portugueses para o formato internacional 351XXXXXXXXX.
+ * Aceita números nacionais de 9 algarismos ou internacionais com indicativo 351.
+ */
+export function normalizePortuguesePhone(rawPhone: string): string | null {
+  return formatPortuguesePhone(rawPhone) || null;
+}
 
 export const authRouter = Router();
 
@@ -118,7 +127,7 @@ authRouter.post('/verify-otp', async (req: Request, res: Response): Promise<void
       user: result.user,
     });
   } catch (error: unknown) {
-    console.error('[Auth Verify OTP] Erro:', error);
+    console.error('[Auth Verify OTP] Falha interna.');
     res.status(500).json({
       success: false,
       message: 'Falha interna ao validar o código OTP.',
@@ -180,7 +189,7 @@ authRouter.post('/login', async (req: Request, res: Response): Promise<void> => 
     });
     return;
   } catch (error: unknown) {
-    console.error('[Auth Login] Erro interno:', error);
+    console.error('[Auth Login] Falha interna.');
     res.status(500).json({
       success: false,
       message: 'Erro interno ao validar autenticação.',
@@ -240,7 +249,7 @@ export async function geocodePortugueseAddress(morada: string): Promise<{ latitu
       }
     }
   } catch (err: any) {
-    console.warn('[Geocoding Nominatim] Aviso:', err?.message || err);
+    console.warn('[Geocoding Nominatim] Falha na consulta de endereço.');
   }
 
   return { latitude: null, longitude: null };
@@ -394,13 +403,13 @@ async function handleCreateLoja(req: AdminRequest, res: Response): Promise<void>
       .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo')
       .single();
     if (error) {
-      console.error('[handleCreateLoja] Supabase insert:', error.message);
-      res.status(400).json({ success: false, message: 'Não foi possível criar a loja.', details: error.message });
+      console.error('[handleCreateLoja] Falha na gravação da loja.');
+      res.status(400).json({ success: false, message: 'Não foi possível criar a loja.' });
       return;
     }
     res.status(201).json({ success: true, message: 'Loja criada.', loja: data });
   } catch (err: any) {
-    console.error('[handleCreateLoja] Erro:', err);
+    console.error('[handleCreateLoja] Falha interna.');
     res.status(500).json({ success: false, message: 'Erro interno ao criar loja.' });
   }
 }
@@ -438,7 +447,16 @@ async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void>
         updates.telefone = normalized;
       }
     }
-    if (ativo !== undefined) updates.ativo = Boolean(ativo);
+    if (ativo !== undefined) {
+      if (typeof ativo !== 'boolean') {
+        res.status(400).json({
+          success: false,
+          message: 'O campo ativo tem de ser um valor booleano.',
+        });
+        return;
+      }
+      updates.ativo = ativo;
+    }
     if (morada !== undefined) {
       updates.morada = String(morada).trim();
       const coords = await geocodePortugueseAddress(updates.morada);
@@ -458,7 +476,7 @@ async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void>
       .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo')
       .maybeSingle();
     if (error) {
-      res.status(400).json({ success: false, message: 'Não foi possível atualizar a loja.', details: error.message });
+      res.status(400).json({ success: false, message: 'Não foi possível atualizar a loja.' });
       return;
     }
     if (!data) {
@@ -467,7 +485,7 @@ async function handleUpdateLoja(req: AdminRequest, res: Response): Promise<void>
     }
     res.status(200).json({ success: true, message: 'Loja atualizada.', loja: data });
   } catch (err: any) {
-    console.error('[handleUpdateLoja] Erro:', err);
+    console.error('[handleUpdateLoja] Falha interna.');
     res.status(500).json({ success: false, message: 'Erro interno ao atualizar loja.' });
   }
 }
@@ -482,13 +500,13 @@ async function handleGetLojas(_req: AdminRequest, res: Response): Promise<void> 
       .select('id, nome, morada, nif_loja, telefone, codigo_loja, latitude, longitude, ativo, admin_id')
       .order('nome', { ascending: true });
     if (error) {
-      console.error('[handleGetLojas] Supabase select:', error.message);
+      console.error('[handleGetLojas] Falha na consulta de lojas.');
       res.status(503).json({ success: false, message: 'Não foi possível consultar as lojas.' });
       return;
     }
     res.status(200).json({ success: true, lojas: data || [], total: data?.length || 0 });
   } catch (err: any) {
-    console.error('[handleGetLojas] Erro:', err);
+    console.error('[handleGetLojas] Falha interna.');
     res.status(500).json({ success: false, message: 'Erro ao listar lojas.' });
   }
 }
@@ -541,7 +559,11 @@ async function handleCreateFuncionario(req: AdminRequest, res: Response): Promis
       { data: { nome_completo: String(nome_completo).trim() } }
     );
     if (inviteError || !invited.user) {
-      res.status(400).json({ success: false, message: 'Não foi possível convidar o utilizador para Supabase Auth.', details: inviteError?.message });
+      console.error('[handleCreateFuncionario] Falha ao criar convite Auth.');
+      res.status(400).json({
+        success: false,
+        message: 'Não foi possível convidar o utilizador.',
+      });
       return;
     }
 
@@ -560,18 +582,35 @@ async function handleCreateFuncionario(req: AdminRequest, res: Response): Promis
       .single();
 
     if (error || !data) {
-      await supabaseAdmin.auth.admin.deleteUser(invited.user.id);
-      res.status(400).json({ success: false, message: 'Não foi possível gravar o funcionário. O convite Auth foi revertido.', details: error?.message });
+      const { error: rollbackError } =
+        await supabaseAdmin.auth.admin.deleteUser(invited.user.id);
+
+      if (rollbackError) {
+        console.error('[handleCreateFuncionario] Falha ao reverter identidade Auth.');
+        res.status(500).json({
+          success: false,
+          message: 'A gravação falhou e a reversão automática requer intervenção.',
+        });
+        return;
+      }
+
+      res.status(400).json({
+        success: false,
+        message: 'Não foi possível gravar o funcionário. O convite Auth foi revertido.',
+      });
       return;
     }
     if (data.id !== invited.user.id) {
-      await supabaseAdmin.auth.admin.deleteUser(invited.user.id);
-      res.status(409).json({ success: false, message: 'A associação Auth/funcionário não ficou consistente; criação revertida.' });
+      console.error('[handleCreateFuncionario] Divergência entre identidade Auth e funcionário; requer reconciliação.');
+      res.status(409).json({
+        success: false,
+        message: 'A associação Auth/funcionário não ficou consistente. É necessária reconciliação manual.',
+      });
       return;
     }
     res.status(201).json({ success: true, message: 'Funcionário criado e convite enviado.', funcionario: data });
   } catch (err: any) {
-    console.error('[handleCreateFuncionario] Erro:', err);
+    console.error('[handleCreateFuncionario] Falha interna.');
     res.status(500).json({ success: false, message: 'Erro interno ao registar funcionário.' });
   }
 }
@@ -605,7 +644,16 @@ async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promis
       }
       updates.role = normalizedRole;
     }
-    if (ativo !== undefined) updates.ativo = Boolean(ativo);
+    if (ativo !== undefined) {
+      if (typeof ativo !== 'boolean') {
+        res.status(400).json({
+          success: false,
+          message: 'O campo ativo tem de ser um valor booleano.',
+        });
+        return;
+      }
+      updates.ativo = ativo;
+    }
     if (telemovel !== undefined) {
       if (telemovel === null || telemovel === '') updates.telemovel = null;
       else {
@@ -636,7 +684,7 @@ async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promis
       .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
       .maybeSingle();
     if (error) {
-      res.status(400).json({ success: false, message: 'Não foi possível atualizar o funcionário.', details: error.message });
+      res.status(400).json({ success: false, message: 'Não foi possível atualizar o funcionário.' });
       return;
     }
     if (!data) {
@@ -645,7 +693,7 @@ async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promis
     }
     res.status(200).json({ success: true, message: 'Funcionário atualizado.', funcionario: data });
   } catch (err: any) {
-    console.error('[handleUpdateFuncionario] Erro:', err);
+    console.error('[handleUpdateFuncionario] Falha interna.');
     res.status(500).json({ success: false, message: 'Erro interno ao atualizar funcionário.' });
   }
 }
@@ -660,7 +708,7 @@ async function handleGetFuncionarios(_req: AdminRequest, res: Response): Promise
       .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
       .order('nome_completo', { ascending: true });
     if (error) {
-      console.error('[handleGetFuncionarios] Supabase select:', error.message);
+      console.error('[handleGetFuncionarios] Falha na consulta de funcionários.');
       res.status(503).json({ success: false, message: 'Não foi possível consultar os funcionários.' });
       return;
     }
@@ -677,7 +725,7 @@ async function handleGetFuncionarios(_req: AdminRequest, res: Response): Promise
     }));
     res.status(200).json({ success: true, funcionarios, total: funcionarios.length });
   } catch (err: any) {
-    console.error('[handleGetFuncionarios] Erro:', err);
+    console.error('[handleGetFuncionarios] Falha interna.');
     res.status(500).json({ success: false, message: 'Erro ao listar funcionários.' });
   }
 }
@@ -737,7 +785,7 @@ function handleUpdateMargensConfig(req: AdminRequest, res: Response): void {
       config: systemConfigs,
     });
   } catch (err: any) {
-    console.error('[handleUpdateMargensConfig] Erro:', err);
+    console.error('[handleUpdateMargensConfig] Falha interna.');
     res.status(500).json({ success: false, message: 'Erro ao atualizar margens.' });
   }
 }

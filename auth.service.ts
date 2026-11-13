@@ -5,8 +5,13 @@ import jwt from 'jsonwebtoken';
 import { randomInt } from 'crypto';
 import { sendWhatsAppOtp, formatPortuguesePhone } from './whatsapp.service';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('JWT_SECRET tem de estar configurado no servidor.');
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET tem de estar configurado no servidor.');
+  }
+  return secret;
+})();
 
 const supabaseUrl =
   process.env.SUPABASE_URL ||
@@ -53,25 +58,17 @@ const otpRequestLimits = new Map<string, { count: number; resetAt: number }>();
  * Gera variantes normalizadas para pesquisa de um número de telemóvel português.
  */
 function getPhoneVariants(rawPhone: string): string[] {
-  const digits = rawPhone.replace(/\D/g, '');
-  const variants = new Set<string>();
+  const canonical = formatPortuguesePhone(rawPhone);
 
-  if (!digits) return [];
+  if (!canonical) return [];
 
-  variants.add(digits);
-  variants.add(`+${digits}`);
+  const national = canonical.slice(3);
 
-  if (digits.startsWith('351') && digits.length >= 12) {
-    const national = digits.slice(3);
-    variants.add(national);
-    variants.add(`+351${national}`);
-    variants.add(`351${national}`);
-  } else if (digits.length === 9) {
-    variants.add(`351${digits}`);
-    variants.add(`+351${digits}`);
-  }
-
-  return Array.from(variants);
+  return Array.from(new Set([
+    canonical,
+    `+${canonical}`,
+    national,
+  ]));
 }
 
 /**
@@ -92,19 +89,44 @@ export async function findUserInSupabaseByPhone(phone: string): Promise<Authenti
 
     if (!error && Array.isArray(data) && data.length === 1) {
       const matchedUser = data[0];
-      if (matchedUser.ativo === false) return null;
+      const userId =
+        typeof matchedUser.id === 'string' ? matchedUser.id.trim() : '';
+      const fullName =
+        typeof matchedUser.nome_completo === 'string'
+          ? matchedUser.nome_completo.trim()
+          : '';
+      const userRole =
+        typeof matchedUser.role === 'string'
+          ? matchedUser.role.trim().toLowerCase()
+          : '';
+
+      // A autenticação OTP só pode prosseguir com um registo ativo
+      // e com os campos essenciais efetivamente presentes na base de dados.
+      if (
+        matchedUser.ativo !== true ||
+        !userId ||
+        !fullName ||
+        !userRole
+      ) {
+        return null;
+      }
+
       return {
-        id: matchedUser.id,
-        nome_completo: matchedUser.nome_completo || 'Funcionário Diamante',
-        email: matchedUser.email || '',
-        role: String(matchedUser.role || '').toLowerCase(),
-        loja_id: matchedUser.loja_id || null,
-        telemovel: matchedUser.telemovel || phone,
+        id: userId,
+        nome_completo: fullName,
+        email: typeof matchedUser.email === 'string' ? matchedUser.email : '',
+        role: userRole,
+        loja_id: matchedUser.loja_id ?? null,
+        telemovel:
+          typeof matchedUser.telemovel === 'string' &&
+          matchedUser.telemovel.trim()
+            ? matchedUser.telemovel
+            : phone,
         ativo: true,
       };
     }
   } catch (err: any) {
-    console.warn('[Auth Service] Erro na consulta Supabase por telemóvel:', err?.message);
+    console.warn('[Auth Service] Falha na consulta Supabase por telemóvel.');
   }
 
   return null;
@@ -124,21 +146,44 @@ export async function findUserInSupabaseByEmail(email: string): Promise<Authenti
       .maybeSingle();
 
     if (!error && data) {
-      if (data.ativo === false) return null;
+      const userId =
+        typeof data.id === 'string' ? data.id.trim() : '';
+      const fullName =
+        typeof data.nome_completo === 'string'
+          ? data.nome_completo.trim()
+          : '';
+      const userEmail =
+        typeof data.email === 'string' ? data.email.trim() : '';
+      const userRole =
+        typeof data.role === 'string'
+          ? data.role.trim().toLowerCase()
+          : '';
+
+      if (
+        data.ativo !== true ||
+        !userId ||
+        !fullName ||
+        !userEmail ||
+        !userRole
+      ) {
+        return null;
+      }
+
       return {
-        id: data.id,
-        nome_completo: data.nome_completo || 'Utilizador Diamante',
-        email: data.email,
-        role: String(data.role || '').toLowerCase(),
-        loja_id: data.loja_id || null,
-        telemovel: data.telemovel,
+        id: userId,
+        nome_completo: fullName,
+        email: userEmail,
+        role: userRole,
+        loja_id: data.loja_id ?? null,
+        telemovel:
+          typeof data.telemovel === 'string' ? data.telemovel : undefined,
         ativo: true,
       };
     }
 
 
   } catch (err) {
-    console.error('[Auth Service] Erro na consulta Supabase por email:', err);
+    console.error('[Auth Service] Falha na consulta Supabase por email.');
   }
 
   return null;
@@ -172,7 +217,7 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
   simulated?: boolean;
 }> {
   const formatted = formatPortuguesePhone(rawPhone);
-  if (!formatted || formatted.length < 9) {
+  if (!formatted) {
     return {
       success: false,
       message: 'Introduza um número de telemóvel válido.',
@@ -197,10 +242,10 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
   }
 
   // 1. Validação estrita contra a BD Supabase
-  const user = await findUserInSupabaseByPhone(rawPhone);
+  const user = await findUserInSupabaseByPhone(formatted);
 
   if (!user) {
-    console.warn(`[Auth Service] Tentativa de OTP para número não registado/inativo: ${formatted}`);
+    console.warn('[Auth Service] Pedido OTP recusado: número não registado ou conta inativa.');
     return {
       success: false,
       message: 'Número de telemóvel não autorizado ou conta inativa no sistema.',
@@ -220,7 +265,7 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
     userId: user.id,
   });
 
-  console.log(`[Auth Service] Utilizador verificado no Supabase (${user.nome_completo}, Role: ${user.role}). A enviar OTP.`);
+  console.log('[Auth Service] Utilizador validado; a iniciar envio de OTP.');
 
   // 3. Envia código via Evolution API
   const sendResult = await sendWhatsAppOtp(formatted, otpCode);
@@ -255,7 +300,15 @@ export async function verifyOtpAndAuthenticate(
   statusCode?: number;
 }> {
   const formatted = formatPortuguesePhone(rawPhone);
-  const code = inputCode.trim();
+  const code = typeof inputCode === 'string' ? inputCode.trim() : '';
+
+  if (!formatted) {
+    return {
+      success: false,
+      message: 'Introduza um número de telemóvel português válido.',
+      statusCode: 400,
+    };
+  }
 
   const stored = otpStore.get(formatted);
 
@@ -298,8 +351,8 @@ export async function verifyOtpAndAuthenticate(
   otpStore.delete(formatted);
 
   // Consulta novamente a base de dados Supabase para obter os privilégios reais
-  const dbUser = await findUserInSupabaseByPhone(rawPhone);
-  if (!dbUser || (stored.userId && stored.userId !== dbUser.id)) {
+  const dbUser = await findUserInSupabaseByPhone(formatted);
+  if (!dbUser || !stored.userId || stored.userId !== dbUser.id) {
     return {
       success: false,
       message: 'Acesso negado. Registo de utilizador inexistente ou inativo no Supabase.',

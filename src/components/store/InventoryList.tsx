@@ -43,7 +43,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
       if (error) throw error;
       setItems(data || []);
     } catch (err) {
-      console.warn('Erro ao carregar inventário físico:', err);
+      console.warn('[Inventário] Falha ao carregar inventário físico.');
       onShowToast('error', 'Não foi possível obter os dados do inventário.');
     } finally {
       setIsLoading(false);
@@ -81,7 +81,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
       );
       onShowToast('success', `Lote ${codigoUnico} marcado como enviado para a Sede.`, 'Inventário Atualizado');
     } catch (err: unknown) {
-      console.warn('[Inventário] Falha ao atualizar estado no inventário:', err);
+      console.warn('[Inventário] Falha ao atualizar estado.');
       onShowToast('error', 'Erro ao atualizar estado no inventário.');
     } finally {
       setUpdatingId(null);

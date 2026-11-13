@@ -10,6 +10,7 @@ import { LandingPage } from './components/landing/LandingPage';
 import { LoginPage } from './components/auth/LoginPage';
 import { RegisterPage } from './components/auth/RegisterPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AdminDashboard as AdminWarRoomDashboard } from './components/admin/AdminDashboard_old_operational';
 import { AdminLojasPage } from './components/admin/AdminLojasPage';
 import { AdminFuncionariosPage } from './components/admin/AdminFuncionariosPage';
 import { AdminConfigPage } from './components/admin/AdminConfigPage';
@@ -146,6 +147,9 @@ function AppRouter() {
 
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
   if (isAdmin) {
+    if (currentPath === '/dashboard-admin') {
+      return <AdminWarRoomDashboard onNavigate={navigate} />;
+    }
     if (currentPath === '/admin/lojas') {
       return <AdminLojasPage onNavigate={navigate} />;
     }

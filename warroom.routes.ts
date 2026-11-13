@@ -32,9 +32,9 @@ router.get('/kpis', verifyAdmin, async (req, res) => {
       lojasAtivas: lojasRes.count || 0,
       totalLojas: 24
     });
-  } catch (err: any) {
-    console.error('[WarRoom KPIs Error]:', err.message);
-    res.status(500).json({ error: 'Erro ao carregar KPIs', details: err.message });
+  } catch {
+    console.error('[WarRoom KPIs] Falha ao carregar indicadores.');
+    res.status(500).json({ error: 'Erro ao carregar KPIs' });
   }
 });
 

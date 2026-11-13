@@ -156,7 +156,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         });
 
       if (invError) {
-        console.warn('Aviso: inserção em inventario_fisico:', invError);
+        console.warn('[Compra] Aviso: não foi possível atualizar o inventário.');
       }
 
       // 3. Toast: "Compra registada! Aguarda aprovação."
@@ -177,9 +177,9 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
 
       onSuccess();
     } catch (err: unknown) {
-      console.warn('[Compra] Falha ao registar nova compra:', err);
-      const msg = err instanceof Error ? err.message : 'Falha ao gravar no Supabase.';
-      setErrorMessage(`Erro ao registar compra: ${msg}`);
+      console.warn('[Compra] Falha ao registar nova compra.');
+      const msg = 'Não foi possível registar a compra. Tente novamente.';
+      setErrorMessage(msg);
       onShowToast('error', 'Falha ao gravar transação na base de dados.');
     } finally {
       setIsSubmitting(false);

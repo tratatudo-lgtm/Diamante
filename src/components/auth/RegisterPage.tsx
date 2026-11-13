@@ -138,7 +138,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({ onNavigate }) => {
         onNavigate(dest);
       }, 1200);
     } catch (err: unknown) {
-      console.warn('[Registo] Erro no registo:', err);
+      console.warn('[Registo] Falha no processo de registo.');
       const msg = err instanceof Error ? err.message : 'Erro ao ligar ao servidor de autenticação.';
       setErrorMessage(msg);
     } finally {

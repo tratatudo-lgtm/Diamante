@@ -58,6 +58,7 @@ interface RateLimitRecord {
   resetTime: number;
 }
 const rateLimitMap = new Map<string, RateLimitRecord>();
+let rateLimitCleanupCounter = 0;
 
 function bruteForceProtection(req: Request, res: Response, next: NextFunction): void {
   // Aplicado exclusivamente em endpoints de autenticação sensíveis
@@ -65,10 +66,34 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
     return next();
   }
 
-  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown-ip';
+  // Nunca confiar em X-Forwarded-For fornecido pelo cliente.
+  const remoteAddress = req.socket.remoteAddress;
+
+  if (typeof remoteAddress !== 'string' || !remoteAddress.trim()) {
+    res.status(503).json({
+      success: false,
+      message: 'Não foi possível validar a origem do pedido.',
+    });
+    return;
+  }
+
+  const clientIp = remoteAddress.trim().toLowerCase().replace(/^::ffff:/, '');
   const now = Date.now();
-  const windowMs = 60 * 1000; // Janela de 1 minuto
-  const maxAttempts = 100; // Limite amplo para testes e prevenção de ataques massivos
+  const windowMs = 60 * 1000;
+  const maxAttempts = 30;
+
+  // Limpeza periódica dos registos expirados, sem timers adicionais.
+  rateLimitCleanupCounter += 1;
+
+  if (rateLimitCleanupCounter >= 256) {
+    rateLimitCleanupCounter = 0;
+
+    for (const [ip, record] of rateLimitMap) {
+      if (now > record.resetTime) {
+        rateLimitMap.delete(ip);
+      }
+    }
+  }
 
   const record = rateLimitMap.get(clientIp);
 
@@ -78,6 +103,7 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
   }
 
   record.count += 1;
+
   if (record.count > maxAttempts) {
     res.status(429).json({
       success: false,
@@ -113,35 +139,68 @@ app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req, res) => {
     if (error) throw error;
     
     res.json({ success: true, data: data || [] });
-  } catch(e: any) {
-    console.error('[Pending Error]:', e.message);
-    res.status(500).json({ success: false, error: e.message });
+  } catch {
+    console.error('[Pending Error] Falha ao consultar transações pendentes.');
+    res.status(500).json({ success: false, error: 'Não foi possível consultar as transações pendentes.' });
   }
 });
 
 // ENDPOINT: AUTORIZAR TRANSAÇÃO PENDENTE
 app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
-  
-  const { transactionId } = req.body;
-  if (!transactionId) return res.status(400).json({ error: 'ID da transação obrigatório' });
-  
+  const transactionId = req.body?.transactionId;
+
+  if (typeof transactionId !== 'string' || !transactionId.trim()) {
+    return res.status(400).json({
+      success: false,
+      error: 'ID da transação obrigatório'
+    });
+  }
+
   try {
-    const { error } = await supabaseAdmin
+    const adminId = (req as any).adminUser?.id;
+
+    if (!adminId) {
+      return res.status(401).json({
+        success: false,
+        error: 'Sessão administrativa inválida'
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
       .from('transacoes')
-      .update({ 
-        estado: 'aprovado', 
-        aprovado_por: (req as any).adminUser.id, 
-        data_aprovacao: new Date().toISOString() 
+      .update({
+        estado: 'aprovado',
+        aprovado_por: adminId,
+        data_aprovacao: new Date().toISOString()
       })
-      .eq('id', transactionId);
-      
+      .eq('id', transactionId.trim())
+      .eq('estado', 'pendente_aprovacao')
+      .select('id')
+      .maybeSingle();
+
     if (error) throw error;
-    
-    console.log(`[ADMIN] Transação ${transactionId} autorizada por ${(req as any).adminUser.id}`);
-    res.json({ success: true, message: 'Transação autorizada com sucesso' });
-  } catch(e: any) {
-    console.error('[Authorize Error]:', e.message);
-    res.status(500).json({ success: false, error: e.message });
+
+    if (!data) {
+      return res.status(409).json({
+        success: false,
+        error: 'A transação não está pendente ou já foi processada'
+      });
+    }
+
+    console.log('[ADMIN] Transação autorizada com sucesso.');
+
+    return res.json({
+      success: true,
+      message: 'Transação autorizada com sucesso',
+      transactionId: data.id
+    });
+  } catch {
+    console.error('[Authorize Error] Falha interna ao autorizar transação.');
+
+    return res.status(500).json({
+      success: false,
+      error: 'Não foi possível autorizar a transação'
+    });
   }
 });
 
@@ -165,6 +224,62 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
+// DETALHE DE LOJA — CONSULTA ADMINISTRATIVA PROTEGIDA
+app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
+  const lojaId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+
+  if (!lojaId) {
+    return res.status(400).json({
+      success: false,
+      error: 'ID da loja obrigatório'
+    });
+  }
+
+  try {
+    const { supabaseAdmin } = await import('./auth.service');
+
+    const [transactionsRes, employeesRes, historyKpisRes] = await Promise.all([
+      supabaseAdmin
+        .from('transacoes')
+        .select('id, valor_final, peso_gramas, created_at, estado')
+        .eq('loja_id', lojaId)
+        .order('created_at', { ascending: false })
+        .limit(10),
+      supabaseAdmin
+        .from('funcionarios')
+        .select('id, nome_completo, email, role, ativo')
+        .eq('loja_id', lojaId),
+      supabaseAdmin
+        .from('kpi_loja_diaria')
+        .select('data, total_compras_qtd, total_compras_valor')
+        .eq('loja_id', lojaId)
+        .order('data', { ascending: false })
+        .limit(7)
+    ]);
+
+    if (transactionsRes.error || employeesRes.error || historyKpisRes.error) {
+      console.error('[War Room Store Details] Falha numa consulta administrativa.');
+      return res.status(500).json({
+        success: false,
+        error: 'Não foi possível carregar os detalhes da loja'
+      });
+    }
+
+    return res.json({
+      success: true,
+      transactions: transactionsRes.data || [],
+      employees: employeesRes.data || [],
+      historyKpis: historyKpisRes.data || []
+    });
+  } catch (_error: unknown) {
+    console.error('[War Room Store Details] Erro interno.');
+    return res.status(500).json({
+      success: false,
+      error: 'Não foi possível carregar os detalhes da loja'
+    });
+  }
+});
+
 // =========================================================================
 // 3.1 SALA DE GUERRA (WAR ROOM / ADMIN DASHBOARD)
 // Proxy seguro server-side para tabelas Supabase (evita falhas de CORS/Iframe no frontend)
@@ -178,41 +293,55 @@ app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin
 
   try {
     const { supabaseAdmin } = await import('./auth.service');
-    const [lojasRes, todayTxsRes, pendingTxsRes, kpiTodayRes, kpiYesterdayRes] = await Promise.allSettled([
-      supabaseAdmin.from('lojas').select('*').order('nome', { ascending: true }),
-      supabaseAdmin.from('transacoes').select('*').gte('created_at', todayStartIso),
+
+    const [
+      lojasRes,
+      todayTxsRes,
+      pendingTxsRes,
+      kpiTodayRes,
+      kpiYesterdayRes,
+      recentTxsRes,
+    ] = await Promise.all([
+      supabaseAdmin.from('lojas').select('id, nome, codigo_loja, morada, latitude, longitude, ativo').order('nome', { ascending: true }),
+      supabaseAdmin.from('transacoes').select('id, loja_id, estado, valor_final, peso_gramas').gte('created_at', todayStartIso),
       supabaseAdmin.from('transacoes').select('id, loja_id, valor_final, peso_gramas, estado').eq('estado', 'pendente_aprovacao'),
-      supabaseAdmin.from('kpi_loja_diaria').select('*').eq('data', todayStr),
-      supabaseAdmin.from('kpi_loja_diaria').select('*').eq('data', yesterdayStr),
+      supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, pendentes_aprovacao_qtd').eq('data', todayStr),
+      supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, pendentes_aprovacao_qtd').eq('data', yesterdayStr),
+      supabaseAdmin.from('transacoes').select('id, loja_id, estado, valor_final, peso_gramas, created_at').order('created_at', { ascending: false }).limit(20),
     ]);
 
-    const lojas = lojasRes.status === 'fulfilled' && lojasRes.value.data ? lojasRes.value.data : [];
-    const todayTxs = todayTxsRes.status === 'fulfilled' && todayTxsRes.value.data ? todayTxsRes.value.data : [];
-    const allPendingTxs = pendingTxsRes.status === 'fulfilled' && pendingTxsRes.value.data ? pendingTxsRes.value.data : [];
-    const kpiToday = kpiTodayRes.status === 'fulfilled' && kpiTodayRes.value.data ? kpiTodayRes.value.data : [];
-    const kpiYesterday = kpiYesterdayRes.status === 'fulfilled' && kpiYesterdayRes.value.data ? kpiYesterdayRes.value.data : [];
+    const queryResults = [
+      lojasRes,
+      todayTxsRes,
+      pendingTxsRes,
+      kpiTodayRes,
+      kpiYesterdayRes,
+      recentTxsRes,
+    ];
 
-    const isConnected = lojasRes.status === 'fulfilled' && !lojasRes.value.error;
+    if (queryResults.some((result) => result.error)) {
+      console.error('[War Room] Uma ou mais consultas administrativas falharam.');
+      return res.status(503).json({
+        success: false,
+        error: 'Não foi possível carregar todos os dados da Sala de Guerra.',
+      });
+    }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      isConnected,
-      lojas,
-      todayTxs,
-      allPendingTxs,
-      kpiToday,
-      kpiYesterday,
+      isConnected: true,
+      lojas: lojasRes.data || [],
+      todayTxs: todayTxsRes.data || [],
+      allPendingTxs: pendingTxsRes.data || [],
+      kpiToday: kpiTodayRes.data || [],
+      kpiYesterday: kpiYesterdayRes.data || [],
+      recentTxs: recentTxsRes.data || [],
     });
   } catch (_err: unknown) {
-    res.status(200).json({
-      success: true,
-      isConnected: false,
-      lojas: [],
-      todayTxs: [],
-      allPendingTxs: [],
-      kpiToday: [],
-      kpiYesterday: [],
-      message: 'Base de dados em standby ou aguardar credenciais de produção.',
+    console.error('[War Room] Erro interno ao carregar dados administrativos.');
+    return res.status(503).json({
+      success: false,
+      error: 'Serviço da Sala de Guerra temporariamente indisponível.',
     });
   }
 });
@@ -264,7 +393,7 @@ io.use(async (socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log(`[Chat WS] ✅ Conectado: ${socket.id}`);
+  console.log('[Chat WS] Ligação estabelecida.');
   
   const employee = socket.data.employee as { id: string; role: string; loja_id: string | null };
   const allowedRooms = new Set([employee.id, ...(employee.loja_id ? [`store:${employee.loja_id}`] : [])]);
@@ -281,7 +410,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log(`[Chat WS] ❌ Desconectado: ${socket.id}`);
+    console.log('[Chat WS] Ligação terminada.');
   });
 });
 
@@ -304,7 +433,7 @@ async function setupViteOrStatic() {
       viteMiddlewares = vite.middlewares;
       console.log('[Diamante OS] Vite dev server integrado com sucesso.');
     } catch (err) {
-      console.error('[Diamante OS] Erro ao integrar Vite:', err);
+      console.error('[Diamante OS] Falha ao integrar o servidor Vite.');
     }
   } else {
     const distPath = path.resolve(__dirname, 'dist');
@@ -326,7 +455,7 @@ setupViteOrStatic().then(() => {
     console.log(`WebSocket: Ativo (Socket.IO)`);
     console.log(`=========================================`);
   });
-}).catch(err => {
-  console.error('[Diamante OS] Erro fatal ao iniciar:', err);
+}).catch(() => {
+  console.error('[Diamante OS] Falha fatal ao iniciar o servidor.');
   process.exit(1);
 });

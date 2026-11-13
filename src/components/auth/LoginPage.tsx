@@ -127,7 +127,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
         otpInputRefs.current[0]?.focus();
       }, 150);
     } catch (err: unknown) {
-      console.warn('[Login OTP] Erro ao enviar OTP:', err);
+      console.warn('[Login OTP] Falha ao enviar código.');
       const msg = err instanceof Error ? err.message : 'Falha ao comunicar com o servidor de autenticação.';
       setError(msg);
     } finally {
@@ -170,7 +170,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
         window.location.href = targetPath;
       }
     } catch (err: unknown) {
-      console.warn('[Login OTP] Erro na validação do OTP:', err);
+      console.warn('[Login OTP] Falha na validação do código.');
       const msg = err instanceof Error ? err.message : 'Erro ao validar código OTP.';
       setError(msg);
     } finally {
@@ -240,7 +240,7 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
         window.location.href = targetPath;
       }
     } catch (err: unknown) {
-      console.warn('[Login Email] Erro no login por email:', err);
+      console.warn('[Login Email] Falha na autenticação por email.');
       const msg = err instanceof Error ? err.message : 'Falha na autenticação.';
       setError(msg);
     } finally {

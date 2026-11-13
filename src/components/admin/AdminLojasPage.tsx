@@ -119,7 +119,7 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
 
       setLojas(loadedLojas);
     } catch (err: any) {
-      console.warn('[AdminLojas] Aviso ao carregar:', err?.message || err);
+      console.warn('[AdminLojas] Falha ao carregar lojas.');
       addToast('error', 'Não foi possível atualizar a lista de lojas.');
     } finally {
       setIsLoading(false);
@@ -296,8 +296,8 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
       setIsModalOpen(false);
       await fetchLojas();
     } catch (err: any) {
-      console.warn('[AdminLojas] Erro ao gravar:', err?.message || err);
-      addToast('error', err?.message || 'Erro ao comunicar com o servidor.');
+      console.warn('[AdminLojas] Falha ao gravar loja.');
+      addToast('error', 'Não foi possível gravar a loja. Verifique os dados e tente novamente.');
     } finally {
       setIsSubmitting(false);
     }

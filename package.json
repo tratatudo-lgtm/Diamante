@@ -15,7 +15,6 @@
     "@google/genai": "^2.4.0",
     "@supabase/supabase-js": "^2.45.6",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/socket.io-client": "^1.4.36",
     "@vitejs/plugin-react": "^6.1.1",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
@@ -29,7 +28,6 @@
     "react-dom": "^19.0.1",
     "recharts": "^3.10.1",
     "socket.io": "^4.8.4",
-    "socket.io-client": "^4.8.4",
     "vite": "^8.3.0"
   },
   "devDependencies": {

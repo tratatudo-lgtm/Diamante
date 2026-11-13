@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+
 import type { LojaComKpi, Transacao, Funcionario, KpiLojaDiaria } from '../../types/database';
 import { X, Building2, MapPin, Users, Receipt, Calendar, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
 
@@ -21,39 +21,49 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
   const [historyKpis, setHistoryKpis] = useState<KpiLojaDiaria[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isApproving, setIsApproving] = useState<string | null>(null);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
 
   const fetchStoreDetails = useCallback(async (lojaId: string) => {
     setIsLoadingDetails(true);
+    setDetailsError(null);
+    setStoreTransactions([]);
+    setStoreEmployees([]);
+    setHistoryKpis([]);
+
     try {
-      // 1. Transactions of this store
-      const { data: txData } = await supabase
-        .from('transacoes')
-        .select('*')
-        .eq('loja_id', lojaId)
-        .order('created_at', { ascending: false })
-        .limit(10);
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) {
+        throw new Error('Sessão administrativa não encontrada. Volte a iniciar sessão.');
+      }
 
-      if (txData) setStoreTransactions(txData);
+      const response = await fetch(
+        `/api/admin/war-room/stores/${encodeURIComponent(lojaId)}`,
+        {
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          signal: AbortSignal.timeout(4000),
+        }
+      );
 
-      // 2. Employees of this store
-      const { data: empData } = await supabase
-        .from('funcionarios')
-        .select('*')
-        .eq('loja_id', lojaId);
+      const payload = await response.json().catch(() => null);
 
-      if (empData) setStoreEmployees(empData);
+      if (!response.ok || !payload?.success) {
+        throw new Error(
+          payload?.error || 'Não foi possível carregar os detalhes da loja.'
+        );
+      }
 
-      // 3. KPI history (last 7 days)
-      const { data: kpiData } = await supabase
-        .from('kpi_loja_diaria')
-        .select('*')
-        .eq('loja_id', lojaId)
-        .order('data', { ascending: false })
-        .limit(7);
-
-      if (kpiData) setHistoryKpis(kpiData);
+      setStoreTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+      setStoreEmployees(Array.isArray(payload.employees) ? payload.employees : []);
+      setHistoryKpis(Array.isArray(payload.historyKpis) ? payload.historyKpis : []);
     } catch (err) {
-      console.warn('Erro ao carregar detalhes da loja:', err);
+      const message = err instanceof Error
+        ? err.message
+        : 'Erro inesperado ao carregar os detalhes da loja.';
+      setDetailsError(message);
+      console.warn('[War Room] Falha ao carregar detalhes da loja:', message);
     } finally {
       setIsLoadingDetails(false);
     }
@@ -77,20 +87,41 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
 
   const handleApproveTransaction = async (txId: string) => {
     setIsApproving(txId);
-    try {
-      const { error } = await supabase
-        .from('transacoes')
-        .update({ estado: 'aprovado' })
-        .eq('id', txId);
+    setDetailsError(null);
 
-      if (!error) {
-        setStoreTransactions((prev) =>
-          prev.map((t) => (t.id === txId ? { ...t, estado: 'aprovado' } : t))
-        );
-        onRefreshData?.();
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) {
+        throw new Error('Sessão administrativa não encontrada. Volte a iniciar sessão.');
       }
+
+      const response = await fetch('/api/v1/admin/dashboard/authorize', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ transactionId: txId }),
+        signal: AbortSignal.timeout(4000),
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(
+          payload?.error || 'Não foi possível aprovar a transação.'
+        );
+      }
+
+      await fetchStoreDetails(loja!.id);
+      onRefreshData?.();
     } catch (err) {
-      console.warn('[Admin] Erro ao aprovar transação:', err);
+      const message = err instanceof Error
+        ? err.message
+        : 'Erro inesperado ao aprovar a transação.';
+      setDetailsError(message);
+      console.warn('[War Room] Falha na aprovação da transação:', message);
     } finally {
       setIsApproving(null);
     }
@@ -158,6 +189,15 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
               </p>
             </div>
           </div>
+
+          {detailsError && (
+            <div
+              role="alert"
+              className="p-3 rounded-lg border border-red-800/60 bg-red-950/40 text-red-300 text-xs"
+            >
+              {detailsError}
+            </div>
+          )}
 
           {/* Section: Transactions of this store */}
           <div>
@@ -260,9 +300,13 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
                       <span className="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">
                         {emp.role}
                       </span>
-                      <p className="text-[10px] text-emerald-400 mt-1 flex items-center justify-end gap-1">
+                      <p className={`text-[10px] mt-1 flex items-center justify-end gap-1 ${
+                        emp.ativo === true
+                          ? 'text-emerald-400'
+                          : 'text-gray-500'
+                      }`}>
                         <CheckCircle2 className="w-2.5 h-2.5" />
-                        Ativo
+                        {emp.ativo === true ? 'Ativo' : 'Inativo'}
                       </p>
                     </div>
                   </div>

@@ -3,10 +3,13 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from '../auth.service';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET tem de estar configurado no ambiente do servidor.');
-}
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET tem de estar configurado no ambiente do servidor.');
+  }
+  return secret;
+})();
 
 export interface AdminRequest extends Request {
   adminUser?: {
@@ -55,7 +58,7 @@ export async function verifyAdmin(
       .maybeSingle();
 
     if (error) {
-      console.error('[verifyAdmin] Falha ao validar funcionário:', error.message);
+      console.error('[verifyAdmin] Falha na consulta de permissões do funcionário.');
       res.status(503).json({ success: false, message: 'Não foi possível validar as permissões.' });
       return;
     }
@@ -72,10 +75,10 @@ export async function verifyAdmin(
       nome_completo: funcionario.nome_completo || undefined,
     };
 
-    console.log(`[ADMIN] ${req.method} ${req.path} por funcionário ${funcionario.id}`);
+    console.log(`[ADMIN] Pedido administrativo validado: ${req.method} ${req.path}.`);
     next();
-  } catch (err) {
-    console.error('[verifyAdmin] Erro inesperado:', err);
+  } catch {
+    console.error('[verifyAdmin] Erro interno ao validar permissões.');
     res.status(500).json({ success: false, message: 'Erro interno ao validar permissões.' });
   }
 }

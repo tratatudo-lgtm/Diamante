@@ -29,11 +29,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     switch (activeTab) {
       case 'lojas':
       case 'dashboard-admin':
-        return <AdminLojasPage />;
+        return <AdminLojasPage onNavigate={handleMenuSelect} />;
       case 'funcionarios':
-        return <AdminFuncionariosPage />;
+        return <AdminFuncionariosPage onNavigate={handleMenuSelect} />;
       case 'config':
-        return <AdminConfigPage />;
+        return <AdminConfigPage onNavigate={handleMenuSelect} />;
       case 'auditoria':
         return (
           <div className="flex flex-col items-center justify-center h-full text-[#D4AF37]">
@@ -42,7 +42,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           </div>
         );
       default:
-        return <AdminLojasPage />;
+        return <AdminLojasPage onNavigate={handleMenuSelect} />;
     }
   };
 
