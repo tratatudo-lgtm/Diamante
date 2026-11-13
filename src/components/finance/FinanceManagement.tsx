@@ -184,71 +184,55 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
   // 3. AÇÕES RÁPIDAS (CONFIRMAR, REJEITAR, CRIAR)
   // =========================================================
   const handleConfirmPayment = async (txId: string) => {
-    // Deduz do saldo disponível
-
-    // Deduz do saldo disponível
-    const tx = transactions.find((t) => t.id === txId);
-    if (tx && tx.estado === 'pendente') {
-      setSaldoDisponivelBase((prev) => Math.max(0, prev - tx.valor));
-    }
-
-    if (selectedTx && selectedTx.id === txId) {
-      setSelectedTx((prev) => (prev ? { ...prev, estado: 'pago' } : null));
+    try {
+      await confirmPayment(txId);
+      const tx = transactions.find((item) => item.id === txId);
+      if (tx && tx.estado === 'pendente') setSaldoDisponivelBase((prev) => Math.max(0, prev - tx.valor));
+      if (selectedTx?.id === txId) setSelectedTx((prev) => prev ? { ...prev, estado: 'pago' } : null);
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao confirmar o pagamento.');
     }
   };
 
   const handleRejectPayment = async (txId: string) => {
-    if (selectedTx && selectedTx.id === txId) {
-    if (selectedTx && selectedTx.id === txId) {
-      setSelectedTx((prev) => (prev ? { ...prev, estado: 'rejeitado' } : null));
+    try {
+      await rejectPayment(txId);
+      if (selectedTx?.id === txId) setSelectedTx((prev) => prev ? { ...prev, estado: 'rejeitado' } : null);
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao rejeitar o pagamento.');
     }
   };
 
   const handleCreatePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPayment.beneficiarioNome.trim() || !newPayment.valor) return;
-
-    const storeObj = storeOptions.find((s) => s.id === newPayment.lojaId);
-    const id = `tx-${Date.now()}`;
+    const storeObj = storeOptions.find((store) => store.id === newPayment.lojaId);
+    if (!storeObj) {
+      setActionError('Selecione uma loja existente antes de criar o pagamento.');
+      return;
+    }
     const refNum = Date.now();
-    const referencia = `PAG-2026-${refNum}`;
-
+    const referencia = `PAG-${refNum}`;
     const createdTx: FinancialTransaction = {
-      id,
-      referencia,
-      lojaId: newPayment.lojaId,
-      lojaNome: storeObj?.nome || '',
+      id: `tx-${refNum}`, referencia, lojaId: newPayment.lojaId, lojaNome: storeObj.nome,
       beneficiarioNome: newPayment.beneficiarioNome.trim(),
       beneficiarioNif: newPayment.beneficiarioNif.trim(),
       beneficiarioIban: newPayment.beneficiarioIban.trim().toUpperCase(),
-      valor: Number(newPayment.valor),
-      estado: 'pendente',
+      valor: Number(newPayment.valor), estado: 'pendente',
       data: new Date().toLocaleDateString('pt-PT'),
       hora: new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }),
-      metodo: newPayment.metodo,
-      contaOrigem: newPayment.contaOrigem,
-      descricao: newPayment.descricao.trim(),
-      pesoOuroGramas: Number(newPayment.pesoOuroGramas) || 0,
-      tipoMetal: newPayment.tipoMetal,
-      operadorNome: newPayment.operadorNome,
+      metodo: newPayment.metodo, contaOrigem: newPayment.contaOrigem,
+      descricao: newPayment.descricao.trim(), pesoOuroGramas: Number(newPayment.pesoOuroGramas) || 0,
+      tipoMetal: newPayment.tipoMetal, operadorNome: newPayment.operadorNome,
       comprovativoRef: `SEPA-COMP-${refNum}-PEND`,
     };
-
-    setIsCreateModalOpen(false);
-    setIsCreateModalOpen(false);
-    setNewPayment({
-      lojaId: storeOptions[0]?.id || '',
-      beneficiarioNome: '',
-      beneficiarioNif: '',
-      beneficiarioIban: '',
-      valor: 0,
-      metodo: 'Transferência Imediata',
-      contaOrigem: '',
-      descricao: '',
-      pesoOuroGramas: 0,
-      tipoMetal: '',
-      operadorNome: '',
-    });
+    try {
+      await createPayment(createdTx);
+      setIsCreateModalOpen(false);
+      setNewPayment({ lojaId: '', beneficiarioNome: '', beneficiarioNif: '', beneficiarioIban: '', valor: 0, metodo: 'Transferência Imediata', contaOrigem: '', descricao: '', pesoOuroGramas: 0, tipoMetal: '', operadorNome: '' });
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao criar o pagamento.');
+    }
   };
 
   // Helper de Badge de Estado
