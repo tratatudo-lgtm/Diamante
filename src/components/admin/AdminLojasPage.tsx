@@ -99,9 +99,11 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
       }
 
       setLojas(data.lojas as AdminLoja[]);
+      return true;
     } catch {
       console.warn('[AdminLojas] Falha ao carregar lojas pela API protegida.');
       addToast('error', 'Não foi possível atualizar a lista de lojas. Verifique a sessão e tente novamente.');
+      return false;
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -259,7 +261,6 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
           throw new Error(errData?.message || 'Falha ao atualizar loja.');
         }
 
-        addToast('success', `Loja "${formData.nome}" atualizada com sucesso.`, 'Loja Guardada');
       } else {
         // POST /admin/lojas
         const res = await fetch('/api/admin/lojas', {
@@ -273,11 +274,15 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
           throw new Error(errData?.message || 'Falha ao criar loja.');
         }
 
-        addToast('success', `Loja "${formData.nome}" criada e geocodificada.`, 'Loja Criada');
       }
 
       setIsModalOpen(false);
-      await fetchLojas();
+      const synchronized = await fetchLojas();
+      if (synchronized) {
+        addToast('success', `Loja "${formData.nome}" ${editingLoja ? 'atualizada' : 'criada'} com sucesso.`, editingLoja ? 'Loja Guardada' : 'Loja Criada');
+      } else {
+        addToast('info', 'A gravação foi concluída, mas a lista não sincronizou. Atualize a página antes de repetir a operação.');
+      }
     } catch (err: any) {
       console.warn('[AdminLojas] Falha ao gravar loja.');
       addToast('error', 'Não foi possível gravar a loja. Verifique os dados e tente novamente.');
