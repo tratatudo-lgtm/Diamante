@@ -19,6 +19,7 @@ import { StoreManagement } from './components/stores/StoreManagement';
 import { EmployeeManagement } from './components/employees/EmployeeManagement';
 import { FinanceManagement } from './components/finance/FinanceManagement';
 import { ClientManagement } from './components/clients/ClientManagement';
+import { CRMWorkspace } from './components/clients/CRMWorkspace';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { LogAuditPage } from './components/admin/LogAuditPage';
 import { Loader2 } from 'lucide-react';
@@ -176,7 +177,7 @@ function AppRouter() {
       return <FinanceManagement onNavigate={navigate} />;
     }
     if (currentPath === '/clients' || currentPath === '/clientes' || currentPath === '/fornecedores') {
-      return <ClientManagement onNavigate={navigate} />;
+      return <CRMWorkspace />;
     }
     if (currentPath === '/settings' || currentPath === '/configuracoes' || currentPath === '/admin/config') {
       return <SettingsPage onNavigate={navigate} />;
