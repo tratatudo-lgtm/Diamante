@@ -229,6 +229,40 @@ app.get('/api/health', (_req: Request, res: Response) => {
   });
 });
 
+// LISTAGEM ADMINISTRATIVA DE TRANSACOES — APENAS LEITURA
+app.get('/api/admin/transactions', verifyAdmin, async (req, res) => {
+  const parsedLimit = Number(req.query.limit);
+  const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.trunc(parsedLimit), 1), 200) : 100;
+
+  try {
+    const { supabaseAdmin } = await import('./auth.service');
+    const [transactionsRes, storesRes] = await Promise.all([
+      supabaseAdmin
+        .from('transacoes')
+        .select('id, loja_id, estado, valor_final, peso_gramas, created_at', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .limit(limit),
+      supabaseAdmin.from('lojas').select('id, nome'),
+    ]);
+
+    if (transactionsRes.error || storesRes.error) {
+      console.error('[Admin Transactions] Falha numa consulta administrativa.');
+      return res.status(503).json({ success: false, error: 'Não foi possível carregar as transações.' });
+    }
+
+    const storeNames = new Map((storesRes.data || []).map((store: { id: string; nome: string }) => [store.id, store.nome]));
+    const data = (transactionsRes.data || []).map((tx: any) => ({
+      ...tx,
+      loja_nome: storeNames.get(tx.loja_id) || null,
+    }));
+
+    return res.json({ success: true, data, total: transactionsRes.count || 0 });
+  } catch {
+    console.error('[Admin Transactions] Erro interno.');
+    return res.status(500).json({ success: false, error: 'Não foi possível carregar as transações.' });
+  }
+});
+
 // DETALHE DE LOJA — CONSULTA ADMINISTRATIVA PROTEGIDA
 app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
   const lojaId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
