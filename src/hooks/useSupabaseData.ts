@@ -14,40 +14,10 @@ import type {
 } from '../types/supabase-schema';
 
 // =========================================================================
-// 1. DADOS INICIAIS DE REFORÇO / FALLBACK REALISTA
-// =========================================================================
-export const DEFAULT_STORES: Store[] = [
-  { id: 'loj-001', codigo: 'LOJ-001', nome: "Diamante D'ouro - Baixa", status: 'ativa', endereco: 'Rua Augusta 120, Baixa Pombalina', cidade: 'Lisboa', gerente: 'Ana Sofia Martins', telefone: '+351 213 425 610', email: 'baixa@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123001', volumeMes: 48500, metaMes: 50000, progressoMeta: 97, totalTransacoesMes: 64, ouroCompradoGramas: 840.5, dataAbertura: '15/01/2018' },
-  { id: 'loj-002', codigo: 'LOJ-002', nome: "Diamante D'ouro - Chiado", status: 'ativa', endereco: 'Rua Garrett 42', cidade: 'Lisboa', gerente: 'Mariana Castelo Branco', telefone: '+351 213 428 990', email: 'chiado@diamantedouro.pt', horario: 'Seg - Sáb: 10:00 - 19:30', nif: '509123002', volumeMes: 62100, metaMes: 60000, progressoMeta: 103, totalTransacoesMes: 82, ouroCompradoGramas: 1120.0, dataAbertura: '22/03/2018' },
-  { id: 'loj-003', codigo: 'LOJ-003', nome: "Diamante D'ouro - Campo de Ourique", status: 'ativa', endereco: 'Rua Ferreira Borges 88', cidade: 'Lisboa', gerente: 'Helena Pires Vaz', telefone: '+351 213 874 120', email: 'ouríque@diamantedouro.pt', horario: 'Seg - Sex: 09:30 - 19:00', nif: '509123003', volumeMes: 34200, metaMes: 35000, progressoMeta: 98, totalTransacoesMes: 45, ouroCompradoGramas: 590.2, dataAbertura: '10/06/2018' },
-  { id: 'loj-004', codigo: 'LOJ-004', nome: "Diamante D'ouro - Alvalade", status: 'ativa', endereco: 'Avenida da Igreja 24B', cidade: 'Lisboa', gerente: 'Patrícia Rebelo', telefone: '+351 217 934 510', email: 'alvalade@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123004', volumeMes: 29800, metaMes: 32000, progressoMeta: 93, totalTransacoesMes: 39, ouroCompradoGramas: 510.4, dataAbertura: '04/09/2018' },
-  { id: 'loj-005', codigo: 'LOJ-005', nome: "Diamante D'ouro - Parque das Nações", status: 'ativa', endereco: 'Alameda dos Oceanos 43', cidade: 'Lisboa', gerente: 'Catarina Morais', telefone: '+351 218 954 220', email: 'nacoes@diamantedouro.pt', horario: 'Seg - Dom: 10:00 - 20:00', nif: '509123005', volumeMes: 41500, metaMes: 40000, progressoMeta: 104, totalTransacoesMes: 53, ouroCompradoGramas: 730.0, dataAbertura: '18/11/2018' },
-  { id: 'loj-006', codigo: 'LOJ-006', nome: "Diamante D'ouro - Cascais", status: 'ativa', endereco: 'Rua Frederico Arouca 54', cidade: 'Cascais', gerente: 'Beatriz Fontes', telefone: '+351 214 832 110', email: 'cascais@diamantedouro.pt', horario: 'Seg - Sáb: 10:00 - 19:30', nif: '509123006', volumeMes: 54900, metaMes: 55000, progressoMeta: 100, totalTransacoesMes: 71, ouroCompradoGramas: 980.6, dataAbertura: '02/02/2019' },
-  { id: 'loj-007', codigo: 'LOJ-007', nome: "Diamante D'ouro - Sintra", status: 'ativa', endereco: 'Praça da República 12', cidade: 'Sintra', gerente: 'Inês Carvalhal', telefone: '+351 219 231 040', email: 'sintra@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123007', volumeMes: 27400, metaMes: 30000, progressoMeta: 91, totalTransacoesMes: 36, ouroCompradoGramas: 480.0, dataAbertura: '15/04/2019' },
-  { id: 'loj-008', codigo: 'LOJ-008', nome: "Diamante D'ouro - Amadora", status: 'ativa', endereco: 'Rua Elias Garcia 110', cidade: 'Amadora', gerente: 'Sara Antunes', telefone: '+351 214 938 720', email: 'amadora@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123008', volumeMes: 31200, metaMes: 30000, progressoMeta: 104, totalTransacoesMes: 48, ouroCompradoGramas: 560.1, dataAbertura: '20/07/2019' },
-  { id: 'loj-009', codigo: 'LOJ-009', nome: "Diamante D'ouro - Almada", status: 'ativa', endereco: 'Avenida 23 de Julho 18', cidade: 'Almada', gerente: 'Joana Figueiredo', telefone: '+351 212 743 090', email: 'almada@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123009', volumeMes: 33800, metaMes: 35000, progressoMeta: 97, totalTransacoesMes: 44, ouroCompradoGramas: 610.8, dataAbertura: '10/09/2019' },
-  { id: 'loj-010', codigo: 'LOJ-010', nome: "Diamante D'ouro - Setúbal", status: 'ativa', endereco: 'Avenida Luísa Todi 152', cidade: 'Setúbal', gerente: 'Carla Silveira', telefone: '+351 265 522 180', email: 'setubal@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123010', volumeMes: 26500, metaMes: 28000, progressoMeta: 95, totalTransacoesMes: 38, ouroCompradoGramas: 470.2, dataAbertura: '05/11/2019' },
-  { id: 'loj-011', codigo: 'LOJ-011', nome: "Diamante D'ouro - Porto Santa Catarina", status: 'ativa', endereco: 'Rua de Santa Catarina 310', cidade: 'Porto', gerente: 'Marta Ribeiro Sousa', telefone: '+351 222 084 310', email: 'santacatarina@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:30', nif: '509123011', volumeMes: 58200, metaMes: 55000, progressoMeta: 106, totalTransacoesMes: 76, ouroCompradoGramas: 1040.5, dataAbertura: '12/01/2020' },
-  { id: 'loj-012', codigo: 'LOJ-012', nome: "Diamante D'ouro - Porto Boavista", status: 'ativa', endereco: 'Avenida da Boavista 1240', cidade: 'Porto', gerente: 'Filipa Nogueira', telefone: '+351 226 091 420', email: 'boavista@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123012', volumeMes: 49700, metaMes: 48000, progressoMeta: 104, totalTransacoesMes: 62, ouroCompradoGramas: 890.0, dataAbertura: '01/03/2020' },
-  { id: 'loj-013', codigo: 'LOJ-013', nome: "Diamante D'ouro - Vila Nova de Gaia", status: 'ativa', endereco: 'Avenida da República 1420', cidade: 'Vila Nova de Gaia', gerente: 'Rita Magalhães', telefone: '+351 223 754 110', email: 'gaia@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123013', volumeMes: 37400, metaMes: 38000, progressoMeta: 98, totalTransacoesMes: 51, ouroCompradoGramas: 660.3, dataAbertura: '15/05/2020' },
-  { id: 'loj-014', codigo: 'LOJ-014', nome: "Diamante D'ouro - Matosinhos", status: 'ativa', endereco: 'Rua Brito Capelo 405', cidade: 'Matosinhos', gerente: 'Susana Valente', telefone: '+351 229 382 090', email: 'matosinhos@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123014', volumeMes: 31900, metaMes: 32000, progressoMeta: 100, totalTransacoesMes: 44, ouroCompradoGramas: 570.4, dataAbertura: '20/07/2020' },
-  { id: 'loj-015', codigo: 'LOJ-015', nome: "Diamante D'ouro - Braga Centro", status: 'ativa', endereco: 'Rua do Souto 64', cidade: 'Braga', gerente: 'Diana Pinheiro', telefone: '+351 253 268 410', email: 'braga@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123015', volumeMes: 44100, metaMes: 42000, progressoMeta: 105, totalTransacoesMes: 59, ouroCompradoGramas: 790.0, dataAbertura: '10/09/2020' },
-  { id: 'loj-016', codigo: 'LOJ-016', nome: "Diamante D'ouro - Guimarães", status: 'ativa', endereco: 'Largo do Toural 32', cidade: 'Guimarães', gerente: 'Andreia Vasconcelos', telefone: '+351 253 514 220', email: 'guimaraes@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123016', volumeMes: 36800, metaMes: 35000, progressoMeta: 105, totalTransacoesMes: 47, ouroCompradoGramas: 650.0, dataAbertura: '05/11/2020' },
-  { id: 'loj-017', codigo: 'LOJ-017', nome: "Diamante D'ouro - Coimbra Baixa", status: 'ativa', endereco: 'Rua Visconde da Luz 78', cidade: 'Coimbra', gerente: 'Luísa Antunes', telefone: '+351 239 824 110', email: 'coimbra@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123017', volumeMes: 35200, metaMes: 36000, progressoMeta: 98, totalTransacoesMes: 46, ouroCompradoGramas: 620.0, dataAbertura: '15/01/2021' },
-  { id: 'loj-018', codigo: 'LOJ-018', nome: "Diamante D'ouro - Aveiro", status: 'ativa', endereco: 'Rua de Coimbra 14', cidade: 'Aveiro', gerente: 'Célia Bernardo', telefone: '+351 234 421 980', email: 'aveiro@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123018', volumeMes: 32600, metaMes: 32000, progressoMeta: 102, totalTransacoesMes: 43, ouroCompradoGramas: 580.0, dataAbertura: '20/03/2021' },
-  { id: 'loj-019', codigo: 'LOJ-019', nome: "Diamante D'ouro - Leiria", status: 'ativa', endereco: 'Praça Rodrigues Lobo 28', cidade: 'Leiria', gerente: 'Sónia Henriques', telefone: '+351 244 832 440', email: 'leiria@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123019', volumeMes: 28400, metaMes: 30000, progressoMeta: 95, totalTransacoesMes: 37, ouroCompradoGramas: 510.0, dataAbertura: '10/05/2021' },
-  { id: 'loj-020', codigo: 'LOJ-020', nome: "Diamante D'ouro - Évora", status: 'ativa', endereco: 'Praça do Giraldo 45', cidade: 'Évora', gerente: 'Maria João Barroso', telefone: '+351 266 741 290', email: 'evora@diamantedouro.pt', horario: 'Seg - Sex: 09:30 - 19:00', nif: '509123020', volumeMes: 25100, metaMes: 26000, progressoMeta: 97, totalTransacoesMes: 33, ouroCompradoGramas: 440.0, dataAbertura: '15/07/2021' },
-  { id: 'loj-021', codigo: 'LOJ-021', nome: "Diamante D'ouro - Faro Baixa", status: 'ativa', endereco: 'Rua de Santo António 92', cidade: 'Faro', gerente: 'Cláudia Lourenço', telefone: '+351 289 824 150', email: 'faro@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123021', volumeMes: 39500, metaMes: 40000, progressoMeta: 99, totalTransacoesMes: 52, ouroCompradoGramas: 710.0, dataAbertura: '01/09/2021' },
-  { id: 'loj-022', codigo: 'LOJ-022', nome: "Diamante D'ouro - Portimão", status: 'ativa', endereco: 'Rua do Comércio 68', cidade: 'Portimão', gerente: 'Daniela Raposo', telefone: '+351 282 419 330', email: 'portimao@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123022', volumeMes: 28700, metaMes: 30000, progressoMeta: 95, totalTransacoesMes: 41, ouroCompradoGramas: 512.9, dataAbertura: '10/11/2021' },
-  { id: 'loj-023', codigo: 'LOJ-023', nome: "Diamante D'ouro - Funchal Sé", status: 'ativa', endereco: 'Rua da Carreira 32', cidade: 'Funchal (Madeira)', gerente: 'Vera Lúcia Camacho', telefone: '+351 291 224 810', email: 'funchal@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123023', volumeMes: 33400, metaMes: 35000, progressoMeta: 95, totalTransacoesMes: 44, ouroCompradoGramas: 590.0, dataAbertura: '15/01/2022' },
-  { id: 'loj-024', codigo: 'LOJ-024', nome: "Diamante D'ouro - Ponta Delgada", status: 'ativa', endereco: 'Rua dos Mercadores 18', cidade: 'Ponta Delgada (Açores)', gerente: 'Teresa Cabral Mota', telefone: '+351 296 304 920', email: 'pontadelgada@diamantedouro.pt', horario: 'Seg - Sáb: 09:30 - 19:00', nif: '509123024', volumeMes: 29100, metaMes: 30000, progressoMeta: 97, totalTransacoesMes: 39, ouroCompradoGramas: 520.0, dataAbertura: '20/03/2022' },
-];
-
-// =========================================================================
 // HOOK 1: useStores (Lojas)
 // =========================================================================
 export function useStores() {
-  const [data, setData] = useState<Store[]>(DEFAULT_STORES);
+  const [data, setData] = useState<Store[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,39 +38,26 @@ export function useStores() {
 
         if (dbLojas && dbLojas.length > 0) {
           // Mapeia o registo da base de dados para o modelo Store do frontend
-          const mapped: Store[] = dbLojas.map((row: any, index: number) => {
-            const fallback = DEFAULT_STORES[index % DEFAULT_STORES.length];
-            return {
-              id: String(row.id),
-              codigo: row.codigo_loja || row.codigo || fallback?.codigo || `LOJ-${String(index + 1).padStart(3, '0')}`,
-              nome: row.nome || fallback?.nome || 'Loja Diamante D\'ouro',
-              status: row.ativo === false ? 'inativa' : 'ativa',
-              endereco: row.morada || row.endereco || fallback?.endereco || 'Portugal',
-              cidade: row.cidade || fallback?.cidade || 'Lisboa',
-              gerente: row.gerente || fallback?.gerente || 'Gerente em Funções',
-              telefone: row.telefone || fallback?.telefone || '+351 213 456 789',
-              email: row.email || fallback?.email || 'contacto@diamantedouro.pt',
-              horario: row.horario || fallback?.horario || 'Seg - Sáb: 09:30 - 19:00',
-              nif: row.nif_loja || row.nif || fallback?.nif || '509123000',
-              volumeMes: typeof row.volume_mes === 'number' ? row.volume_mes : fallback?.volumeMes || 35000,
-              metaMes: typeof row.meta_mes === 'number' ? row.meta_mes : fallback?.metaMes || 40000,
-              progressoMeta: typeof row.progresso_meta === 'number' ? row.progresso_meta : fallback?.progressoMeta || 95,
-              totalTransacoesMes: typeof row.total_transacoes === 'number' ? row.total_transacoes : fallback?.totalTransacoesMes || 45,
-              ouroCompradoGramas: typeof row.peso_ouro_g === 'number' ? row.peso_ouro_g : fallback?.ouroCompradoGramas || 600,
-              dataAbertura: row.data_abertura || fallback?.dataAbertura || '01/01/2020',
-            };
-          });
+          const mapped: Store[] = (dbLojas || []).map((row: any) => ({
+            id: String(row.id), codigo: row.codigo_loja || row.codigo || '',
+            nome: row.nome || '', status: row.ativo === false ? 'inativa' : 'ativa',
+            endereco: row.morada || row.endereco || '', cidade: row.cidade || '',
+            gerente: row.gerente || '', telefone: row.telefone || '', email: row.email || '',
+            horario: row.horario || '', nif: row.nif_loja || row.nif || '',
+            volumeMes: Number(row.volume_mes) || 0, metaMes: Number(row.meta_mes) || 0,
+            progressoMeta: Number(row.progresso_meta) || 0, totalTransacoesMes: Number(row.total_transacoes) || 0,
+            ouroCompradoGramas: Number(row.peso_ouro_g) || 0, dataAbertura: row.data_abertura || '',
+          }));
 
           setData(mapped);
           return;
         }
       }
 
-      // Se a base de dados ainda não tiver lojas inseridas, mantém as 24 lojas oficiais
-      setData(DEFAULT_STORES);
+      setData([]);
     } catch (err: any) {
       setError(err?.message || 'Falha ao sincronizar lojas com Supabase');
-      setData(DEFAULT_STORES);
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -197,7 +154,8 @@ export function useEmployees() {
           .select('*, lojas(nome)')
           .order('nome_completo', { ascending: true });
 
-        if (!dbError && dbFuncs && dbFuncs.length > 0) {
+        if (dbError) throw dbError;
+        {
           const mapped: Employee[] = dbFuncs.map((row: any, idx: number) => {
             const roleStr = String(row.role || 'operador').toLowerCase();
             const cargo: EmployeeRole = roleStr.includes('gerente') ? 'Gerente' : roleStr.includes('estag') ? 'Estagiário' : 'Operador';
@@ -205,20 +163,20 @@ export function useEmployees() {
 
             return {
               id: String(row.id),
-              codigo: `COL-${String(idx + 1).padStart(3, '0')}`,
-              nome: row.nome_completo || 'Colaborador Diamante',
-              nif: row.nif || `2${Math.floor(10000000 + Math.random() * 89999999)}`,
-              telemovel: row.telemovel || '+351 912 345 678',
-              email: row.email || `${(row.nome_completo || 'colaborador').toLowerCase().replace(/\s+/g, '.')}@diamantedouro.pt`,
-              lojaId: row.loja_id || 'loj-001',
-              lojaNome: row.lojas?.nome || "Diamante D'ouro - Baixa",
+              codigo: row.codigo || '',
+              nome: row.nome_completo || '',
+              nif: row.nif || '',
+              telemovel: row.telemovel || '',
+              email: row.email || '',
+              lojaId: row.loja_id || '',
+              lojaNome: row.lojas?.nome || '',
               cargo,
-              salarioBase: Number(row.salario_base) || (cargo === 'Gerente' ? 1800 : cargo === 'Operador' ? 1250 : 900),
-              dataAdmissao: row.data_admissao || '15/01/2022',
+              salarioBase: Number(row.salario_base) || 0,
+              dataAdmissao: row.data_admissao || '',
               status,
               avatarColor: 'from-amber-600 to-yellow-600',
-              especialidade: row.especialidade || 'Avaliação de Ouro e Atendimento',
-              transacoesMes: typeof row.transacoes_mes === 'number' ? row.transacoes_mes : Math.floor(20 + Math.random() * 40),
+              especialidade: row.especialidade || '',
+              transacoesMes: Number(row.transacoes_mes) || 0,
             };
           });
 
@@ -227,17 +185,10 @@ export function useEmployees() {
         }
       }
 
-      // Se a Supabase estiver vazia, utiliza dados iniciais formatados
-      const { INITIAL_EMPLOYEES } = await import('../components/employees/EmployeeManagement');
-      setData(INITIAL_EMPLOYEES || []);
+      setData([]);
     } catch (err: any) {
       setError(err?.message || 'Falha ao sincronizar funcionários');
-      try {
-        const { INITIAL_EMPLOYEES } = await import('../components/employees/EmployeeManagement');
-        setData(INITIAL_EMPLOYEES || []);
-      } catch {
-        setData([]);
-      }
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -327,26 +278,27 @@ export function useClients() {
           .select('*')
           .order('nome', { ascending: true });
 
-        if (!dbError && dbClients && dbClients.length > 0) {
+        if (dbError) throw dbError;
+        {
           const mapped: Client[] = dbClients.map((row: any, idx: number) => ({
             id: String(row.id),
-            codigoCliente: row.codigo_cliente || `CLI-${String(idx + 1).padStart(3, '0')}`,
+            codigoCliente: row.codigo_cliente || '',
             nome: row.nome,
             nif: row.nif,
             telemovel: row.telemovel,
-            email: row.email || `${row.nome.toLowerCase().replace(/\s+/g, '.')}@email.pt`,
-            docIdentificacao: row.doc_identificacao || 'CC Nacional Não Declarado',
-            dataNascimento: row.data_nascimento || '01/01/1980',
-            morada: row.morada || 'Portugal',
-            cidade: row.cidade || 'Lisboa',
-            lojaOrigemId: row.loja_origem_id || 'loj-001',
-            lojaOrigemNome: row.loja_origem_nome || "Diamante D'ouro - Baixa (Lisboa)",
+            email: row.email || '',
+            docIdentificacao: row.doc_identificacao || '',
+            dataNascimento: row.data_nascimento || '',
+            morada: row.morada || '',
+            cidade: row.cidade || '',
+            lojaOrigemId: row.loja_origem_id || '',
+            lojaOrigemNome: row.loja_origem_nome || '',
             status: (row.status as ClientStatus) || 'normal',
             totalTransacoes: Number(row.total_transacoes) || 0,
             totalCompradoEUR: Number(row.total_comprado_eur) || 0.0,
-            ultimaVisita: row.ultima_visita || 'Recente',
-            dataRegisto: row.created_at ? new Date(row.created_at).toLocaleDateString('pt-PT') : '01/01/2024',
-            notasInternas: row.notas_internas || 'Ficha de cliente sincronizada.',
+            ultimaVisita: row.ultima_visita || '',
+            dataRegisto: row.created_at ? new Date(row.created_at).toLocaleDateString('pt-PT') : '',
+            notasInternas: row.notas_internas || '',
             historico: Array.isArray(row.historico) ? row.historico : [],
           }));
 
@@ -355,17 +307,10 @@ export function useClients() {
         }
       }
 
-      // Fallback para os clientes realistas mockados caso tabela não exista
-      const { INITIAL_CLIENTS } = await import('../components/clients/ClientManagement') as any;
-      setData(INITIAL_CLIENTS || []);
+      setData([]);
     } catch (err: any) {
       setError(err?.message || 'Falha ao sincronizar clientes');
-      try {
-        const { INITIAL_CLIENTS } = await import('../components/clients/ClientManagement') as any;
-        setData(INITIAL_CLIENTS || []);
-      } catch {
-        setData([]);
-      }
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -466,26 +411,27 @@ export function useFinanceTransactions() {
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (!dbError && dbTx && dbTx.length > 0) {
+        if (dbError) throw dbError;
+        {
           const mapped: FinancialTransaction[] = dbTx.map((row: any) => ({
             id: String(row.id),
-            referencia: row.referencia || `PAG-2026-${row.id}`,
-            lojaId: row.loja_id || 'loj-001',
-            lojaNome: row.loja_nome || "Diamante D'ouro - Baixa",
-            beneficiarioNome: row.beneficiario_nome || 'Cliente Beneficiário',
-            beneficiarioNif: row.beneficiario_nif || '299999999',
+            referencia: row.referencia || '',
+            lojaId: row.loja_id || '',
+            lojaNome: row.loja_nome || '',
+            beneficiarioNome: row.beneficiario_nome || '',
+            beneficiarioNif: row.beneficiario_nif || '',
             beneficiarioIban: row.beneficiario_iban || '',
             valor: Number(row.valor) || 0,
             estado: (row.estado as PaymentStatus) || 'pendente',
             data: row.data || new Date(row.created_at || Date.now()).toLocaleDateString('pt-PT'),
-            hora: row.hora || '10:00',
-            metodo: (row.metodo as PaymentMethod) || 'Transferência Imediata',
-            contaOrigem: row.conta_origem || 'Millennium BCP - Conta Principal Liquidação',
-            descricao: row.descricao || 'Compra de ouro de balcão',
+            hora: row.hora || '',
+            metodo: (row.metodo as PaymentMethod) || '',
+            contaOrigem: row.conta_origem || '',
+            descricao: row.descricao || '',
             pesoOuroGramas: Number(row.peso_ouro_gramas) || 0,
-            tipoMetal: row.tipo_metal || 'Ouro 19.2k (Toque 800)',
-            operadorNome: row.operador_nome || 'Operador de Balcão',
-            comprovativoRef: row.comprovativo_ref || `SEPA-COMP-${row.id}`,
+            tipoMetal: row.tipo_metal || '',
+            operadorNome: row.operador_nome || '',
+            comprovativoRef: row.comprovativo_ref || '',
           }));
 
           setData(mapped);
@@ -493,17 +439,10 @@ export function useFinanceTransactions() {
         }
       }
 
-      // Fallback para as transações realistas
-      const { INITIAL_TRANSACTIONS } = await import('../components/finance/FinanceManagement') as any;
-      setData(INITIAL_TRANSACTIONS || []);
+      setData([]);
     } catch (err: any) {
       setError(err?.message || 'Falha ao sincronizar transações financeiras');
-      try {
-        const { INITIAL_TRANSACTIONS } = await import('../components/finance/FinanceManagement') as any;
-        setData(INITIAL_TRANSACTIONS || []);
-      } catch {
-        setData([]);
-      }
+      setData([]);
     } finally {
       setLoading(false);
     }
@@ -608,36 +547,13 @@ export interface SystemConfigData {
   };
 }
 
-const DEFAULT_SETTINGS: SystemConfigData = {
-  general: {
-    nomeEmpresa: "Diamante D'ouro Lda",
-    nif: '509123456',
-    moradaSede: 'Avenida da Liberdade 180, 4º Andar',
-    codigoPostal: '1250-146',
-    cidade: 'Lisboa',
-    telefoneSede: '+351 213 456 789',
-    emailGeral: 'contacto@diamantedouro.pt',
-    registoContrastaria: 'Contrastaria de Lisboa - Licença INCM nº 4892',
-    moedaPadrao: 'EUR (€)',
-    fusoHorario: 'Europe/Lisbon (WET/WEST)',
-    logoUrl: '',
-  },
-  goldPrices: {
-    ouro24k: 84.5,
-    ouro19k: 65.2,
-    ouro18k: 61.8,
-    ouro14k: 48.0,
-    ouro9k: 30.5,
-    prata925: 0.95,
-    margemSegurancaPercent: 8.5,
-    autoUpdate: true,
-    intervaloMinutos: 15,
-    ultimaAtualizacao: '06/11/2026 às 10:45',
-  },
+const EMPTY_SETTINGS: SystemConfigData = {
+  general: { nomeEmpresa: '', nif: '', moradaSede: '', codigoPostal: '', cidade: '', telefoneSede: '', emailGeral: '', registoContrastaria: '', moedaPadrao: '', fusoHorario: '', logoUrl: '' },
+  goldPrices: { ouro24k: 0, ouro19k: 0, ouro18k: 0, ouro14k: 0, ouro9k: 0, prata925: 0, margemSegurancaPercent: 0, autoUpdate: false, intervaloMinutos: 0, ultimaAtualizacao: '' },
 };
 
 export function useSystemSettings() {
-  const [data, setData] = useState<SystemConfigData>(DEFAULT_SETTINGS);
+  const [data, setData] = useState<SystemConfigData>(EMPTY_SETTINGS);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -653,16 +569,17 @@ export function useSystemSettings() {
           .eq('chave', 'geral_sistema')
           .single();
 
-        if (!dbError && dbConfig && dbConfig.valor) {
+        if (dbError && dbError.code !== 'PGRST116') throw dbError;
+        if (dbConfig?.valor) {
           setData(dbConfig.valor as SystemConfigData);
           return;
         }
       }
 
-      setData(DEFAULT_SETTINGS);
+      setData(EMPTY_SETTINGS);
     } catch (err: any) {
       setError(err?.message || 'Falha ao sincronizar configurações');
-      setData(DEFAULT_SETTINGS);
+      setData(EMPTY_SETTINGS);
     } finally {
       setLoading(false);
     }
