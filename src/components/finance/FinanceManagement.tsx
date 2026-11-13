@@ -85,18 +85,18 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
     lojaId: '',
     beneficiarioNome: '',
     beneficiarioNif: '',
-    beneficiarioIban: 'PT50 ',
-    valor: 1500,
+    beneficiarioIban: '',
+    valor: 0,
     metodo: 'Transferência Imediata' as PaymentMethod,
-    contaOrigem: 'Millennium BCP - Conta Principal Liquidação',
-    descricao: 'Compra de Lote de Ouro Usado',
-    pesoOuroGramas: 25.0,
-    tipoMetal: 'Ouro 19.2k (Toque 800)',
-    operadorNome: 'Operador de Balcão',
+    contaOrigem: '',
+    descricao: '',
+    pesoOuroGramas: 0,
+    tipoMetal: '',
+    operadorNome: '',
   });
 
   // Saldo base da tesouraria
-  const [saldoDisponivelBase, setSaldoDisponivelBase] = useState<number>(184250.0);
+  const [saldoDisponivelBase, setSaldoDisponivelBase] = useState<number>(0);
 
   // =========================================================
   // 1. ESTATÍSTICAS CALCULADAS EM TEMPO REAL
@@ -236,17 +236,17 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
     await createPayment(createdTx);
     setIsCreateModalOpen(false);
     setNewPayment({
-      lojaId: storeOptions[0].id,
+      lojaId: storeOptions[0]?.id || '',
       beneficiarioNome: '',
       beneficiarioNif: '',
-      beneficiarioIban: 'PT50 ',
-      valor: 1500,
+      beneficiarioIban: '',
+      valor: 0,
       metodo: 'Transferência Imediata',
-      contaOrigem: 'Millennium BCP - Conta Principal Liquidação',
-      descricao: 'Compra de Lote de Ouro Usado',
-      pesoOuroGramas: 25.0,
-      tipoMetal: 'Ouro 19.2k (Toque 800)',
-      operadorNome: 'Operador de Balcão',
+      contaOrigem: '',
+      descricao: '',
+      pesoOuroGramas: 0,
+      tipoMetal: '',
+      operadorNome: '',
     });
   };
 
