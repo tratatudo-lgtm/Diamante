@@ -194,6 +194,9 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
     if (!formData.nome_completo.trim()) {
       errors.nome_completo = 'Nome completo é obrigatório.';
     }
+    if (!editingFuncionario && !formData.email.trim()) {
+      errors.email = 'Email obrigatório para enviar o convite de acesso.';
+    }
 
     const phoneCheck = validatePhone(formData.telemovel);
     if (!phoneCheck.isValid || !phoneCheck.normalized) {
@@ -216,8 +219,12 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
       };
 
       const payload = {
-        ...formData,
+        nome_completo: formData.nome_completo,
         telemovel: phoneCheck.normalized,
+        loja_id: formData.loja_id,
+        role: formData.role,
+        ...(editingFuncionario ? {} : { email: formData.email.trim() }),
+        ...(editingFuncionario ? { ativo: formData.ativo } : {}),
       };
 
       if (editingFuncionario) {
@@ -767,15 +774,19 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
               {/* Email Opcional */}
               <div>
                 <label className="block text-[11px] font-mono text-slate-400 mb-1">
-                  Email (Opcional)
+                  Email * (necessário para convite)
                 </label>
                 <input
                   type="email"
                   value={formData.email || ''}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="operadora@diamantedouro.pt"
-                  className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white focus:outline-hidden focus:border-[#D4AF37]"
+                  placeholder="funcionario@diamantedouro.pt"
+                  required={!editingFuncionario}
+                  disabled={!!editingFuncionario}
+                  className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white focus:outline-hidden focus:border-[#D4AF37] disabled:opacity-60"
                 />
+                {formErrors.email && <p className="text-[10px] text-rose-400 mt-1">{formErrors.email}</p>}
+                {editingFuncionario && <p className="text-[10px] text-slate-500 mt-1">A alteração do email exige um fluxo próprio e está temporariamente bloqueada.</p>}
               </div>
 
               {/* Estado Ativo Toggle */}
