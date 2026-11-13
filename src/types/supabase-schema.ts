@@ -6,23 +6,17 @@
 
 export interface DatabaseLoja {
   id: string;
-  codigo_loja: string;
   nome: string;
   morada: string;
-  nif_loja?: string | null;
+  nif_loja: string;
   telefone?: string | null;
-  email?: string | null;
-  gerente?: string | null;
-  horario?: string | null;
-  cidade?: string | null;
+  codigo_loja?: string | null;
+  created_at: string;
+  admin_id?: string | null;
+  ativo: boolean;
   latitude?: number | null;
   longitude?: number | null;
-  ativo: boolean;
-  meta_mes?: number | null;
-  created_at?: string;
-  updated_at?: string;
 }
-
 export interface DatabaseFuncionario {
   id: string;
   nome_completo: string;
