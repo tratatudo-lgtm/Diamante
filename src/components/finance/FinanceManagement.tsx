@@ -209,27 +209,27 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
 
     const storeObj = storeOptions.find((s) => s.id === newPayment.lojaId);
     const id = `tx-${Date.now()}`;
-    const refNum = Math.floor(8950 + Math.random() * 1000);
+    const refNum = Date.now();
     const referencia = `PAG-2026-${refNum}`;
 
     const createdTx: FinancialTransaction = {
       id,
       referencia,
       lojaId: newPayment.lojaId,
-      lojaNome: storeObj ? storeObj.nome : "Diamante D'ouro - Baixa (Lisboa)",
+      lojaNome: storeObj?.nome || '',
       beneficiarioNome: newPayment.beneficiarioNome.trim(),
-      beneficiarioNif: newPayment.beneficiarioNif.trim() || '299999999',
+      beneficiarioNif: newPayment.beneficiarioNif.trim(),
       beneficiarioIban: newPayment.beneficiarioIban.trim().toUpperCase(),
       valor: Number(newPayment.valor),
       estado: 'pendente',
-      data: '06/11/2026',
+      data: new Date().toLocaleDateString('pt-PT'),
       hora: new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' }),
       metodo: newPayment.metodo,
       contaOrigem: newPayment.contaOrigem,
       descricao: newPayment.descricao.trim(),
       pesoOuroGramas: Number(newPayment.pesoOuroGramas) || 0,
       tipoMetal: newPayment.tipoMetal,
-      operadorNome: newPayment.operadorNome || 'Operador Tesouraria',
+      operadorNome: newPayment.operadorNome,
       comprovativoRef: `SEPA-COMP-${refNum}-PEND`,
     };
 
