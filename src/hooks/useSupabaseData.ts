@@ -1,7 +1,7 @@
 // PATH: src/hooks/useSupabaseData.ts
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
-import type { Store } from '../components/stores/StoreManagement';
+import type { Store } from '../types/supabase-schema';
 import type { Employee, EmployeeRole, EmployeeStatus } from '../components/employees/EmployeeManagement';
 import type { Client, ClientStatus, ClientTransactionRecord } from '../components/clients/ClientManagement';
 import type { FinancialTransaction, PaymentStatus, PaymentMethod } from '../components/finance/FinanceManagement';
