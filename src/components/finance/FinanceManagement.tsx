@@ -58,6 +58,10 @@ export interface FinancialTransaction {
   comprovativoRef?: string;
 }
 
+interface FinanceManagementProps {
+  onNavigate?: (path: string) => void;
+}
+
 export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate }) => {
   const {
     data: transactions,
