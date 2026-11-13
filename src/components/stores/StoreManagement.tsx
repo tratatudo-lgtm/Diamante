@@ -4,7 +4,8 @@ import {
   Building2, Plus, Search, MapPin, Phone, FileText, Pencil, Power,
   RefreshCw, X, Loader2, CheckCircle2, AlertCircle, Hash,
 } from 'lucide-react';
-import { useStores, type Store } from '../../hooks/useSupabaseData';
+import { useStores } from '../../hooks/useSupabaseData';
+import type { Store } from '../../types/supabase-schema';
 
 type StoreForm = Pick<Store, 'codigo' | 'nome' | 'endereco' | 'nif' | 'telefone'>;
 
