@@ -270,11 +270,11 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
 
   // 3. Envia código via Evolution API
   const sendResult = await sendWhatsAppOtp(formatted, otpCode);
-  if (!sendResult.success) {
+  if (!sendResult.success || sendResult.simulated) {
     otpStore.delete(formatted);
     return {
       success: false,
-      message: 'Não foi possível enviar o código por WhatsApp. Solicite um novo código mais tarde.',
+      message: 'Não foi possível confirmar o envio real do código por WhatsApp. Solicite um novo código mais tarde.',
       statusCode: 502,
     };
   }
