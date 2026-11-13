@@ -50,6 +50,7 @@ export interface Employee {
 
 export const EmployeeManagement: React.FC = () => {
   const { data: employees, loading, createEmployee, updateEmployee, deleteEmployee } = useEmployees();
+  const [actionError, setActionError] = useState<string | null>(null);
   const { data: stores } = useStores();
   const storeOptions = stores.map((store) => ({ id: store.id, nome: store.nome }));
 
@@ -269,11 +270,16 @@ export const EmployeeManagement: React.FC = () => {
     const storeObj = storeOptions.find((s) => s.id === formData.lojaId);
     const lojaNome = storeObj ? storeObj.nome : formData.lojaNome;
 
+    try {
     await createEmployee({
       ...formData,
       lojaNome,
       transacoesMes: 0,
     });
+    } catch (err: any) {
+      setActionError(err?.message || 'Falha ao criar o funcionário.');
+      return;
+    }
 
     setIsCreateModalOpen(false);
   };
@@ -291,20 +297,28 @@ export const EmployeeManagement: React.FC = () => {
       lojaNome,
     };
 
-    await updateEmployee(selectedEmployee.id, updated);
+    setSelectedEmployee({ ...selectedEmployee, ...updated });
     setSelectedEmployee({ ...selectedEmployee, ...updated });
     setIsEditModalOpen(false);
   };
 
   // Eliminar Funcionário (Supabase)
   const handleDeleteEmployee = async (id: string) => {
-    await deleteEmployee(id);
+    setIsDeletingId(null);
     setIsDeletingId(null);
     setSelectedEmployee(null);
   };
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-white p-4 sm:p-6 lg:p-8 font-sans selection:bg-[#D4AF37]/30 selection:text-white">
+      {actionError && (
+        <div role="alert" className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+          <div className="flex items-center justify-between gap-3">
+            <span>{actionError}</span>
+            <button type="button" onClick={() => setActionError(null)} aria-label="Fechar aviso">×</button>
+          </div>
+        </div>
+      )}
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         {/* =========================================================
             1. HEADER
