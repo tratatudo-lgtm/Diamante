@@ -8,7 +8,7 @@ export const getSupabaseConfig = () => {
 
 export const isSupabaseConfigured = (): boolean => {
   const { url, key } = getSupabaseConfig();
-  if (!url || !key || key === 'your-anon-key') return false;
+  if (!url || !key || url.includes('your-project.supabase.co') || /your-anon-key|placeholder/i.test(key)) return false;
 
   try {
     const parsed = new URL(url);
