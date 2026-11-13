@@ -52,6 +52,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isOnline, setIsOnline] = useState(true);
   const [recentTxs, setRecentTxs] = useState<Transacao[]>([]);
+  const [totalTransactions, setTotalTransactions] = useState(0);
   const [dataError, setDataError] = useState<string | null>(null);
 
   const addToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
@@ -114,6 +115,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       const kpiToday: KpiLojaDiaria[] = Array.isArray(apiData.kpiToday) ? apiData.kpiToday : [];
       const kpiYesterday: KpiLojaDiaria[] = Array.isArray(apiData.kpiYesterday) ? apiData.kpiYesterday : [];
       const recentTransactions: Transacao[] = Array.isArray(apiData.recentTxs) ? apiData.recentTxs : [];
+      const transactionCount = Number(apiData.recentTxsCount) || 0;
 
       const nonDraftTodayTxs = todayTxs.filter((tx) => tx.estado !== 'rascunho');
       const volumeHoje = nonDraftTodayTxs.reduce((sum, tx) => sum + (Number(tx.valor_final) || 0), 0);
@@ -169,6 +171,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
       setLojas(mergedLojas);
       setRecentTxs(recentTransactions);
+      setTotalTransactions(transactionCount);
       setIsOnline(true);
       setDataError(null);
     } catch (err: unknown) {
@@ -350,7 +353,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 label: 'vs ontem',
                 isPositiveGood: true,
               }}
-              onClick={() => onNavigate('/finance')}
+              onClick={() => onNavigate('/admin/transacoes')}
               subtitle={
                 globalKpis.volumeOntem > 0
                   ? `Ontem: ${formatCurrency(globalKpis.volumeOntem)}`
@@ -378,12 +381,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             />
 
             <KPICard
-              title="Transações recentes"
-              value={recentTxs.length}
+              title="Total de transações"
+              value={totalTransactions}
               icon={ReceiptText}
               isLoading={isLoading}
               onClick={() => onNavigate('/admin/transacoes')}
-              subtitle="Últimos 20 registos · Abrir lista"
+              subtitle="Todos os registos · Abrir lista"
             />
             {/* 3. Peso Rede (Hoje) */}
             <KPICard
