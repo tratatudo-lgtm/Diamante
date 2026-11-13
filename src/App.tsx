@@ -11,6 +11,7 @@ import { LoginPage } from './components/auth/LoginPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminDashboard as AdminWarRoomDashboard } from './components/admin/AdminDashboard_old_operational';
 import { AdminTransactionsPage } from './components/admin/AdminTransactionsPage';
+import { AdminPageLayout } from './components/admin/AdminPageLayout';
 import { AdminLojasPage } from './components/admin/AdminLojasPage';
 import { AdminFuncionariosPage } from './components/admin/AdminFuncionariosPage';
 import { AdminConfigPage } from './components/admin/AdminConfigPage';
@@ -150,10 +151,10 @@ function AppRouter() {
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
   if (isAdmin) {
     if (currentPath === '/admin/transacoes') {
-      return <AdminTransactionsPage onNavigate={navigate} />;
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><AdminTransactionsPage onNavigate={navigate} /></AdminPageLayout>;
     }
     if (currentPath === '/admin/transacoes-pendentes') {
-      return <AdminTransactionsPage onNavigate={navigate} initialStatus="pendente_aprovacao" />;
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><AdminTransactionsPage onNavigate={navigate} initialStatus="pendente_aprovacao" /></AdminPageLayout>;
     }
     if (currentPath === '/dashboard-admin') {
       return <AdminWarRoomDashboard onNavigate={navigate} />;
@@ -168,19 +169,19 @@ function AppRouter() {
       return <AdminConfigPage onNavigate={navigate} />;
     }
     if (currentPath === '/stores' || currentPath === '/gestao-lojas') {
-      return <StoreManagement />;
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><StoreManagement /></AdminPageLayout>;
     }
     if (currentPath === '/employees' || currentPath === '/equipa' || currentPath === '/gestao-funcionarios') {
-      return <EmployeeManagement />;
+      return <AdminFuncionariosPage onNavigate={navigate} />;
     }
     if (currentPath === '/finance' || currentPath === '/financeiro' || currentPath === '/tesouraria') {
-      return <FinanceManagement onNavigate={navigate} />;
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><FinanceManagement onNavigate={navigate} /></AdminPageLayout>;
     }
     if (currentPath === '/clients' || currentPath === '/clientes' || currentPath === '/fornecedores') {
-      return <CRMWorkspace />;
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><CRMWorkspace /></AdminPageLayout>;
     }
     if (currentPath === '/settings' || currentPath === '/configuracoes' || currentPath === '/admin/config') {
-      return <SettingsPage onNavigate={navigate} />;
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><SettingsPage onNavigate={navigate} /></AdminPageLayout>;
     }
     if (currentPath === '/admin/logs' || currentPath === '/logs' || currentPath === '/auditoria') {
       return <LogAuditPage onNavigate={navigate} />;
