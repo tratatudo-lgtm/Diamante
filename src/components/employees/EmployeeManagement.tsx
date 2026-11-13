@@ -1054,7 +1054,7 @@ export const EmployeeManagement: React.FC = () => {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="nome.sobrenome@diamantedouro.pt"
+                    placeholder="nome.sobrenome@empresa.pt"
                     className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]"
                   />
                 </div>
