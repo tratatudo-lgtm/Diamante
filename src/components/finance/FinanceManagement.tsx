@@ -97,7 +97,6 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
   });
 
   // Saldo base da tesouraria
-  const [saldoDisponivelBase, setSaldoDisponivelBase] = useState<number>(0);
 
   // =========================================================
   // 1. ESTATÍSTICAS CALCULADAS EM TEMPO REAL
@@ -186,8 +185,6 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
   const handleConfirmPayment = async (txId: string) => {
     try {
       await confirmPayment(txId);
-      const tx = transactions.find((item) => item.id === txId);
-      if (tx && tx.estado === 'pendente') setSaldoDisponivelBase((prev) => Math.max(0, prev - tx.valor));
       if (selectedTx?.id === txId) setSelectedTx((prev) => prev ? { ...prev, estado: 'pago' } : null);
     } catch (err: any) {
       setActionError(err?.message || 'Falha ao confirmar o pagamento.');
@@ -349,11 +346,11 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                 Saldo Disponível em Conta
               </span>
               <p className="text-2xl sm:text-3xl font-extrabold text-white">
-                {formatEUR(saldoDisponivelBase)}
+                Não disponível
               </p>
               <p className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                Millennium BCP & CGD Ativas
+                Sem contas bancárias configuradas
               </p>
             </div>
             <div className="w-12 h-12 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-center text-[#D4AF37] shrink-0">
@@ -436,7 +433,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                 onChange={(e) => setStoreFilter(e.target.value)}
                 className="w-full px-3 py-2.5 bg-[#0b0f19] border border-slate-700/70 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
               >
-                <option value="todas">Todos os Balcões (24 Lojas)</option>
+                <option value="todas">Todas as Lojas ({storeOptions.length})</option>
                 {storeOptions.map((st) => (
                   <option key={st.id} value={st.id}>
                     {st.nome}
@@ -882,10 +879,10 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
               <div className="flex items-start justify-between border-b pb-3">
                 <div>
                   <h4 className="font-extrabold text-base tracking-wider uppercase">
-                    Diamante D'ouro Lda
+                    Diamante D'ouro
                   </h4>
                   <p className="text-[10px] text-slate-500 font-mono">
-                    NIF: 509 123 456 &bull; Registo Contrastaria Lisboa
+                    Dados fiscais e de Contrastaria não configurados.
                   </p>
                 </div>
                 <button
