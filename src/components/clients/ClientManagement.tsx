@@ -31,7 +31,7 @@ import {
 } from 'lucide-react';
 import { useClients, useStores } from '../../hooks/useSupabaseData';
 
-export type ClientStatus = 'vip' | 'normal' | 'bloqueado';
+export type ClientStatus = 'vip' | 'normal' | 'bloqueado' | '';
 
 export interface ClientTransactionRecord {
   id: string;
@@ -238,6 +238,8 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
             <span>Blacklist / Bloqueado</span>
           </span>
         );
+      default:
+        return <span className="text-[11px] text-slate-400">Não definido</span>;
     }
   };
 
