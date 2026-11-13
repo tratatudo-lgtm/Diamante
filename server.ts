@@ -442,7 +442,7 @@ io.use(async (socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('[Chat WS] Ligação estabelecida.');
+  console.log('[Realtime] Ligação autenticada estabelecida.');
 
   const refreshSocketEmployee = async (): Promise<boolean> => {
     const tokenExpiresAt = socket.data.tokenExpiresAt;
@@ -503,14 +503,36 @@ io.on('connection', (socket) => {
     }).catch(() => socket.disconnect(true));
   }, 30000);
 
-  socket.on('join_room', (room: unknown) => {
+  socket.on('join_room', async (room: unknown) => {
     const employee = socket.data.employee as { id: string; role: string; loja_id: string | null };
     const allowedRooms = new Set([
       employee.id,
       ...(employee.loja_id ? [`store:${employee.loja_id}`] : []),
       ...(employee.role === 'admin' ? ['admin'] : []),
     ]);
-    if (typeof room === 'string' && allowedRooms.has(room)) socket.join(room);
+
+    if (typeof room !== 'string' || room.length > 128 || !allowedRooms.has(room)) {
+      socket.emit('room_denied', {
+        room: typeof room === 'string' && room.length <= 128 ? room : null,
+        reason: 'Sala não autorizada para esta sessão.',
+      });
+      console.warn('[Realtime] Pedido de entrada numa sala recusado.');
+      return;
+    }
+
+    try {
+      await socket.join(room);
+      if (socket.rooms.has(room)) {
+        socket.emit('room_joined', { room });
+        console.log('[Realtime] Entrada numa sala autorizada.');
+      } else {
+        socket.emit('room_denied', { room, reason: 'Não foi possível confirmar a entrada na sala.' });
+        console.warn('[Realtime] Entrada numa sala não confirmada.');
+      }
+    } catch {
+      socket.emit('room_denied', { room, reason: 'Falha ao entrar na sala.' });
+      console.error('[Realtime] Falha ao adicionar ligação a uma sala.');
+    }
   });
 
   socket.on('send_message', (data: any) => {
@@ -527,9 +549,9 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', (reason) => {
     clearInterval(permissionRefresh);
-    console.log('[Chat WS] Ligação terminada.');
+    console.log(`[Realtime] Ligação terminada. Motivo: ${reason}.`);
   });
 });
 
