@@ -392,7 +392,7 @@ export function useFinanceTransactions() {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi rejeitado.');
     const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado' }).eq('id', txId).select('id');
     if (error) throw error;
-    if (!data?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
+    if (!updatedRows?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
     setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'rejeitado' } : tx));
   };
 
