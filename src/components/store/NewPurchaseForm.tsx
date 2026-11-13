@@ -24,7 +24,6 @@ interface NewPurchaseFormProps {
 
 export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onShowToast }) => {
   const { userSession, funcionario } = useAuth();
-  const funcionarioId = userSession?.id || funcionario?.id || null;
   const lojaId = userSession?.loja_id || funcionario?.loja_id || null;
 
   // Form states
