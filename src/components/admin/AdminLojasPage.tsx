@@ -216,7 +216,9 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
     if (!formData.codigo_loja.trim()) errors.codigo_loja = 'Código da loja é obrigatório.';
     if (!formData.morada.trim()) errors.morada = 'Morada completa é obrigatória.';
 
-    if (formData.nif_loja.trim()) {
+    if (!formData.nif_loja.trim()) {
+      errors.nif_loja = 'O NIF é obrigatório para registar uma loja.';
+    } else {
       if (!validateNIF(formData.nif_loja)) {
         errors.nif_loja = 'NIF inválido (deve conter 9 dígitos com dígito de controlo correto).';
       }
@@ -669,7 +671,7 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
                 {/* NIF da Loja */}
                 <div>
                   <label className="block text-[11px] font-mono text-slate-400 mb-1">
-                    NIF do Estabelecimento (9 dígitos)
+                    NIF do Estabelecimento (9 dígitos) *
                   </label>
                   <input
                     type="text"
@@ -677,6 +679,7 @@ export const AdminLojasPage: React.FC<AdminLojasPageProps> = ({ onNavigate }) =>
                     onChange={(e) => setFormData({ ...formData, nif_loja: e.target.value })}
                     placeholder="NIF (9 dígitos)"
                     maxLength={9}
+                    required
                     className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-white font-mono focus:outline-hidden focus:border-[#D4AF37]"
                   />
                   {formErrors.nif_loja && (
