@@ -80,349 +80,10 @@ interface LogAuditPageProps {
   onNavigate?: (path: string) => void;
 }
 
-// 24 Lojas Oficiais da Rede Diamante D'ouro
-const AUDIT_STORES = [
-  "Diamante D'ouro - Baixa (Lisboa)",
-  "Diamante D'ouro - Chiado (Lisboa)",
-  "Diamante D'ouro - Campo de Ourique (Lisboa)",
-  "Diamante D'ouro - Alvalade (Lisboa)",
-  "Diamante D'ouro - Parque das Nações (Lisboa)",
-  "Diamante D'ouro - Cascais",
-  "Diamante D'ouro - Sintra",
-  "Diamante D'ouro - Amadora",
-  "Diamante D'ouro - Almada",
-  "Diamante D'ouro - Setúbal",
-  "Diamante D'ouro - Porto Santa Catarina",
-  "Diamante D'ouro - Porto Boavista",
-  "Diamante D'ouro - Vila Nova de Gaia",
-  "Diamante D'ouro - Matosinhos",
-  "Diamante D'ouro - Braga Centro",
-  "Diamante D'ouro - Guimarães",
-  "Diamante D'ouro - Coimbra Baixa",
-  "Diamante D'ouro - Aveiro",
-  "Diamante D'ouro - Leiria",
-  "Diamante D'ouro - Évora",
-  "Diamante D'ouro - Faro Baixa",
-  "Diamante D'ouro - Portimão",
-  "Diamante D'ouro - Funchal Sé (Madeira)",
-  "Diamante D'ouro - Ponta Delgada (Açores)",
-  'Sede Central Administrativa',
-];
-
-// Dados Iniciais Realistas de Auditoria (35+ registos minuciosos)
-const INITIAL_AUDIT_LOGS: AuditLogItem[] = [
-  {
-    id: 'AUD-2026-9942',
-    timestamp: '06/11/2026 10:48:22',
-    severity: 'critical',
-    category: 'security',
-    action: 'Deteção de Contrafação / Inclusão em Blacklist',
-    description: 'Cliente NIF 276543210 tentou vender pulseira pesando 65g com toque falso (teste de ácido nítrico falhou). Registo bloqueado preventivamente.',
-    actorNome: 'Joana Figueiredo',
-    actorRole: 'Operador de Balcão',
-    actorPhone: '+351 931 209 876',
-    lojaNome: "Diamante D'ouro - Almada",
-    ipAddress: '194.65.231.14',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) DiamanteOS-Client/2.4.1',
-    hashIntegridade: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    metadados: { nif_cliente: '276543210', peso_apresentado: '65g', tipo_ensaio: 'Ácido Nítrico + Densímetro Eletrónico' },
-  },
-  {
-    id: 'AUD-2026-9941',
-    timestamp: '06/11/2026 10:45:10',
-    severity: 'info',
-    category: 'pricing',
-    action: 'Atualização Automática LBMA Fix',
-    description: 'Cotação de referência do ouro puro (24k) atualizada para €84,50/g via live feed internacional.',
-    actorNome: 'Sistema Automático / Cron',
-    actorRole: 'Serviço de Background',
-    actorPhone: 'N/A',
-    lojaNome: 'Sede Central Administrativa',
-    ipAddress: '127.0.0.1 (Internal Service)',
-    userAgent: 'DiamanteOS-SyncDaemon/2.0',
-    hashIntegridade: '7d5be5a2a24f0c74b94676571faeb6cfbcf2ec9713b194f1c907106093845bf3',
-    diff: [{ campo: 'Preço Ouro 24k', anterior: '€84,10', novo: '€84,50' }],
-  },
-  {
-    id: 'AUD-2026-9940',
-    timestamp: '06/11/2026 10:14:55',
-    severity: 'success',
-    category: 'transaction',
-    action: 'Liquidação SEPA Imediata Concluída',
-    description: 'Pagamento de €3.250,00 autorizado para cliente Maria Manuela Ferreira referente a Lote Ouro 19.2k (58g).',
-    actorNome: 'Ana Sofia Martins',
-    actorRole: 'Gerente de Balcão',
-    actorPhone: '+351 912 345 678',
-    lojaNome: "Diamante D'ouro - Baixa (Lisboa)",
-    ipAddress: '85.241.112.90',
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-    hashIntegridade: 'ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb',
-    metadados: { valor_eur: 3250.0, ref_pagamento: 'PAG-2026-8941', banco_origem: 'Millennium BCP' },
-  },
-  {
-    id: 'AUD-2026-9939',
-    timestamp: '06/11/2026 09:48:33',
-    severity: 'warning',
-    category: 'finance',
-    action: 'Pedido de Dupla Autorização Disparado',
-    description: 'Transação superior a €5.000,00 (€8.400,00 em Barra 100g 24k) gerou solicitação de aprovação OTP para diretores financeiros.',
-    actorNome: 'Mariana Castelo Branco',
-    actorRole: 'Operador de Balcão',
-    actorPhone: '+351 934 567 890',
-    lojaNome: "Diamante D'ouro - Chiado (Lisboa)",
-    ipAddress: '85.241.112.94',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/128.0.0.0',
-    hashIntegridade: '4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a',
-    metadados: { valor_eur: 8400.0, aprovadores_notificados: ['+351 937 230 116', '+351 912 345 678'] },
-  },
-  {
-    id: 'AUD-2026-9938',
-    timestamp: '06/11/2026 09:12:04',
-    severity: 'success',
-    category: 'auth',
-    action: 'Autenticação 2FA Bem-Sucedida',
-    description: 'Código de 6 dígitos verificado com sucesso via WhatsApp Evolution API na primeira tentativa.',
-    actorNome: 'Beatriz Fontes',
-    actorRole: 'Gerente de Balcão',
-    actorPhone: '+351 917 890 123',
-    lojaNome: "Diamante D'ouro - Cascais",
-    ipAddress: '193.136.21.5',
-    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X)',
-    hashIntegridade: 'ef2d127de37b942baad06145e54b0c619a1f22327b2ebbcfbec78f5564afe39d',
-  },
-  {
-    id: 'AUD-2026-9937',
-    timestamp: '06/11/2026 08:30:19',
-    severity: 'info',
-    category: 'store',
-    action: 'Abertura de Balcão & Controlo de Caixa',
-    description: 'Registo de abertura do dia efetuado. Fundo de maneio em cofre verificado: €10.000,00 em numerário.',
-    actorNome: 'Catarina Morais',
-    actorRole: 'Operador de Balcão',
-    actorPhone: '+351 925 678 901',
-    lojaNome: "Diamante D'ouro - Parque das Nações (Lisboa)",
-    ipAddress: '82.154.204.18',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    hashIntegridade: 'b7a526528ef050b168673a8daefea92a95574c86bc9dc004a44b8be562b78b87',
-  },
-  {
-    id: 'AUD-2026-9936',
-    timestamp: '05/11/2026 18:42:01',
-    severity: 'security',
-    category: 'security',
-    action: 'Bloqueio de IP por Tentativas Excedidas',
-    description: 'Endereço IP 185.220.101.5 bloqueado temporariamente (10 tentativas de solicitação OTP em 2 minutos sem correspondência de funcionário).',
-    actorNome: 'Serviço de Segurança Perimetral',
-    actorRole: 'WAF / Rate-Limiter',
-    actorPhone: 'N/A',
-    lojaNome: 'Sede Central Administrativa',
-    ipAddress: '185.220.101.5 (Tor Exit Node)',
-    userAgent: 'curl/8.1.2',
-    hashIntegridade: '356a192b7913b04c54574d18c28d46e6395428ab',
-  },
-  {
-    id: 'AUD-2026-9935',
-    timestamp: '05/11/2026 17:22:15',
-    severity: 'critical',
-    category: 'transaction',
-    action: 'Rejeição de Pagamento por Divergência de Titularidade',
-    description: 'Venda de ouro (48g) travada pela auditoria central. Titular do IBAN bancário fornecido não correspondia ao NIF do vendedor cadastrado.',
-    actorNome: 'Patrícia Rebelo',
-    actorRole: 'Operador de Balcão',
-    actorPhone: '+351 967 890 123',
-    lojaNome: "Diamante D'ouro - Alvalade (Lisboa)",
-    ipAddress: '85.241.112.88',
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-    hashIntegridade: 'da4b9237bacccdf19c0760cab7aec4a8359010b0',
-    metadados: { nif_cliente: '256789012', motivo: 'Conformidade Lei 83/2017 (Prevenção de Branqueamento)' },
-  },
-  {
-    id: 'AUD-2026-9934',
-    timestamp: '05/11/2026 16:10:48',
-    severity: 'info',
-    category: 'pricing',
-    action: 'Ajuste Manual de Margem de Compra',
-    description: 'Margem de segurança para Ouro 19.2k ajustada de 8,0% para 8,5% pelo Administrador Master.',
-    actorNome: 'Administrador Master',
-    actorRole: 'Master',
-    actorPhone: '+351 937 230 116',
-    lojaNome: 'Sede Central Administrativa',
-    ipAddress: '81.84.19.120',
-    userAgent: 'Mozilla/5.0 (Macintosh; Apple Silicon M3)',
-    hashIntegridade: '77de68daecd823babbb58edb1c8e14d7106e83bb',
-    diff: [{ campo: 'Margem Spread 19.2k', anterior: '8.0%', novo: '8.5%' }],
-  },
-  {
-    id: 'AUD-2026-9933',
-    timestamp: '05/11/2026 14:05:30',
-    severity: 'success',
-    category: 'transaction',
-    action: 'Registo de Compra de Espólio & Herança',
-    description: 'Processo de herança familiar concluído no valor de €6.700,00 (Faqueiro Prata 833 + Joalharia Ouro 19.2k - 95g). Documento de partilha anexado.',
-    actorNome: 'Filipa Nogueira',
-    actorRole: 'Operador de Balcão',
-    actorPhone: '+351 936 789 012',
-    lojaNome: "Diamante D'ouro - Porto Boavista",
-    ipAddress: '89.155.10.42',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    hashIntegridade: '1b6453892473a467d07842d45ee068fb',
-  },
-  {
-    id: 'AUD-2026-9932',
-    timestamp: '05/11/2026 11:30:14',
-    severity: 'info',
-    category: 'employee',
-    action: 'Atribuição de Balcão a Funcionária',
-    description: 'Operadora Susana Valente transferida provisoriamente da loja Matosinhos para apoio ao balcão Porto Boavista.',
-    actorNome: 'Administrador Master',
-    actorRole: 'Master',
-    actorPhone: '+351 937 230 116',
-    lojaNome: 'Sede Central Administrativa',
-    ipAddress: '81.84.19.120',
-    userAgent: 'Mozilla/5.0 (Macintosh; Apple Silicon M3)',
-    hashIntegridade: '2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c',
-  },
-  {
-    id: 'AUD-2026-9931',
-    timestamp: '05/11/2026 09:05:00',
-    severity: 'success',
-    category: 'store',
-    action: 'Fecho e Reconciliação Diária Confirmada',
-    description: 'Relatório diário de fecho da loja Faro Baixa verificado sem quebras de peso físico (482.5g em cofre).',
-    actorNome: 'Cláudia Lourenço',
-    actorRole: 'Gerente de Balcão',
-    actorPhone: '+351 921 345 678',
-    lojaNome: "Diamante D'ouro - Faro Baixa",
-    ipAddress: '85.240.180.22',
-    userAgent: 'Mozilla/5.0 (iPad; CPU OS 17_4)',
-    hashIntegridade: '8f40be3b9e7a2666242468300fb079b9',
-  },
-  {
-    id: 'AUD-2026-9930',
-    timestamp: '04/11/2026 17:15:33',
-    severity: 'warning',
-    category: 'finance',
-    action: 'Alerta de Saldo Baixo em Conta de Liquidação',
-    description: 'Conta Millennium BCP Principal atingiu patamar de segurança inferior a €50.000,00. Ordem de reforço automático disparada.',
-    actorNome: 'Módulo Tesouraria Automático',
-    actorRole: 'Serviço de Background',
-    actorPhone: 'N/A',
-    lojaNome: 'Sede Central Administrativa',
-    ipAddress: '127.0.0.1',
-    userAgent: 'DiamanteOS-TreasuryService/2.0',
-    hashIntegridade: '5f93f983524def3dce464469d2cf9f11',
-  },
-  {
-    id: 'AUD-2026-9929',
-    timestamp: '04/11/2026 14:20:05',
-    severity: 'success',
-    category: 'transaction',
-    action: 'Compra de Filigrana Tradicional Certificada',
-    description: 'Aquisição de Custódia e Brincos à Rainha em Ouro 19.2k (60.5g) com contraste histórico de Guimarães no valor de €3.400,00.',
-    actorNome: 'Andreia Vasconcelos',
-    actorRole: 'Operador de Balcão',
-    actorPhone: '+351 965 432 109',
-    lojaNome: "Diamante D'ouro - Guimarães",
-    ipAddress: '89.155.19.88',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    hashIntegridade: 'c8f7422320b92c481977717d23d8c11e',
-  },
-  {
-    id: 'AUD-2026-9928',
-    timestamp: '04/11/2026 11:45:50',
-    severity: 'info',
-    category: 'finance',
-    action: 'Emissão de Cheque Bancário Visado',
-    description: 'Cheque visado nº 841299 emitido para aquisição de Moedas D. João V em Ouro (32.8g) no valor de €2.600,00.',
-    actorNome: 'Maria João Barroso',
-    actorRole: 'Gerente de Balcão',
-    actorPhone: '+351 914 321 098',
-    lojaNome: "Diamante D'ouro - Évora",
-    ipAddress: '85.242.10.99',
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-    hashIntegridade: '45c48cce2e2d7fbdea1afc51c7c6ad26',
-  },
-  {
-    id: 'AUD-2026-9927',
-    timestamp: '04/11/2026 09:30:12',
-    severity: 'security',
-    category: 'auth',
-    action: 'Código OTP Expirado / Reemissão Solicitada',
-    description: 'Código de 6 dígitos enviado para +351 918 901 234 expirou após 5 minutos. Novo código gerado pela Evolution API.',
-    actorNome: 'Helena Pires Vaz',
-    actorRole: 'Operador de Balcão',
-    actorPhone: '+351 918 901 234',
-    lojaNome: "Diamante D'ouro - Campo de Ourique (Lisboa)",
-    ipAddress: '85.241.112.92',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    hashIntegridade: 'd3d9446802a44259755d38e6d163e820',
-  },
-  {
-    id: 'AUD-2026-9926',
-    timestamp: '03/11/2026 17:50:41',
-    severity: 'success',
-    category: 'store',
-    action: 'Geocodificação e Validação de Morada de Loja',
-    description: 'Coordenadas GPS (Lat: 37.1384, Lng: -8.5375) revalidadas via API Nominatim OpenStreetMap para Portimão.',
-    actorNome: 'Administrador Master',
-    actorRole: 'Master',
-    actorPhone: '+351 937 230 116',
-    lojaNome: "Diamante D'ouro - Portimão",
-    ipAddress: '81.84.19.120',
-    userAgent: 'Mozilla/5.0 (Macintosh; Apple Silicon M3)',
-    hashIntegridade: '6512bd43d9caa6e02c990b0a82652dca',
-  },
-  {
-    id: 'AUD-2026-9925',
-    timestamp: '03/11/2026 15:30:22',
-    severity: 'success',
-    category: 'transaction',
-    action: 'Compra de Moeda de Investimento Bullion',
-    description: 'Krugerrand 1oz Ouro 22k (31.1g) adquirido por €1.750,00 de cliente cidadão alemão com passaporte validado.',
-    actorNome: 'Daniela Raposo',
-    actorRole: 'Operador de Balcão',
-    actorPhone: '+351 928 765 432',
-    lojaNome: "Diamante D'ouro - Portimão",
-    ipAddress: '85.240.181.14',
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-    hashIntegridade: 'c20ad4d76fe97759aa27a0c99bff6710',
-  },
-  {
-    id: 'AUD-2026-9924',
-    timestamp: '03/11/2026 11:10:09',
-    severity: 'info',
-    category: 'employee',
-    action: 'Novo Contrato de Funcionária Registado',
-    description: 'Registo de funcionária Sofia Carvalhal no sistema para loja Funchal Sé com perfil Operador de Balcão.',
-    actorNome: 'Administrador Master',
-    actorRole: 'Master',
-    actorPhone: '+351 937 230 116',
-    lojaNome: "Diamante D'ouro - Funchal Sé (Madeira)",
-    ipAddress: '81.84.19.120',
-    userAgent: 'Mozilla/5.0 (Macintosh; Apple Silicon M3)',
-    hashIntegridade: 'c51ce410c124a10e0db5e4b97fc2af39',
-  },
-  {
-    id: 'AUD-2026-9923',
-    timestamp: '03/11/2026 09:20:18',
-    severity: 'success',
-    category: 'auth',
-    action: 'Sessão Master Iniciada',
-    description: 'Login bem-sucedido com telemóvel +351 937 230 116 e confirmação de privilégios is_admin() no Supabase.',
-    actorNome: 'Administrador Master',
-    actorRole: 'Master',
-    actorPhone: '+351 937 230 116',
-    lojaNome: 'Sede Central Administrativa',
-    ipAddress: '81.84.19.120',
-    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
-    hashIntegridade: 'fbade9e36a3f36d3d676c1b808451dd7',
-  },
-];
-
 export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
-  const [logs, setLogs] = useState<AuditLogItem[]>(INITIAL_AUDIT_LOGS);
+  const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isLiveStreaming, setIsLiveStreaming] = useState(true);
+  const [isLiveStreaming] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>('Agora');
 
   // Filtros
@@ -436,52 +97,47 @@ export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
   const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
 
-  // Carregamento de Logs Reais da Base de Dados Supabase (se disponíveis)
+  // Os registos apresentados vêm exclusivamente da tabela de auditoria.
   const fetchLogsFromDatabase = useCallback(async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-
-      // Tentar buscar transações reais ou tabela de logs
-      if (isSupabaseConfigured()) {
-        try {
-          const { data: dbLogs, error: logErr } = await supabase
-            .from('logs_auditoria')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(100);
-
-          if (!logErr && dbLogs && dbLogs.length > 0) {
-            const formatted: AuditLogItem[] = dbLogs.map((item: any) => ({
-              id: item.id || `AUD-${item.created_at?.slice(0, 10)}`,
-              timestamp: new Date(item.created_at || Date.now()).toLocaleString('pt-PT'),
-              severity: (item.severity as LogSeverity) || 'info',
-              category: (item.category as LogCategory) || 'transaction',
-              action: item.action || 'Atividade de Sistema',
-              description: item.description || item.detalhes || '',
-              actorNome: item.actor_nome || item.user_name || 'Utilizador',
-              actorRole: item.actor_role || 'Operador',
-              actorPhone: item.actor_phone || '',
-              lojaNome: item.loja_nome || 'Balcão Diamante',
-              ipAddress: item.ip_address || '194.65.231.10',
-              userAgent: item.user_agent || 'DiamanteOS Web/2.4',
-              hashIntegridade: item.hash || 'sha256-verified-ok',
-              metadados: item.metadata || {},
-            }));
-
-            // Mesclar mantendo a integridade
-            setLogs((prev) => {
-              const ids = new Set(formatted.map((l) => l.id));
-              const remainder = prev.filter((p) => !ids.has(p.id));
-              return [...formatted, ...remainder];
-            });
-          }
-        } catch {
-          // Tabela específica de logs pode não estar criada ainda no Supabase
-        }
+      if (!isSupabaseConfigured()) {
+        setLogs([]);
+        setLastSyncTime('');
+        return;
       }
 
+      const { data: dbLogs, error } = await supabase
+        .from('logs_auditoria')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+
+      const formatted: AuditLogItem[] = (dbLogs || []).map((item: any) => ({
+        id: String(item.id || ''),
+        timestamp: item.created_at || '',
+        severity: (['critical', 'security', 'warning', 'info', 'success'].includes(item.severity) ? item.severity : 'info') as LogSeverity,
+        category: (['auth', 'transaction', 'store', 'employee', 'pricing', 'finance', 'security'].includes(item.category) ? item.category : 'transaction') as LogCategory,
+        action: item.action || '',
+        description: item.description || item.detalhes || '',
+        actorNome: item.actor_nome || item.user_name || '',
+        actorRole: item.actor_role || '',
+        actorPhone: item.actor_phone || '',
+        lojaNome: item.loja_nome || '',
+        lojaId: item.loja_id || undefined,
+        ipAddress: item.ip_address || '',
+        userAgent: item.user_agent || '',
+        hashIntegridade: item.hash || '',
+        metadados: item.metadata || {},
+      }));
+
+      setLogs(formatted);
       setLastSyncTime(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
     } catch (err) {
+      setLogs([]);
+      setLastSyncTime('');
       console.warn('[LogAudit] Falha ao consultar registos de auditoria.');
     } finally {
       setIsLoading(false);
@@ -489,40 +145,8 @@ export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
   }, []);
 
   useEffect(() => {
-    fetchLogsFromDatabase();
+    void fetchLogsFromDatabase();
   }, [fetchLogsFromDatabase]);
-
-  // Simulação de Streaming em Tempo Real (novos eventos periódicos para demonstração de segurança)
-  useEffect(() => {
-    if (!isLiveStreaming) return;
-
-    const interval = setInterval(() => {
-      // 20% de probabilidade de novo evento a cada 20 segundos
-      if (Math.random() < 0.25) {
-        const randomStore = AUDIT_STORES[Math.floor(Math.random() * (AUDIT_STORES.length - 1))];
-        const newEvent: AuditLogItem = {
-          id: `AUD-2026-${Math.floor(10000 + Math.random() * 90000)}`,
-          timestamp: new Date().toLocaleString('pt-PT'),
-          severity: Math.random() < 0.2 ? 'warning' : 'success',
-          category: 'transaction',
-          action: 'Verificação Periódica de Balcão',
-          description: `Batimento de integridade de sessão e estado de cofre em ${randomStore.replace("Diamante D'ouro - ", '')}.`,
-          actorNome: 'Monitor de Telemetria',
-          actorRole: 'Daemon',
-          actorPhone: 'N/A',
-          lojaNome: randomStore,
-          ipAddress: '194.65.231.42',
-          userAgent: 'DiamanteOS-TelemetryGuard/2.1',
-          hashIntegridade: Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join(''),
-        };
-
-        setLogs((prev) => [newEvent, ...prev.slice(0, 150)]);
-        setLastSyncTime('Agora');
-      }
-    }, 20000);
-
-    return () => clearInterval(interval);
-  }, [isLiveStreaming]);
 
   // =========================================================
   // 1. ESTATÍSTICAS DO PAINEL FORENSE
@@ -572,14 +196,10 @@ export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
       }
 
       // Período
-      if (periodFilter === 'today' && !log.timestamp.includes('06/11/2026')) {
+      if (periodFilter === 'today' && new Date(log.timestamp).toDateString() !== new Date().toDateString()) {
         return false;
       }
-      if (
-        periodFilter === '24h' &&
-        !log.timestamp.includes('06/11/2026') &&
-        !log.timestamp.includes('05/11/2026')
-      ) {
+      if (periodFilter === '24h' && Date.now() - new Date(log.timestamp).getTime() > 24 * 60 * 60 * 1000) {
         return false;
       }
 
@@ -747,28 +367,9 @@ export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
 
             {/* Ações Rápidas do Cabeçalho */}
             <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
-              {/* Botão de Pausar / Retomar Stream */}
-              <button
-                onClick={() => setIsLiveStreaming(!isLiveStreaming)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
-                  isLiveStreaming
-                    ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/20'
-                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-                }`}
-                title={isLiveStreaming ? 'Pausar monitorização ao vivo' : 'Retomar monitorização'}
-              >
-                {isLiveStreaming ? (
-                  <>
-                    <Pause className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Ao Vivo</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="w-3.5 h-3.5 text-slate-400" />
-                    <span>Pausado</span>
-                  </>
-                )}
-              </button>
+              <span className="px-3 py-2 rounded-xl text-xs font-semibold border border-slate-700 text-slate-400">
+                Registos da base de dados
+              </span>
 
               {/* Botão Sincronizar */}
               <button
@@ -909,7 +510,7 @@ export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
                   className="w-full px-3 py-2.5 bg-[#0b0f19] border border-slate-700/70 rounded-xl text-xs sm:text-sm text-slate-200 focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
                 >
                   <option value="all">Todos os Balcões & Sede Central</option>
-                  {AUDIT_STORES.map((st) => (
+                  {[...new Set(logs.map((log) => log.lojaNome).filter(Boolean))].map((st) => (
                     <option key={st} value={st}>
                       {st}
                     </option>
