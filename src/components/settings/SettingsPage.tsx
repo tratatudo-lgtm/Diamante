@@ -69,7 +69,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const { data: dbSettings, loading: isLoadingSettings, saveSettings } = useSystemSettings();
+  const { data: dbSettings, loading: isLoadingSettings, error: settingsError, saveSettings } = useSystemSettings();
 
   // =========================================================
   // 1. ESTADO: GERAL
@@ -180,6 +180,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-white p-4 sm:p-6 lg:p-8 font-sans selection:bg-[#D4AF37]/30 selection:text-white">
+      {settingsError && <div role="alert" className="mb-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">{settingsError}</div>}
       {/* Toast Notifier */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3.5 rounded-xl bg-[#151b2b] border border-[#D4AF37] text-white shadow-2xl animate-in slide-in-from-bottom-5">
