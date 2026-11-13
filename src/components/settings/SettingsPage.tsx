@@ -127,6 +127,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   };
 
   const handleSaveSettings = async () => {
+    if (activeTab !== 'geral' && activeTab !== 'ouro') {
+      triggerToast('Esta secção ainda não está ligada à persistência. Nenhuma alteração foi guardada.');
+      return;
+    }
     setIsSaving(true);
     try {
       await saveSettings({
