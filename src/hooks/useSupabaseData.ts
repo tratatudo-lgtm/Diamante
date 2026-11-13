@@ -74,7 +74,9 @@ export function useStores() {
     const codigo = `LOJ-${String(data.length + 1).padStart(3, '0')}`;
     const { data: inserted, error } = await supabase.from('lojas').insert({
       codigo_loja: codigo, nome: newStoreData.nome, morada: newStoreData.endereco,
-      telefone: newStoreData.telefone, nif_loja: newStoreData.nif, ativo: newStoreData.status === 'ativa',
+      cidade: newStoreData.cidade, gerente: newStoreData.gerente, telefone: newStoreData.telefone,
+      email: newStoreData.email, horario: newStoreData.horario, nif_loja: newStoreData.nif,
+      meta_mes: newStoreData.metaMes, ativo: newStoreData.status === 'ativa',
     }).select('id').single();
     if (error) throw error;
     const created: Store = {
@@ -88,8 +90,10 @@ export function useStores() {
   const updateStore = async (id: string, updates: Partial<Store>) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. A loja não foi atualizada.');
     const { error } = await supabase.from('lojas').update({
-      nome: updates.nome, morada: updates.endereco, telefone: updates.telefone,
-      nif_loja: updates.nif, ativo: updates.status ? updates.status === 'ativa' : undefined,
+      nome: updates.nome, morada: updates.endereco, cidade: updates.cidade, gerente: updates.gerente,
+      telefone: updates.telefone, email: updates.email, horario: updates.horario,
+      nif_loja: updates.nif, meta_mes: updates.metaMes,
+      ativo: updates.status !== undefined ? updates.status === 'ativa' : undefined,
     }).eq('id', id);
     if (error) throw error;
     setData((prev) => prev.map((store) => store.id === id ? { ...store, ...updates } : store));
@@ -175,7 +179,7 @@ export function useEmployees() {
       nome_completo: newEmp.nome, nif: newEmp.nif, telemovel: newEmp.telemovel,
       email: newEmp.email, loja_id: newEmp.lojaId, role: newEmp.cargo.toLowerCase(),
       salario_base: newEmp.salarioBase, data_admissao: newEmp.dataAdmissao,
-      especialidade: newEmp.especialidade, ativo: true,
+      especialidade: newEmp.especialidade, status: newEmp.status, ativo: true,
     }).select('id').single();
     if (error) throw error;
     const created: Employee = {
@@ -192,7 +196,7 @@ export function useEmployees() {
       email: updates.email, loja_id: updates.lojaId,
       role: updates.cargo ? updates.cargo.toLowerCase() : undefined,
       salario_base: updates.salarioBase, data_admissao: updates.dataAdmissao,
-      especialidade: updates.especialidade,
+      especialidade: updates.especialidade, status: updates.status,
     }).eq('id', id);
     if (error) throw error;
     setData((prev) => prev.map((employee) => employee.id === id ? { ...employee, ...updates } : employee));
@@ -389,7 +393,8 @@ export function useFinanceTransactions() {
       beneficiario_iban: newTx.beneficiarioIban, valor: newTx.valor, estado: newTx.estado,
       metodo: newTx.metodo, conta_origem: newTx.contaOrigem, descricao: newTx.descricao,
       peso_ouro_gramas: newTx.pesoOuroGramas, tipo_metal: newTx.tipoMetal,
-      operador_nome: newTx.operadorNome,
+      operador_nome: newTx.operadorNome, data: newTx.data, hora: newTx.hora,
+      comprovativo_ref: newTx.comprovativoRef,
     }).select('id').single();
     if (error) throw error;
     setData((prev) => [{ ...newTx, id: String(inserted.id) }, ...prev]);
