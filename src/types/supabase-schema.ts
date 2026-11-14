@@ -49,23 +49,20 @@ export interface DatabaseCliente {
   id: string;
   codigo_cliente: string;
   nome: string;
-  nif: string;
-  telemovel: string;
+  nif: string | null;
+  bi_cc: string;
+  telemovel?: string | null;
   email?: string | null;
-  doc_identificacao?: string | null;
-  data_nascimento?: string | null;
-  morada?: string | null;
+  morada: string;
   cidade?: string | null;
-  loja_origem_id?: string | null;
+  data_nascimento?: string | null;
+  loja_registo_id: string;
   status: 'vip' | 'normal' | 'bloqueado' | string;
-  total_transacoes?: number;
-  total_comprado_eur?: number;
-  ultima_visita?: string | null;
   notas_internas?: string | null;
+  consentimento_rgpd: boolean;
+  consentimento_rgpd_data?: string | null;
   created_at?: string;
-  updated_at?: string;
 }
-
 export interface DatabaseTransacaoFinanceira {
   id: string;
   referencia: string;
@@ -110,7 +107,7 @@ export interface SupabaseDatabaseSchema {
       };
       clientes: {
         Row: DatabaseCliente;
-        Insert: Partial<DatabaseCliente> & Pick<DatabaseCliente, 'nome' | 'nif' | 'telemovel'>;
+        Insert: Partial<DatabaseCliente> & Pick<DatabaseCliente, 'nome' | 'bi_cc' | 'morada' | 'loja_registo_id'>;
         Update: Partial<DatabaseCliente>;
       };
       transacoes_financeiras: {
