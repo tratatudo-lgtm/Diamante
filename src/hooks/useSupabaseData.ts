@@ -335,10 +335,10 @@ export function useFinanceTransactions() {
       if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
 
       if (isSupabaseConfigured()) {
-        // Tenta 'transacoes_financeiras' ou tabela 'transacoes' existente
+        // Pagamentos de tesouraria: entidade separada das compras de ouro em 'transacoes'.
         const { data: dbTx, error: dbError } = await supabase
           .from('transacoes_financeiras')
-          .select('*')
+          .select('*, lojas(nome)')
           .order('created_at', { ascending: false });
 
         if (dbError) throw dbError;
@@ -347,7 +347,7 @@ export function useFinanceTransactions() {
             id: String(row.id),
             referencia: row.referencia || '',
             lojaId: row.loja_id || '',
-            lojaNome: row.loja_nome || '',
+            lojaNome: row.lojas?.nome || row.loja_nome || '',
             beneficiarioNome: row.beneficiario_nome || '',
             beneficiarioNif: row.beneficiario_nif || '',
             beneficiarioIban: row.beneficiario_iban || '',
@@ -384,17 +384,17 @@ export function useFinanceTransactions() {
 
   const confirmPayment = async (txId: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi confirmado.');
-    const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'pago' }).eq('id', txId).select('id');
+    const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'pago', updated_at: new Date().toISOString() }).eq('id', txId).eq('estado', 'pendente').select('id');
     if (error) throw error;
-    if (!updatedRows?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
+    if (!updatedRows?.length) throw new Error('Pagamento não encontrado ou já processado. Só pagamentos pendentes podem ser confirmados.');
     setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'pago' } : tx));
   };
 
   const rejectPayment = async (txId: string) => {
     if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi rejeitado.');
-    const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado' }).eq('id', txId).select('id');
+    const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado', updated_at: new Date().toISOString() }).eq('id', txId).eq('estado', 'pendente').select('id');
     if (error) throw error;
-    if (!updatedRows?.length) throw new Error('A transação não foi encontrada ou não foi atualizada.');
+    if (!updatedRows?.length) throw new Error('Pagamento não encontrado ou já processado. Só pagamentos pendentes podem ser rejeitados.');
     setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'rejeitado' } : tx));
   };
 
