@@ -68,6 +68,40 @@ case "$ACTION" in
     git -C "$INTEGRATION_DIR" log -1 --format='%h %s'
     git -C "$INTEGRATION_DIR" status --short --branch
     ;;
+  integration_bun_diagnostics)
+    echo "===== BUN DIAGNOSTICS (READ ONLY) ====="
+    echo "===== SSH EXECUTION CONTEXT ====="
+    id
+    printf 'HOME=%s\n' "${HOME:-<unset>}"
+    printf 'PATH=%s\n' "${PATH:-<unset>}"
+    printf 'SHELL=%s\n' "${SHELL:-<unset>}"
+    echo
+    echo "===== BUN RESOLUTION ====="
+    if command -v bun >/dev/null 2>&1; then
+      BUN_PATH="$(command -v bun)"
+      printf 'command -v bun: %s\n' "$BUN_PATH"
+      bun --version
+    else
+      echo "command -v bun: NOT FOUND"
+    fi
+    echo
+    echo "===== BUN COMMAND CANDIDATES ====="
+    type -a bun 2>&1 || true
+    whereis bun 2>/dev/null || true
+    for candidate in /root/.bun/bin/bun /usr/local/bin/bun /usr/bin/bun /bin/bun; do
+      if [[ -x "$candidate" ]]; then
+        printf 'EXECUTABLE: %s\n' "$candidate"
+        "$candidate" --version 2>&1 || true
+      fi
+    done
+    echo
+    echo "===== COMMON BUN INSTALL LOCATIONS ====="
+    for dir in /root/.bun/bin /home/*/.bun/bin /usr/local/bin; do
+      if [[ -d "$dir" ]]; then
+        find "$dir" -maxdepth 1 -type f -name bun -perm /111 -print 2>/dev/null
+      fi
+    done
+    ;;
   integration_validate)
     echo "===== INTEGRATION VALIDATION ====="
     require_dir "$INTEGRATION_DIR"
