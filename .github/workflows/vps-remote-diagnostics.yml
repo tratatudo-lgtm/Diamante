@@ -83,5 +83,4 @@ jobs:
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             -o ConnectTimeout=10 \
-            "$VPS_USER@$VPS_HOST" \
-            "bash -s -- '$REMOTE_ACTION'" < scripts/vps/remote-allowlist.sh
+            "$VPS_USER@$VPS_HOST" "$REMOTE_ACTION"
