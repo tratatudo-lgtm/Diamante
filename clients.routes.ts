@@ -279,6 +279,33 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
   }
 });
 
+// Consentimento explícito para mensagens de aniversário por WhatsApp.
+clientsRouter.patch('/:id/birthday-consent', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  if (!employee || !canReadClients(employee.role) || (employee.role !== 'admin' && !employee.loja_id)) {
+    return res.status(403).json({ success: false, message: 'Não tem autorização para alterar o consentimento.' });
+  }
+  const consent = req.body?.consentimento;
+  if (typeof consent !== 'boolean') {
+    return res.status(400).json({ success: false, message: 'Indique o consentimento de forma explícita.' });
+  }
+  try {
+    let query = supabaseAdmin.from('clientes')
+      .update({
+        consentimento_whatsapp_aniversario: consent,
+        consentimento_whatsapp_aniversario_data: new Date().toISOString(),
+      })
+      .eq('id', req.params.id);
+    if (employee.role !== 'admin') query = query.eq('loja_registo_id', employee.loja_id as string);
+    const { data, error } = await query.select('id,consentimento_whatsapp_aniversario').maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
+    return res.json({ success: true, cliente: data });
+  } catch {
+    return res.status(503).json({ success: false, message: 'Não foi possível actualizar o consentimento.' });
+  }
+});
+
 clientsRouter.patch('/:id/status', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (employee?.role !== 'admin') {
