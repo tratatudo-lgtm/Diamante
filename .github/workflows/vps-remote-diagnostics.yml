@@ -13,6 +13,7 @@ on:
           - nginx
           - rebuild_git_status
           - integration_status
+          - integration_bun_diagnostics
           - integration_validate
 
 permissions:
@@ -49,7 +50,7 @@ jobs:
             fi
           done
           case "$REMOTE_ACTION" in
-            health|services|nginx|rebuild_git_status|integration_status|integration_validate) ;;
+            health|services|nginx|rebuild_git_status|integration_status|integration_bun_diagnostics|integration_validate) ;;
             *) echo "::error::Operação não permitida."; exit 1 ;;
           esac
           if [[ ! "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
