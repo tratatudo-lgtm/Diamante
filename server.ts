@@ -18,6 +18,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { isSocketTokenActive } from './socket-session';
 import { verifyAdmin } from './middleware/verifyAdmin';
+import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -137,6 +138,34 @@ app.use('/api/admin/crm', crmRouter);
 app.use('/api/admin/finance', financeRouter);
 app.use('/api/admin/settings', settingsRouter);
 app.use('/api/store', storeRouter);
+
+// Perfil da loja associada à sessão: nunca aceitar loja_id enviado pelo cliente.
+app.get('/api/store/profile', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  if (!employee?.ativo || !employee.loja_id) {
+    return res.status(403).json({ success: false, message: 'A conta não está associada a uma loja ativa.' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('lojas')
+      .select('id, nome, codigo_loja, morada, telefone, latitude, longitude, ativo')
+      .eq('id', employee.loja_id)
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[STORE] Falha ao consultar perfil da loja.');
+      return res.status(503).json({ success: false, message: 'Não foi possível carregar os dados da loja.' });
+    }
+    if (!data) {
+      return res.status(404).json({ success: false, message: 'Loja não encontrada ou inativa.' });
+    }
+    return res.json({ success: true, loja: data });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro interno ao carregar a loja.' });
+  }
+});
 
 // ENDPOINT: LISTAR TRANSAÇÕES PENDENTES PARA AUTORIZAÇÃO
 app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req, res) => {
