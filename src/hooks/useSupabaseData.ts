@@ -24,7 +24,7 @@ async function adminApiRequest(path: string, init: RequestInit = {}) {
 
 import type { Store } from '../types/supabase-schema';
 import type { Employee, EmployeeRole, EmployeeStatus } from '../components/employees/EmployeeManagement';
-import type { Client, ClientStatus, ClientTransactionRecord } from '../components/clients/ClientManagement';
+import type { Client, ClientStatus } from '../components/clients/ClientManagement';
 import type { FinancialTransaction, PaymentStatus, PaymentMethod } from '../components/finance/FinanceManagement';
 import type {
   DatabaseLoja,
