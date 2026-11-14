@@ -149,6 +149,135 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
   }
 });
 
+
+// Alertas de documentos: funcionário vê apenas a sua loja; administrador vê todas.
+clientsRouter.get('/document-alerts', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  if (!employee || !canReadClients(employee.role) || (employee.role !== 'admin' && !employee.loja_id)) {
+    return res.status(403).json({ success: false, message: 'Não tem autorização para consultar alertas.' });
+  }
+  try {
+    let query = supabaseAdmin.from('v_clientes_documentos_alerta').select('*')
+      .in('estado_documento', ['expirado', 'a_expirar'])
+      .order('data_validade_documento', { ascending: true }).limit(500);
+    if (employee.role !== 'admin') query = query.eq('loja_registo_id', employee.loja_id as string);
+    const { data, error } = await query;
+    if (error) throw error;
+    return res.json({ success: true, alertas: data || [] });
+  } catch {
+    return res.status(503).json({ success: false, message: 'Não foi possível carregar os alertas de documentos.' });
+  }
+});
+
+// Histórico e links temporários: nunca expor storage_path ao browser.
+clientsRouter.get('/:id/documents', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  const clientId = String(req.params.id || '');
+  if (!employee || !canReadClients(employee.role)) return res.status(403).json({ success: false, message: 'Acesso não autorizado.' });
+  try {
+    let clientQuery = supabaseAdmin.from('clientes').select('id,loja_registo_id').eq('id', clientId);
+    if (employee.role !== 'admin') clientQuery = clientQuery.eq('loja_registo_id', employee.loja_id as string);
+    const { data: client, error: clientError } = await clientQuery.maybeSingle();
+    if (clientError || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
+    const { data, error } = await supabaseAdmin.from('cliente_documentos')
+      .select('id,tipo_documento,numero_documento,data_emissao,data_validade,mime_type,tamanho_bytes,uploaded_at,substituido_em')
+      .eq('cliente_id', clientId).order('uploaded_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    const documents = await Promise.all((data || []).map(async (doc: any) => {
+      const { data: signed } = await supabaseAdmin.storage.from('documentos-clientes')
+        .createSignedUrl((await supabaseAdmin.from('cliente_documentos').select('storage_path').eq('id', doc.id).single()).data?.storage_path || '', 300);
+      return { ...doc, signed_url: signed?.signedUrl || null };
+    }));
+    return res.json({ success: true, documentos: documents });
+  } catch {
+    return res.status(503).json({ success: false, message: 'Não foi possível consultar o histórico documental.' });
+  }
+});
+
+// Recebe digitalização e substitui a versão activa, preservando o histórico.
+clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  const clientId = String(req.params.id || '');
+  if (!employee || !canReadClients(employee.role)) return res.status(403).json({ success: false, message: 'Acesso não autorizado.' });
+
+  const body = req.body || {};
+  const tipoDocumento = typeof body.tipoDocumento === 'string' ? body.tipoDocumento : '';
+  const numeroDocumento = typeof body.numeroDocumento === 'string' ? body.numeroDocumento.trim() : '';
+  const dataEmissao = typeof body.dataEmissao === 'string' && body.dataEmissao ? body.dataEmissao : null;
+  const dataValidade = typeof body.dataValidade === 'string' ? body.dataValidade : '';
+  const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
+  const fileName = typeof body.fileName === 'string' ? body.fileName.trim().slice(0, 180) : '';
+  const encoded = typeof body.fileBase64 === 'string' ? body.fileBase64 : '';
+  const allowedMime = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  const extByMime: Record<string, string> = { 'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+  const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+  if (!['cc', 'passaporte', 'cartao_residente', 'outro'].includes(tipoDocumento) ||
+      !numeroDocumento || numeroDocumento.length > 80 || !validDate(dataValidade) ||
+      (dataEmissao && (!validDate(dataEmissao) || dataEmissao > dataValidade)) ||
+      !allowedMime.includes(mimeType) || !fileName || !encoded || encoded.length > 9_000_000) {
+    return res.status(400).json({ success: false, message: 'Indique documento, número, validade futura e um ficheiro PDF/JPEG/PNG/WebP até 6 MB.' });
+  }
+  if (dataValidade < new Date().toISOString().slice(0, 10)) {
+    return res.status(400).json({ success: false, message: 'O novo documento tem de estar dentro da validade.' });
+  }
+  let fileBuffer: Buffer;
+  try { fileBuffer = Buffer.from(encoded.replace(/^data:[^;]+;base64,/, ''), 'base64'); }
+  catch { return res.status(400).json({ success: false, message: 'Ficheiro inválido.' }); }
+  if (!fileBuffer.length || fileBuffer.length > 6 * 1024 * 1024) {
+    return res.status(400).json({ success: false, message: 'O ficheiro excede o limite de 6 MB ou está vazio.' });
+  }
+
+  let storagePath = '';
+  let previousId: string | null = null;
+  try {
+    let clientQuery = supabaseAdmin.from('clientes').select('id,loja_registo_id')
+      .eq('id', clientId);
+    if (employee.role !== 'admin') clientQuery = clientQuery.eq('loja_registo_id', employee.loja_id as string);
+    const { data: client, error: clientError } = await clientQuery.maybeSingle();
+    if (clientError || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
+
+    const { data: previous, error: previousError } = await supabaseAdmin.from('cliente_documentos')
+      .select('id').eq('cliente_id', clientId).is('substituido_em', null).maybeSingle();
+    if (previousError) throw previousError;
+    previousId = previous?.id || null;
+
+    const safeName = fileName.replace(/[^\p{L}\p{N}._-]/gu, '_');
+    storagePath = `${clientId}/${crypto.randomUUID()}.${extByMime[mimeType]}`;
+    const { error: uploadError } = await supabaseAdmin.storage.from('documentos-clientes')
+      .upload(storagePath, fileBuffer, { contentType: mimeType, upsert: false, metadata: { originalName: safeName } });
+    if (uploadError) throw uploadError;
+
+    if (previousId) {
+      const { error } = await supabaseAdmin.from('cliente_documentos')
+        .update({ substituido_em: new Date().toISOString(), substituido_por: employee.id })
+        .eq('id', previousId).is('substituido_em', null);
+      if (error) throw error;
+    }
+
+    const { data: inserted, error: insertError } = await supabaseAdmin.from('cliente_documentos').insert({
+      cliente_id: clientId, tipo_documento: tipoDocumento, numero_documento: numeroDocumento,
+      data_emissao: dataEmissao, data_validade: dataValidade, storage_path: storagePath,
+      mime_type: mimeType, tamanho_bytes: fileBuffer.length, uploaded_by: employee.id,
+    }).select('id').single();
+    if (insertError || !inserted) throw insertError || new Error('Falha ao registar documento.');
+
+    const { error: updateError } = await supabaseAdmin.from('clientes').update({
+      tipo_documento: tipoDocumento, bi_cc: numeroDocumento,
+      data_emissao_documento: dataEmissao, data_validade_documento: dataValidade,
+    }).eq('id', clientId);
+    if (updateError) {
+      await supabaseAdmin.from('cliente_documentos').delete().eq('id', inserted.id);
+      throw updateError;
+    }
+    return res.status(201).json({ success: true, documento_id: inserted.id, message: 'Documento actualizado e versão anterior arquivada.' });
+  } catch {
+    if (storagePath) await supabaseAdmin.storage.from('documentos-clientes').remove([storagePath]);
+    if (previousId) await supabaseAdmin.from('cliente_documentos')
+      .update({ substituido_em: null, substituido_por: null }).eq('id', previousId);
+    return res.status(503).json({ success: false, message: 'Não foi possível guardar o novo documento. A versão anterior foi preservada.' });
+  }
+});
+
 clientsRouter.patch('/:id/status', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (employee?.role !== 'admin') {
