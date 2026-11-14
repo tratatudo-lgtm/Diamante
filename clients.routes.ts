@@ -123,7 +123,7 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
         consentimento_rgpd: true,
         consentimento_rgpd_data: new Date().toISOString(),
       })
-      .select('id,codigo_cliente,nome,nif,bi_cc,telemovel,email,morada,cidade,loja_registo_id,status,data_nascimento,notas_internas,created_at')
+      .select('id,codigo_cliente,nome,nif,bi_cc,tipo_documento,telemovel,email,morada,codigo_postal,pais_residencia,cidade,loja_registo_id,status,data_nascimento,notas_internas,created_at')
       .single();
 
     if (error || !created) {
