@@ -12,6 +12,8 @@ on:
           - services
           - nginx
           - rebuild_git_status
+          - integration_status
+          - integration_validate
 
 permissions:
   contents: read
@@ -23,7 +25,7 @@ concurrency:
 jobs:
   remote-diagnostics:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 25
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v4
@@ -41,13 +43,13 @@ jobs:
         run: |
           set -euo pipefail
           for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_KNOWN_HOSTS; do
-            if [[ -z "${!name:-}" ]]; then
+            if [[ -z "$(printenv "$name" || true)" ]]; then
               echo "::error::Falta configurar o secret $name."
               exit 1
             fi
           done
           case "$REMOTE_ACTION" in
-            health|services|nginx|rebuild_git_status) ;;
+            health|services|nginx|rebuild_git_status|integration_status|integration_validate) ;;
             *) echo "::error::Operação não permitida."; exit 1 ;;
           esac
           if [[ ! "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
@@ -70,7 +72,7 @@ jobs:
           printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
-      - name: Run allowlisted remote diagnostic
+      - name: Run allowlisted remote operation
         shell: bash
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
