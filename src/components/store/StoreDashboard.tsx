@@ -84,15 +84,19 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
       const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-      // 1. Informações da Loja
+      // 1. Informações da Loja — API autenticada; o servidor resolve a loja pelo funcionário.
       if (lojaId) {
-        const { data: lojaData, error: lojaError } = await supabase
-          .from('lojas')
-          .select('*')
-          .eq('id', lojaId)
-          .maybeSingle();
-        if (lojaError) throw lojaError;
-        if (lojaData) setLojaInfo(lojaData);
+        const token = sessionStorage.getItem('diamante_jwt_token');
+        if (!token) throw new Error('Sessão de API não encontrada.');
+        const response = await fetch('/api/store/profile', {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(8000),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || !payload?.success || !payload?.loja) {
+          throw new Error(payload?.message || 'Não foi possível carregar os dados da loja.');
+        }
+        setLojaInfo(payload.loja as Loja);
       }
 
       // 2. Registos de Ponto Hoje (para determinar status Online / Offline)
