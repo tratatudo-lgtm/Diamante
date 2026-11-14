@@ -205,7 +205,12 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClient.nome.trim() || !newClient.nif.trim() || !newClient.docIdentificacao.trim() || !phoneNumber.trim() || !newClient.consentimentoRgpd) { setActionError('Nome, NIF, documento de identificação, telefone e consentimento RGPD são obrigatórios.'); return; }
+    if (!newClient.nome.trim() || !newClient.nif.trim() || !newClient.docIdentificacao.trim() || !phoneNumber.trim() || !newClient.dataNascimento || !newClient.consentimentoRgpd) { setActionError('Nome, NIF, documento de identificação, data de nascimento, telefone e consentimento RGPD são obrigatórios.'); return; }
+    const birthDate = new Date(`${newClient.dataNascimento}T00:00:00.000Z`);
+    const latestAllowedBirthDate = new Date();
+    latestAllowedBirthDate.setUTCHours(0, 0, 0, 0);
+    latestAllowedBirthDate.setUTCFullYear(latestAllowedBirthDate.getUTCFullYear() - 18);
+    if (Number.isNaN(birthDate.getTime()) || birthDate.toISOString().slice(0, 10) !== newClient.dataNascimento || birthDate > latestAllowedBirthDate) { setActionError('O cliente tem de ter pelo menos 18 anos. Verifique a data de nascimento.'); return; }
     const nif = newClient.nif.replace(/\D/g, '');
     if (!/^\d{9}$/.test(nif)) { setActionError('O NIF deve conter exatamente 9 algarismos.'); return; }
     const selectedPhoneCountry = PHONE_COUNTRIES.find((country) => country[0] === phoneCountry) || PHONE_COUNTRIES[0];
@@ -1031,16 +1036,18 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                     <input type="text" required value={newClient.docIdentificacao} onChange={(e) => setNewClient({ ...newClient, docIdentificacao: e.target.value })} placeholder={documentType === 'cc' ? 'Número do Cartão de Cidadão' : documentType === 'passaporte' ? 'Número do passaporte' : documentType === 'cartao_residente' ? 'Número do cartão de residência' : 'Tipo e número do documento'} className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono focus:outline-hidden focus:border-[#D4AF37]" />
                   </div>
 
-                  {/* Data Nascimento */}
+                  {/* Data de nascimento obrigatória — apenas maiores de idade */}
                   <div>
-                    <label className="block text-slate-400 mb-1">Data Nascimento</label>
+                    <label className="block text-slate-400 mb-1">Data de Nascimento * (mínimo 18 anos)</label>
                     <input
-                      type="text"
+                      type="date"
+                      required
+                      max={(() => { const date = new Date(); date.setUTCHours(0, 0, 0, 0); date.setUTCFullYear(date.getUTCFullYear() - 18); return date.toISOString().slice(0, 10); })()}
                       value={newClient.dataNascimento}
                       onChange={(e) => setNewClient({ ...newClient, dataNascimento: e.target.value })}
-                      placeholder="DD/MM/AAAA"
                       className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono focus:outline-hidden focus:border-[#D4AF37]"
                     />
+                    <p className="mt-1 text-[11px] text-slate-500">O registo só é permitido a clientes com 18 anos ou mais.</p>
                   </div>
                 </div>
 
