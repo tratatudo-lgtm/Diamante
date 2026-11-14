@@ -112,3 +112,51 @@ export async function sendWhatsAppOtp(phone: string, otpCode: string): Promise<S
     };
   }
 }
+
+
+/** Normaliza números internacionais para a Evolution API (E.164 sem o sinal +). */
+export function formatInternationalWhatsAppPhone(rawPhone: string): string {
+  const digits = String(rawPhone || '').replace(/\D/g, '');
+  return digits.length >= 8 && digits.length <= 15 && !digits.startsWith('0') ? digits : '';
+}
+
+/** Envia uma mensagem de aniversário; não simula envios em ambiente de produção. */
+export async function sendWhatsAppBirthdayGreeting(phone: string, customerName: string): Promise<SendOtpResult> {
+  const number = formatInternationalWhatsAppPhone(phone);
+  if (!number) return { success: false, error: 'Número internacional inválido.' };
+
+  const firstName = String(customerName || '').trim().split(/\s+/)[0] || 'Cliente';
+  const messageText = `🎉 *Feliz aniversário, ${firstName}!* 🎂
+
+A equipa *Diamante D'Ouro* deseja-lhe um dia muito feliz, cheio de saúde, alegria e momentos especiais.
+
+Obrigado por fazer parte da nossa família. Que este novo ano lhe traga muitas conquistas e motivos para sorrir! ✨
+
+*Com carinho,*
+*Diamante D'Ouro*`;
+
+  const evolutionUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/+$/, '');
+  const evolutionKey = process.env.EVOLUTION_API_KEY || '';
+  const instanceName = process.env.EVOLUTION_INSTANCE || 'diamante-os';
+  if (!evolutionUrl || !evolutionKey || !instanceName) {
+    return { success: false, error: 'Evolution API não está configurada.' };
+  }
+
+  try {
+    const response = await fetch(`${evolutionUrl}/message/sendText/${encodeURIComponent(instanceName)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: evolutionKey },
+      body: JSON.stringify({ number, text: messageText, options: { delay: 1200, presence: 'composing' } }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error(`[WhatsApp Birthday] Evolution API respondeu HTTP ${response.status}.`);
+      return { success: false, error: 'Falha no envio pela Evolution API.' };
+    }
+    return { success: true, messageId: data?.key?.id || data?.id || 'sent' };
+  } catch {
+    console.error('[WhatsApp Birthday] Falha de comunicação com a Evolution API.');
+    return { success: false, error: 'Falha de comunicação com a Evolution API.' };
+  }
+}
