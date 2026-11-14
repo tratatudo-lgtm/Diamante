@@ -53,9 +53,7 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
 
   const isAdmin =
     role === 'admin' ||
-    role === 'master' ||
-    userSession?.role === 'admin' ||
-    userSession?.role === 'master';
+    userSession?.role === 'admin';
 
   if (!isAdmin) return null;
 
