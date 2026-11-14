@@ -1,4 +1,8 @@
 -- Make store purchase retries idempotent and validate invariants inside the database.
+DROP FUNCTION IF EXISTS public.create_store_purchase(
+  uuid, uuid, text, text, text, text, text, numeric, numeric, numeric, numeric, numeric, text
+);
+
 ALTER TABLE public.transacoes
   ADD COLUMN IF NOT EXISTS idempotency_key uuid;
 
@@ -86,6 +90,17 @@ BEGIN
 
     IF NOT FOUND OR v_transaction.funcionario_id <> p_funcionario_id
       OR v_transaction.loja_id <> p_loja_id
+      OR v_transaction.cliente_nome <> btrim(p_cliente_nome)
+      OR v_transaction.cliente_cc IS DISTINCT FROM btrim(p_cliente_cc)
+      OR v_transaction.cliente_contacto IS DISTINCT FROM nullif(btrim(coalesce(p_cliente_contacto, '')), '')
+      OR v_transaction.tipo_peca <> btrim(p_tipo_peca)
+      OR v_transaction.metal <> btrim(p_metal)
+      OR v_transaction.peso_gramas <> p_peso_gramas
+      OR v_transaction.valor_final <> round(p_valor_final, 2)
+      OR v_transaction.valor_sugerido <> round(p_valor_sugerido, 2)
+      OR v_transaction.cotacao_spot_dia IS DISTINCT FROM p_cotacao_spot
+      OR v_transaction.margem_aplicada IS DISTINCT FROM p_margem
+      OR v_transaction.descricao IS DISTINCT FROM nullif(btrim(coalesce(p_descricao, '')), '')
     THEN
       RAISE EXCEPTION 'Chave de idempotência já utilizada por outra operação'
         USING ERRCODE = '42501';
