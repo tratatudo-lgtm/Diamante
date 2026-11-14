@@ -414,10 +414,10 @@ async function handleCreateFuncionario(req: AdminRequest, res: Response): Promis
       return;
     }
     const assignedRole = String(role || 'funcionario').toLowerCase();
-    if (!['admin', 'funcionario', 'aprovador'].includes(assignedRole)) {
+    if (!['admin', 'funcionario'].includes(assignedRole)) {
       res.status(400).json({
         success: false,
-        message: 'Papel inválido. A base de dados aceita atualmente: admin, funcionario ou aprovador. A equivalência gerente/operador carece de aprovação.',
+        message: 'Papel inválido. Apenas admin e funcionario podem ser atribuídos a novas contas.',
       });
       return;
     }
@@ -532,6 +532,20 @@ async function handleUpdateFuncionario(req: AdminRequest, res: Response): Promis
       if (!['admin', 'funcionario', 'aprovador'].includes(normalizedRole)) {
         res.status(400).json({ success: false, message: 'Papel inválido para a constraint atual da base de dados.' });
         return;
+      }
+      if (normalizedRole === 'aprovador') {
+        const { data: currentFuncionario, error: currentFuncionarioError } = await supabaseAdmin
+          .from('funcionarios')
+          .select('role')
+          .eq('id', id)
+          .maybeSingle();
+        if (currentFuncionarioError || currentFuncionario?.role !== 'aprovador') {
+          res.status(403).json({
+            success: false,
+            message: 'O perfil legado de aprovador não pode ser atribuído. Apenas administradores aprovam operações.',
+          });
+          return;
+        }
       }
       updates.role = normalizedRole;
     }
