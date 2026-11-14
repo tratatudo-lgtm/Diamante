@@ -78,7 +78,10 @@ export interface ClienteProtegido {
   morada_protegida?: string;
   loja_registo_id?: string;
   created_at?: string;
-  historico_compras_count?: number;\n  tipo_documento?: string | null;\n  data_validade_documento?: string | null;\n  estado_documento?: 'valido' | 'a_expirar' | 'expirado' | 'sem_data';
+  historico_compras_count?: number;
+  tipo_documento?: string | null;
+  data_validade_documento?: string | null;
+  estado_documento?: 'valido' | 'a_expirar' | 'expirado' | 'sem_data';
 }
 
 export interface UserSessionData {
