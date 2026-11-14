@@ -6,8 +6,6 @@ set -euo pipefail
 ACTION="${SSH_ORIGINAL_COMMAND:-}"
 REBUILD_DIR="/opt/diamante-rebuild/Diamante"
 INTEGRATION_DIR="/opt/diamante-rebuild/Diamante-integracao"
-DISPATCHER="/usr/local/sbin/diamante-remote-diagnostics"
-SOURCE_URL="https://raw.githubusercontent.com/tratatudo-lgtm/Diamante/rebuild/diamante-douro-secure/scripts/vps/diamante-remote-diagnostics"
 
 require_dir() {
   local dir="$1"
@@ -119,23 +117,6 @@ case "$ACTION" in
     echo "lint_exit_code=$LINT_STATUS"
     echo "build_exit_code=$BUILD_STATUS"
     if (( LINT_STATUS != 0 || BUILD_STATUS != 0 )); then exit 1; fi
-    ;;
-  dispatcher_update)
-    echo "===== DISPATCHER UPDATE ====="
-    if [[ ! -x "$DISPATCHER" ]]; then echo "Dispatcher instalado não encontrado."; exit 4; fi
-    command -v curl >/dev/null 2>&1 || { echo "curl não está disponível."; exit 5; }
-    TMP="$(mktemp /usr/local/sbin/diamante-remote-diagnostics.new.XXXXXX)"
-    trap 'rm -f "$TMP"' EXIT
-    curl -fsSL "$SOURCE_URL" -o "$TMP"
-    bash -n "$TMP"
-    chmod 0755 "$TMP"
-    BACKUP="${DISPATCHER}.backup-$(date +%Y%m%d-%H%M%S)"
-    cp -a "$DISPATCHER" "$BACKUP"
-    mv -f "$TMP" "$DISPATCHER"
-    bash -n "$DISPATCHER"
-    echo "Dispatcher actualizado e validado."
-    echo "Backup: $BACKUP"
-    sha256sum "$DISPATCHER"
     ;;
   *)
     echo "Operação não permitida."
