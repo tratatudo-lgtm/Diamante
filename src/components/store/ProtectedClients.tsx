@@ -24,17 +24,20 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Consulta obrigatória à VIEW v_clientes_protegidos (NUNCA à tabela clientes)
-  const fetchProtectedClients = useCallback(async () => {
+  const fetchProtectedClients = useCallback(async (search = '') => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
       if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada.');
-      const { data, error } = await supabase
-        .from('v_clientes_protegidos')
-        .select('*');
-
-      if (error) throw error;
-      setClientes(data || []);
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão não encontrada.');
+      const response = await fetch('/api/clients/protected?search=' + encodeURIComponent(search), {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.success !== true) throw new Error('Falha ao pesquisar clientes.');
+      setClientes(Array.isArray(result.clientes) ? result.clientes : []);
     } catch (err: unknown) {
       console.warn('[Clientes protegidos] Falha ao consultar a vista protegida.');
       setErrorMessage('Não foi possível aceder à vista protegida de clientes.');
@@ -49,9 +52,11 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
 
   const filteredClientes = clientes.filter((c) => {
     const q = searchQuery.toLowerCase();
+    const digits = searchQuery.replace(/\\D/g, '');
     const nome = (c.nome || '').toLowerCase();
     const bi = (c.bi_cc_formatado || '').toLowerCase();
-    return nome.includes(q) || bi.includes(q);
+    const nif = (c.nif_formatado || '').toLowerCase();
+    return nome.includes(q) || bi.includes(q) || (digits.length > 0 && nif.includes(digits));
   });
 
   const formatCurrency = (val: number) => {
@@ -92,8 +97,8 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
             <input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Pesquisar nome ou BI..."
+              onChange={(e) => { setSearchQuery(e.target.value); void fetchProtectedClients(e.target.value); }}
+              placeholder="Pesquisar nome, NIF ou CC..."
               className="w-full pl-9 pr-3 py-2 bg-[#111827] border border-gray-700 rounded-xl text-xs text-white placeholder-gray-500 focus:outline-none focus:border-[#D4AF37]"
             />
           </div>
@@ -135,6 +140,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
           filteredClientes.map((cliente, index) => {
             const nomeExibido = cliente.nome || 'Cliente Protegido';
             const biExibido = cliente.bi_cc_formatado || '****';
+            const nifExibido = cliente.nif_formatado || 'Não disponível';
             const telExibido = cliente.telemovel || 'Não disponível';
 
             return (
@@ -151,7 +157,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
                       <h4 className="text-xs font-bold text-white">{nomeExibido}</h4>
                       <p className="text-[11px] text-gray-400 flex items-center gap-1.5 mt-0.5">
                         <CreditCard className="w-3 h-3 text-gray-500" />
-                        <span className="font-mono">{biExibido}</span>
+                        <span className="font-mono">CC {biExibido} · NIF {nifExibido}</span>
                       </p>
                     </div>
                   </div>
