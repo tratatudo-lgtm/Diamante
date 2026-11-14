@@ -1,4 +1,4 @@
-import React, { useState, useId, useRef } from 'react';
+import React, { useState, useId } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Sparkles,
@@ -42,7 +42,6 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [valorFinalManual, setValorFinalManual] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const idempotencyKeyRef = useRef<string | null>(null);
 
   // Unique IDs for accessibility
   const clienteNomeId = useId();
@@ -123,28 +122,45 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       const token = sessionStorage.getItem('diamante_jwt_token');
       if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
 
-      const idempotencyKey = idempotencyKeyRef.current || crypto.randomUUID();
-      idempotencyKeyRef.current = idempotencyKey;
+      const purchasePayload = {
+        clienteNome: clienteNome.trim(),
+        clienteCc: clienteCc.trim(),
+        clienteTelemovel: clienteTelemovel.trim() || null,
+        tipoPeca,
+        metal,
+        pesoGramas: pesoNum,
+        valorFinal: parseFloat(valorFinalEfetivo.toFixed(2)),
+        valorSugerido: parseFloat(valorSugerido.toFixed(2)),
+        cotacaoSpot: spotPrice,
+        margemPercent,
+        descricao: descricao.trim() || `${tipoPeca} em ${metal}`,
+      };
+      // Persist only a hash and the retry key; never persist customer data in browser storage.
+      const fingerprintBytes = await crypto.subtle.digest(
+        'SHA-256',
+        new TextEncoder().encode(JSON.stringify(purchasePayload))
+      );
+      const fingerprint = Array.from(new Uint8Array(fingerprintBytes))
+        .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      const retryStorageKey = 'diamante_purchase_retry_v1';
+      let retryState: { key?: string; fingerprint?: string } = {};
+      try {
+        retryState = JSON.parse(sessionStorage.getItem(retryStorageKey) || '{}');
+      } catch {
+        retryState = {};
+      }
+      const idempotencyKey = retryState.fingerprint === fingerprint &&
+        typeof retryState.key === 'string' && /^[0-9a-f-]{36}$/i.test(retryState.key)
+        ? retryState.key
+        : crypto.randomUUID();
+      sessionStorage.setItem(retryStorageKey, JSON.stringify({ key: idempotencyKey, fingerprint }));
       const txResponse = await fetch('/api/store/purchases', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          idempotencyKey,
-          clienteNome: clienteNome.trim(),
-          clienteCc: clienteCc.trim(),
-          clienteTelemovel: clienteTelemovel.trim() || null,
-          tipoPeca,
-          metal,
-          pesoGramas: pesoNum,
-          valorFinal: parseFloat(valorFinalEfetivo.toFixed(2)),
-          valorSugerido: parseFloat(valorSugerido.toFixed(2)),
-          cotacaoSpot: spotPrice,
-          margemPercent,
-          descricao: descricao.trim() || `${tipoPeca} em ${metal}`,
-        }),
+        body: JSON.stringify({ ...purchasePayload, idempotencyKey }),
       });
       const txResult = await txResponse.json().catch(() => null);
       if (txResult?.partial) {
@@ -169,7 +185,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       );
 
       // Limpar formulário
-      idempotencyKeyRef.current = null;
+      sessionStorage.removeItem('diamante_purchase_retry_v1');
       setClienteNome('');
       setClienteCc('');
       setClienteTelemovel('');
