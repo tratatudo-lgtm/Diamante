@@ -167,14 +167,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
                     <span>{telExibido}</span>
                   </div>
 
-                  {cliente.total_gasto !== undefined && (
-                    <div className="text-right">
-                      <span className="text-[10px] text-gray-500 mr-1">Total:</span>
-                      <span className="font-mono font-bold text-xs text-[#D4AF37] tabular-nums">
-                        {formatCurrency(cliente.total_gasto)}
-                      </span>
-                    </div>
-                  )}
+
                 </div>
               </div>
             );
