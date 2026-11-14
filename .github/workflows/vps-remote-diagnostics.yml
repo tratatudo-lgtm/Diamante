@@ -1,0 +1,87 @@
+name: VPS Remote Diagnostics
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "Operação remota permitida"
+        required: true
+        type: choice
+        options:
+          - health
+          - services
+          - nginx
+          - rebuild_git_status
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diamante-vps-remote-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  remote-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: rebuild/diamante-douro-secure
+
+      - name: Validate required secrets and input
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+          REMOTE_ACTION: ${{ inputs.action }}
+        run: |
+          set -euo pipefail
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_KNOWN_HOSTS; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Falta configurar o secret $name."
+              exit 1
+            fi
+          done
+          case "$REMOTE_ACTION" in
+            health|services|nginx|rebuild_git_status) ;;
+            *) echo "::error::Operação não permitida."; exit 1 ;;
+          esac
+          if [[ ! "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
+            echo "::error::VPS_HOST inválido."; exit 1
+          fi
+          if [[ ! "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*[$]?$ ]]; then
+            echo "::error::VPS_USER inválido."; exit 1
+          fi
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Run allowlisted remote diagnostic
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          REMOTE_ACTION: ${{ inputs.action }}
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
+            "$VPS_USER@$VPS_HOST" \
+            "bash -s -- '$REMOTE_ACTION'" < scripts/vps/remote-allowlist.sh
