@@ -49,8 +49,8 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
 
   const filteredClientes = clientes.filter((c) => {
     const q = searchQuery.toLowerCase();
-    const nome = (c.nome || c.cliente_nome || '').toLowerCase();
-    const bi = (c.bi_mascarado || c.cliente_cc || '').toLowerCase();
+    const nome = (c.nome || '').toLowerCase();
+    const bi = (c.bi_cc_formatado || '').toLowerCase();
     return nome.includes(q) || bi.includes(q);
   });
 
