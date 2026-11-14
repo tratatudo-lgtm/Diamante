@@ -12,7 +12,9 @@ type Transaction = {
   origem_ligacao: 'confirmada' | 'nome_nao_confirmado';
 };
 type Article = { id: string; transacao_id: string; tipo?: string; descricao?: string; peso_gramas?: number; quilates?: number; foto_url?: string | null; foto_signed_url?: string | null; estado?: string };
-type Attachment = { id: string; nome_ficheiro: string; mime_type: string; tamanho_bytes: number; categoria: string; signed_url?: string | null; created_at: string };\ntype IdentityDocument = { id: string; tipo_documento: string; numero_documento: string; data_emissao?: string | null; data_validade: string; mime_type: string; tamanho_bytes: number; uploaded_at: string; substituido_em?: string | null; signed_url?: string | null };\ntype DocumentAlert = { cliente_id: string; nome: string; nif?: string | null; telemovel?: string | null; data_validade_documento: string; dias_ate_validade: number; estado_documento: 'expirado' | 'a_expirar' };
+type Attachment = { id: string; nome_ficheiro: string; mime_type: string; tamanho_bytes: number; categoria: string; signed_url?: string | null; created_at: string };
+type IdentityDocument = { id: string; tipo_documento: string; numero_documento: string; data_emissao?: string | null; data_validade: string; mime_type: string; tamanho_bytes: number; uploaded_at: string; substituido_em?: string | null; signed_url?: string | null };
+type DocumentAlert = { cliente_id: string; nome: string; nif?: string | null; telemovel?: string | null; data_validade_documento: string; dias_ate_validade: number; estado_documento: 'expirado' | 'a_expirar' };
 type Supplier = { id: string; nome: string; nif?: string; contacto?: string; email?: string; morada?: string; observacoes?: string; ativo: boolean };
 
 const token = () => sessionStorage.getItem('diamante_jwt_token') || '';
@@ -26,7 +28,14 @@ export const CRMWorkspace: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const [detail, setDetail] = useState<{client: Client; transactions: Transaction[]; articles: Article[]; attachments: Attachment[]; documents: IdentityDocument[]} | null>(null);\n  const [documentAlerts, setDocumentAlerts] = useState<DocumentAlert[]>([]);\n  const [documentFile, setDocumentFile] = useState<File | null>(null);\n  const [documentType, setDocumentType] = useState('cc');\n  const [documentNumber, setDocumentNumber] = useState('');\n  const [documentIssueDate, setDocumentIssueDate] = useState('');\n  const [documentExpiryDate, setDocumentExpiryDate] = useState('');\n  const [documentSaving, setDocumentSaving] = useState(false);
+  const [detail, setDetail] = useState<{client: Client; transactions: Transaction[]; articles: Article[]; attachments: Attachment[]; documents: IdentityDocument[]} | null>(null);
+  const [documentAlerts, setDocumentAlerts] = useState<DocumentAlert[]>([]);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState('cc');
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [documentIssueDate, setDocumentIssueDate] = useState('');
+  const [documentExpiryDate, setDocumentExpiryDate] = useState('');
+  const [documentSaving, setDocumentSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -41,7 +50,9 @@ export const CRMWorkspace: React.FC = () => {
       ]);
       if (!c.ok || !s.ok) throw new Error('Não foi possível carregar o CRM. Confirme a sessão administrativa.');
       const cj = await c.json(); const sj = await s.json();
-      setClients(cj.data || []); setSuppliers(sj.data || []);\n      const alertsResponse = await fetch('/api/clients/document-alerts', { headers: headers() });\n      if (alertsResponse.ok) { const alertsJson = await alertsResponse.json(); setDocumentAlerts(alertsJson.alertas || []); }
+      setClients(cj.data || []); setSuppliers(sj.data || []);
+      const alertsResponse = await fetch('/api/clients/document-alerts', { headers: headers() });
+      if (alertsResponse.ok) { const alertsJson = await alertsResponse.json(); setDocumentAlerts(alertsJson.alertas || []); }
     } catch (e: any) { setError(e?.message || 'Falha ao carregar o CRM.'); }
     finally { setLoading(false); }
   }, []);
