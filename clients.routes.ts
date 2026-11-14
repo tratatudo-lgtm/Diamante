@@ -350,7 +350,10 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
       id: row.id,
       nome: row.nome,
       bi_cc_formatado: row.bi_cc ? `${row.bi_cc.slice(0, 4)}****` : '****',
-      nif_formatado: row.nif ? `${row.nif.slice(0, 2)}*****${row.nif.slice(-2)}` : null,\n      tipo_documento: row.tipo_documento || null,\n      data_validade_documento: row.data_validade_documento || null,\n      estado_documento: row.data_validade_documento ? (row.data_validade_documento < new Date().toISOString().slice(0, 10) ? 'expirado' : row.data_validade_documento <= new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10) ? 'a_expirar' : 'valido') : 'sem_data',
+      nif_formatado: row.nif ? `${row.nif.slice(0, 2)}*****${row.nif.slice(-2)}` : null,
+      tipo_documento: row.tipo_documento || null,
+      data_validade_documento: row.data_validade_documento || null,
+      estado_documento: row.data_validade_documento ? (row.data_validade_documento < new Date().toISOString().slice(0, 10) ? 'expirado' : row.data_validade_documento <= new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10) ? 'a_expirar' : 'valido') : 'sem_data',
       telemovel: row.telemovel ? `${row.telemovel.slice(0, 3)}***${row.telemovel.slice(-2)}` : 'Não disponível',
       historico_compras_count: row.bi_cc ? (counts.get(row.bi_cc) || 0) : 0,
     }));
