@@ -69,9 +69,9 @@ jobs:
         run: |
           set -euo pipefail
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
-          printf '%s\\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Run allowlisted remote operation
@@ -82,9 +82,9 @@ jobs:
           REMOTE_ACTION: ${{ inputs.action }}
         run: |
           set -euo pipefail
-          ssh -i "$HOME/.ssh/id_ed25519" \\
-            -o BatchMode=yes \\
-            -o IdentitiesOnly=yes \\
-            -o StrictHostKeyChecking=yes \\
-            -o ConnectTimeout=10 \\
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
             "$VPS_USER@$VPS_HOST" "$REMOTE_ACTION"
