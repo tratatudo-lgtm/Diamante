@@ -149,7 +149,8 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
         const matchNome = client.nome.toLowerCase().includes(q);
-        const matchNif = (client.nif || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''));
+        const nifQuery = q.replace(/\D/g, '');
+        const matchNif = nifQuery.length > 0 && (client.nif || '').replace(/\D/g, '').includes(nifQuery);
         const matchTel = client.telemovel.replace(/\s+/g, '').includes(q.replace(/\s+/g, ''));
         const matchDoc = client.docIdentificacao.toLowerCase().includes(q);
         const matchEmail = client.email.toLowerCase().includes(q);
@@ -1047,6 +1048,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                     <label className="block text-slate-400 mb-1">Morada Residência</label>
                     <input
                       type="text"
+                      required
                       value={newClient.morada}
                       onChange={(e) => setNewClient({ ...newClient, morada: e.target.value })}
                       placeholder="Rua, Número, Andar"
@@ -1070,10 +1072,12 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                   <div>
                     <label className="block text-slate-400 mb-1">Balcão de Registo</label>
                     <select
+                      required
                       value={newClient.lojaOrigemId}
                       onChange={(e) => setNewClient({ ...newClient, lojaOrigemId: e.target.value })}
                       className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
                     >
+                      <option value="">Selecione a loja</option>
                       {storeOptions.map((st) => (
                         <option key={st.id} value={st.id}>
                           {st.nome}
