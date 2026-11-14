@@ -14,7 +14,7 @@ FROM PUBLIC, anon, authenticated, service_role;
 -- The function body schema-qualifies its table references, so keep the
 -- SECURITY DEFINER search path limited to trusted system/temp schemas.
 ALTER FUNCTION public.fn_atualizar_saldo_caixa()
-SET search_path = pg_catalog, pg_temp;
+SET search_path = pg_catalog;
 
 -- The KPI function is attached to a transaction trigger and runs as invoker.
 -- Its unqualified public-table references require public in the pinned path;
