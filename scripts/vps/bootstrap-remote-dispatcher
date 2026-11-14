@@ -94,6 +94,17 @@ case "$ACTION" in
     git -C "$INTEGRATION_DIR" log -1 --format='%h %s'
     git -C "$INTEGRATION_DIR" status --short --branch
     ;;
+  integration_diff)
+    echo "===== ADMIN FUNCIONARIOS LOCAL DIFF (READ ONLY) ====="
+    require_dir "$INTEGRATION_DIR"
+    git -C "$INTEGRATION_DIR" status --short -- src/components/admin/AdminFuncionariosPage.tsx
+    echo
+    echo "===== DIFF AGAINST WORKTREE HEAD ====="
+    git -C "$INTEGRATION_DIR" --no-pager diff --no-ext-diff --no-color --unified=3 HEAD -- src/components/admin/AdminFuncionariosPage.tsx | sed -n '1,260p'
+    echo
+    echo "===== STAGED DIFF SUMMARY ====="
+    git -C "$INTEGRATION_DIR" --no-pager diff --cached --stat -- src/components/admin/AdminFuncionariosPage.tsx
+    ;;
   integration_bun_diagnostics)
     echo "===== BUN DIAGNOSTICS (READ ONLY) ====="
     id
