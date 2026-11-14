@@ -1,5 +1,4 @@
 import { Router, Response } from 'express';
-import { randomUUID } from 'crypto';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { supabaseAdmin } from './auth.service';
 
@@ -37,64 +36,28 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   }
 
   try {
-    const { data: store, error: storeError } = await supabaseAdmin
-      .from('lojas').select('id, ativo').eq('id', employee.loja_id).maybeSingle();
+    const { data: transaction, error: purchaseError } = await supabaseAdmin.rpc('create_store_purchase', {
+      p_funcionario_id: employee.id,
+      p_loja_id: employee.loja_id,
+      p_cliente_nome: clienteNome,
+      p_cliente_cc: clienteCc,
+      p_cliente_contacto: clienteTelemovel || null,
+      p_tipo_peca: tipoPeca,
+      p_metal: metal,
+      p_peso_gramas: peso,
+      p_valor_final: Number(valorFinal.toFixed(2)),
+      p_valor_sugerido: Number(valorSugerido.toFixed(2)),
+      p_cotacao_spot: cotacaoSpot,
+      p_margem: margem,
+      p_descricao: descricao || `${tipoPeca} em ${metal}`,
+    });
 
-    if (storeError) {
-      return res.status(503).json({ success: false, message: 'Não foi possível validar a loja.' });
-    }
-    if (!store || store.ativo !== true) {
-      return res.status(403).json({ success: false, message: 'A loja associada à sua conta não está ativa.' });
-    }
-
-    const { data: transaction, error: txError } = await supabaseAdmin
-      .from('transacoes')
-      .insert({
-        loja_id: employee.loja_id,
-        funcionario_id: employee.id,
-        cliente_nome: clienteNome,
-        cliente_cc: clienteCc,
-        cliente_contacto: clienteTelemovel || null,
-        tipo_peca: tipoPeca,
-        metal,
-        peso_gramas: peso,
-        valor_final: Number(valorFinal.toFixed(2)),
-        valor_sugerido: Number(valorSugerido.toFixed(2)),
-        cotacao_spot_dia: cotacaoSpot,
-        cotacao_dia: cotacaoSpot,
-        margem_aplicada: margem,
-        descricao: descricao || `${tipoPeca} em ${metal}`,
-        estado: 'pendente_aprovacao',
-      })
-      .select('id, loja_id, funcionario_id, estado, valor_final, peso_gramas, created_at')
-      .single();
-
-    if (txError || !transaction) {
-      console.error('[Store Purchase] Falha ao criar transação.');
-      return res.status(503).json({ success: false, message: 'Não foi possível registar a compra.' });
-    }
-
-    const inventoryCode = `INV-${randomUUID().replace(/-/g, '').toUpperCase()}`;
-    const { error: inventoryError } = await supabaseAdmin
-      .from('inventario_fisico')
-      .insert({
-        loja_atual_id: employee.loja_id,
-        transacao_origem_id: transaction.id,
-        codigo_unico: inventoryCode,
-        tipo_peca: tipoPeca,
-        metal,
-        peso_gramas: peso,
-        estado: 'em_loja',
-      });
-
-    if (inventoryError) {
-      console.error('[Store Purchase] Transação criada; falha no inventário físico.');
-      return res.status(207).json({
-        success: false,
-        partial: true,
-        transacao: transaction,
-        message: 'A transação foi criada, mas o inventário não ficou registado. Não repita a compra; contacte a sede.',
-      });
+    if (purchaseError || !transaction || typeof transaction !== 'object' || !transaction.id) {
+      if (purchaseError?.code === '42501') {
+        return res.status(403).json({ success: false, message: 'A sua conta ou loja já não está autorizada a registar compras.' });
+      }
+      console.error('[Store Purchase] Falha na operação atómica de compra e inventário.');
+      return res.status(503).json({ success: false, message: 'Não foi possível registar a compra e o respetivo inventário. Nenhum registo parcial foi confirmado.' });
     }
 
     const io = (globalThis as any).io;
