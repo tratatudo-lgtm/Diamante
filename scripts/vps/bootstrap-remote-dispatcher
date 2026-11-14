@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 TARGET="/usr/local/sbin/diamante-remote-diagnostics"
-SOURCE="https://raw.githubusercontent.com/tratatudo-lgtm/Diamante/rebuild/diamante-douro-secure/scripts/vps/diamante-remote-diagnostics"
+SOURCE="https://raw.githubusercontent.com/tratatudo-lgtm/Diamante/fix/dispatcher-self-update-and-bun-path/scripts/vps/diamante-remote-diagnostics"
 
 if [[ "${EUID}" -ne 0 ]]; then
   echo "Executar como root."
