@@ -56,6 +56,9 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
   const nome = typeof body.nome === 'string' ? body.nome.trim() : '';
   const nif = typeof body.nif === 'string' ? body.nif.replace(/\D/g, '') : '';
   const biCc = typeof body.biCc === 'string' ? body.biCc.trim() : '';
+  const tipoDocumento = typeof body.tipoDocumento === 'string' ? body.tipoDocumento : '';
+  const codigoPostal = typeof body.codigoPostal === 'string' ? body.codigoPostal.trim() : '';
+  const paisResidencia = typeof body.paisResidencia === 'string' ? body.paisResidencia.trim().toUpperCase() : '';
   const telemovel = typeof body.telemovel === 'string' ? body.telemovel.trim() : '';
   const email = typeof body.email === 'string' ? body.email.trim() : '';
   const morada = typeof body.morada === 'string' ? body.morada.trim() : '';
@@ -70,13 +73,13 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
   const status = employee.role === 'admin' ? requestedStatus : 'normal';
 
   if (!nome || nome.length > 200 || !validatePortugueseNIF(nif) ||
-      !biCc || biCc.length > 80 || !telemovel || telemovel.length > 40 ||
-      !morada || morada.length > 300 || email.length > 254 ||
+      !biCc || biCc.length > 80 || !['cc', 'passaporte', 'cartao_residente', 'outro'].includes(tipoDocumento) || !/^\\+[1-9]\\d{7,14}$/.test(telemovel) ||
+      morada.length > 300 || codigoPostal.length > 20 || paisResidencia.length > 10 || email.length > 254 ||
       cidade.length > 100 || dataNascimento.length > 20 || notasInternas.length > 2000 ||
       !lojaId || !consentimentoRgpd) {
     return res.status(400).json({
       success: false,
-      message: 'Preencha nome, NIF português válido, Cartão de Cidadão, telemóvel, morada, loja e confirme o consentimento RGPD.',
+      message: 'Preencha nome, NIF português válido, tipo e número de documento, telefone internacional válido, loja e confirme o consentimento RGPD.',
     });
   }
 
@@ -106,9 +109,12 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
         nome,
         nif,
         bi_cc: biCc,
+        tipo_documento: tipoDocumento,
         telemovel,
         email: email || null,
-        morada,
+        morada: morada || null,
+        codigo_postal: codigoPostal || null,
+        pais_residencia: paisResidencia || null,
         cidade: cidade || null,
         data_nascimento: dataNascimento || null,
         notas_internas: notasInternas || null,
