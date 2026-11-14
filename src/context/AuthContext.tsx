@@ -60,7 +60,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return null;
       }
 
-      const metadata = Array.isArray(rpcData) ? (rpcData[0] as UserSessionData) : (rpcData as UserSessionData);
+      const rawMetadata = Array.isArray(rpcData) ? (rpcData[0] as UserSessionData) : (rpcData as UserSessionData);
+      const metadata: UserSessionData = rawMetadata ? {
+        ...rawMetadata,
+        codigo_loja: rawMetadata.codigo_loja ?? (typeof rawMetadata.loja_codigo === 'string' ? rawMetadata.loja_codigo : null),
+      } : rawMetadata;
       if (metadata?.ativo === false) {
         throw new Error('Conta inativa');
       }
@@ -205,6 +209,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         nome_completo: sessionData.nome_completo,
         role: assignedRole,
         loja_id: assignedLojaId,
+        loja_nome: sessionData.loja_nome ?? null,
+        codigo_loja: sessionData.codigo_loja ?? (typeof sessionData.loja_codigo === 'string' ? sessionData.loja_codigo : null),
         ativo: true,
       };
 
@@ -252,6 +258,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       nome_completo: user.nome_completo,
       role: assignedRole,
       loja_id: user.loja_id ?? null,
+      loja_nome: typeof user.loja_nome === 'string' ? user.loja_nome : null,
+      codigo_loja: typeof user.codigo_loja === 'string' ? user.codigo_loja : (typeof user.loja_codigo === 'string' ? user.loja_codigo : null),
       ativo: true,
     };
 
