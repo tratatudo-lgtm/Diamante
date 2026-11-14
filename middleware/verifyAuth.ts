@@ -9,6 +9,8 @@ export interface AuthenticatedRequest extends Request {
     email: string;
     role: string;
     loja_id: string | null;
+    loja_nome?: string | null;
+    codigo_loja?: string | null;
     telemovel?: string;
     ativo: boolean;
   };
