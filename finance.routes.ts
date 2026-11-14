@@ -42,17 +42,17 @@ router.post('/payments', async (req: Request, res: Response) => {
     const valor = Number(body.valor);
     const metodo = text(body.metodo, 64);
 
-    if (!referencia || !lojaId || !beneficiarioNome || !Number.isFinite(valor) || valor <= 0 || !PAYMENT_METHODS.has(metodo)) {
+    if (!referencia || !lojaId || !beneficiarioNome || !Number.isFinite(valor) || valor <= 0 || valor > 999999999999.99 || Math.round(valor * 100) !== valor * 100 || !PAYMENT_METHODS.has(metodo)) {
       return res.status(400).json({ success: false, message: 'Dados do pagamento inválidos.' });
     }
 
     const { data: store, error: storeError } = await supabaseAdmin
-      .from('lojas').select('id, nome').eq('id', lojaId).maybeSingle();
+      .from('lojas').select('id, nome, ativo').eq('id', lojaId).maybeSingle();
     if (storeError) {
       console.error('[FINANCE] Falha ao validar loja do pagamento.');
       return res.status(503).json({ success: false, message: 'Não foi possível validar a loja.' });
     }
-    if (!store) return res.status(400).json({ success: false, message: 'A loja selecionada não existe.' });
+    if (!store || store.ativo !== true) return res.status(400).json({ success: false, message: 'A loja selecionada não existe ou está inativa.' });
 
     const { data, error } = await supabaseAdmin
       .from('transacoes_financeiras')
