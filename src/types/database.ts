@@ -72,6 +72,7 @@ export interface ClienteProtegido {
   id?: string;
   nome?: string;
   bi_cc_formatado?: string;
+  nif_formatado?: string | null;
   telemovel?: string;
   email?: string;
   morada_protegida?: string;
