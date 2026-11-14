@@ -656,7 +656,21 @@ async function processBirthdayWhatsAppQueue(): Promise<void> {
       return;
     }
     for (const birthday of birthdays || []) {
-      const result = await sendWhatsAppBirthdayGreeting(birthday.telemovel, birthday.nome);
+      const { data: current, error: currentError } = await supabaseAdmin.from('clientes')
+        .select('nome,telemovel,data_nascimento,consentimento_whatsapp_aniversario')
+        .eq('id', birthday.cliente_id).maybeSingle();
+      const lisbonToday = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      const stillBirthday = current?.data_nascimento
+        ? new Date(current.data_nascimento).getUTCMonth() === new Date(lisbonToday).getUTCMonth()
+          && new Date(current.data_nascimento).getUTCDate() === new Date(lisbonToday).getUTCDate()
+        : false;
+      if (currentError || !current || current.consentimento_whatsapp_aniversario !== true || !stillBirthday) {
+        await supabaseAdmin.from('whatsapp_aniversarios_envios')
+          .update({ estado: 'ignorado', erro: 'Consentimento retirado ou aniversário já não corresponde à data actual.', atualizado_em: new Date().toISOString() })
+          .eq('cliente_id', birthday.cliente_id).eq('ano', birthday.ano).eq('estado', 'em_processamento');
+        continue;
+      }
+      const result = await sendWhatsAppBirthdayGreeting(current.telemovel, current.nome);
       const update = await supabaseAdmin.from('whatsapp_aniversarios_envios')
         .update({
           estado: result.success ? 'enviado' : 'falhado',
