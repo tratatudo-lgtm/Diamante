@@ -51,7 +51,10 @@ export interface Client {
   nif: string;
   telemovel: string;
   email: string;
-  docIdentificacao: string; // Ex: CC 14892301 2 ZX4
+  docIdentificacao: string; // Número do documento de identificação
+  tipoDocumento?: string;
+  codigoPostal?: string;
+  paisResidencia?: string;
   dataNascimento: string;
   morada: string;
   cidade: string;
