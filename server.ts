@@ -20,6 +20,7 @@ import jwt from 'jsonwebtoken';
 import { isSocketTokenActive } from './socket-session';
 import { verifyAdmin } from './middleware/verifyAdmin';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
+import { sendWhatsAppBirthdayGreeting } from './whatsapp.service';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -642,6 +643,46 @@ io.on('connection', (socket) => {
   });
 });
 
+// Processamento diário de aniversários (fuso Europe/Lisbon).
+// A função SQL reclama os registos com FOR UPDATE SKIP LOCKED e chave única cliente/ano.
+let birthdayWorkerRunning = false;
+async function processBirthdayWhatsAppQueue(): Promise<void> {
+  if (birthdayWorkerRunning) return;
+  birthdayWorkerRunning = true;
+  try {
+    const { data: birthdays, error } = await supabaseAdmin.rpc('claim_birthday_whatsapp_messages');
+    if (error) {
+      console.error('[Birthday WhatsApp] Não foi possível reclamar a fila.');
+      return;
+    }
+    for (const birthday of birthdays || []) {
+      const result = await sendWhatsAppBirthdayGreeting(birthday.telemovel, birthday.nome);
+      const update = await supabaseAdmin.from('whatsapp_aniversarios_envios')
+        .update({
+          estado: result.success ? 'enviado' : 'falhado',
+          message_id: result.messageId || null,
+          erro: result.success ? null : (result.error || 'Falha no envio.'),
+          atualizado_em: new Date().toISOString(),
+          enviado_em: result.success ? new Date().toISOString() : null,
+        })
+        .eq('cliente_id', birthday.cliente_id)
+        .eq('ano', birthday.ano)
+        .eq('estado', 'em_processamento');
+      if (update.error) console.error('[Birthday WhatsApp] Falha ao actualizar estado de envio.');
+    }
+  } catch {
+    console.error('[Birthday WhatsApp] Erro inesperado no processamento.');
+  } finally {
+    birthdayWorkerRunning = false;
+  }
+}
+
+function startBirthdayWhatsAppWorker(): void {
+  // Executa ao arrancar e depois periodicamente; a chave única impede duplicados anuais.
+  void processBirthdayWhatsAppQueue();
+  setInterval(() => void processBirthdayWhatsAppQueue(), 15 * 60 * 1000);
+}
+
 // Tornar io disponível globalmente para outras rotas/middlewares
 (globalThis as any).io = io;
 
@@ -676,6 +717,7 @@ async function setupViteOrStatic() {
 setupViteOrStatic().then(() => {
   const PORT = process.env.PORT || 3000;
   httpServer.listen(PORT, () => {
+    startBirthdayWhatsAppWorker();
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
     console.log(`Porta: ${PORT}`);
