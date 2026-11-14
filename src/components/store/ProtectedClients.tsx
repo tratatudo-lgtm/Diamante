@@ -68,6 +68,23 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
     return nome.includes(q) || bi.includes(q) || nif.includes(q);
   });
 
+  const updateBirthdayConsent = async (clientId: string, consentimento: boolean) => {
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      const response = await fetch(`/api/clients/${encodeURIComponent(clientId)}/birthday-consent`, {
+        method: 'PATCH',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
+        body: JSON.stringify({ consentimento }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.success !== true) throw new Error(result?.message || 'Não foi possível registar o consentimento.');
+      setClientes(current => current.map(c => c.id === clientId ? { ...c, consentimento_whatsapp_aniversario: consentimento } : c));
+      onShowToast('success', consentimento ? 'Consentimento para mensagem de aniversário registado.' : 'Consentimento para mensagens de aniversário retirado.');
+    } catch (error: any) {
+      onShowToast('error', error?.message || 'Não foi possível actualizar o consentimento.');
+    }
+  };
+
   const submitDocument = async (clientId: string) => {
     if (!documentFile || !documentNumber.trim() || !documentExpiryDate) {
       onShowToast('error', 'Indique o número, a validade e a digitalização do documento.');
@@ -218,6 +235,13 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
                     </span>
                   </div>
                 </div>
+                <label className="flex items-start gap-2 rounded-lg border border-white/[.07] bg-black/20 p-3 text-[11px] text-gray-300">
+                  <input type="checkbox" checked={cliente.consentimento_whatsapp_aniversario === true}
+                    onChange={e=>cliente.id && void updateBirthdayConsent(cliente.id,e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-[#D4AF37]"/>
+                  <span><strong className="block text-white">Autorização para mensagem de aniversário no WhatsApp</strong>
+                    Confirmo que o cliente deu autorização explícita para receber uma mensagem de parabéns no dia do aniversário. Pode retirar a autorização a qualquer momento.</span>
+                </label>
                 {cliente.estado_documento !== 'valido' && (
                   <button type="button" onClick={()=>{setDocumentClientId(documentClientId===cliente.id?null:(cliente.id || null));setDocumentType('cc');setDocumentNumber('');setDocumentIssueDate('');setDocumentExpiryDate('');setDocumentFile(null);}} className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-400/15">
                     <UploadCloud className="h-4 w-4"/> {documentClientId===cliente.id?'Fechar actualização':'Digitalizar / actualizar documento'}
