@@ -180,13 +180,14 @@ clientsRouter.get('/:id/documents', verifyAuth, async (req: AuthenticatedRequest
     const { data: client, error: clientError } = await clientQuery.maybeSingle();
     if (clientError || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
     const { data, error } = await supabaseAdmin.from('cliente_documentos')
-      .select('id,tipo_documento,numero_documento,data_emissao,data_validade,mime_type,tamanho_bytes,uploaded_at,substituido_em')
+      .select('id,tipo_documento,numero_documento,data_emissao,data_validade,mime_type,tamanho_bytes,uploaded_at,substituido_em,storage_path')
       .eq('cliente_id', clientId).order('uploaded_at', { ascending: false }).limit(50);
     if (error) throw error;
     const documents = await Promise.all((data || []).map(async (doc: any) => {
       const { data: signed } = await supabaseAdmin.storage.from('documentos-clientes')
-        .createSignedUrl((await supabaseAdmin.from('cliente_documentos').select('storage_path').eq('id', doc.id).single()).data?.storage_path || '', 300);
-      return { ...doc, signed_url: signed?.signedUrl || null };
+        .createSignedUrl(doc.storage_path, 300);
+      const { storage_path: _privatePath, ...safeDocument } = doc;
+      return { ...safeDocument, signed_url: signed?.signedUrl || null };
     }));
     return res.json({ success: true, documentos: documents });
   } catch {
