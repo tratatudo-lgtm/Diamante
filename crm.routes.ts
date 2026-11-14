@@ -16,7 +16,7 @@ router.get('/clients', async (_req: Request, res: Response) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('clientes')
-      .select('id,nome,bi_cc,telemovel,email,morada,loja_registo_id,created_at,contacto')
+      .select('id,nome,nif,bi_cc,tipo_documento,telemovel,email,morada,loja_registo_id,created_at,contacto,data_nascimento,data_emissao_documento,data_validade_documento')
       .order('nome', { ascending: true })
       .limit(500);
     if (error) return fail(res, 'Falha ao consultar clientes.');
