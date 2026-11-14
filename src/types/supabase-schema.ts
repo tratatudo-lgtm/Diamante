@@ -51,9 +51,12 @@ export interface DatabaseCliente {
   nome: string;
   nif: string | null;
   bi_cc: string;
+  tipo_documento: 'cc' | 'passaporte' | 'cartao_residente' | 'outro';
   telemovel?: string | null;
   email?: string | null;
-  morada: string;
+  morada: string | null;
+  codigo_postal?: string | null;
+  pais_residencia?: string | null;
   cidade?: string | null;
   data_nascimento?: string | null;
   loja_registo_id: string;
