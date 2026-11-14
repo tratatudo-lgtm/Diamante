@@ -1,4 +1,4 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useRef } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Sparkles,
@@ -42,6 +42,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [valorFinalManual, setValorFinalManual] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   // Unique IDs for accessibility
   const clienteNomeId = useId();
@@ -122,6 +123,8 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       const token = sessionStorage.getItem('diamante_jwt_token');
       if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
 
+      const idempotencyKey = idempotencyKeyRef.current || crypto.randomUUID();
+      idempotencyKeyRef.current = idempotencyKey;
       const txResponse = await fetch('/api/store/purchases', {
         method: 'POST',
         headers: {
@@ -129,6 +132,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          idempotencyKey,
           clienteNome: clienteNome.trim(),
           clienteCc: clienteCc.trim(),
           clienteTelemovel: clienteTelemovel.trim() || null,
@@ -165,6 +169,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       );
 
       // Limpar formulário
+      idempotencyKeyRef.current = null;
       setClienteNome('');
       setClienteCc('');
       setClienteTelemovel('');
