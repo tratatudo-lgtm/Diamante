@@ -12,6 +12,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   }
 
   const body = req.body || {};
+  const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : '';
   const clienteNome = typeof body.clienteNome === 'string' ? body.clienteNome.trim() : '';
   const clienteCc = typeof body.clienteCc === 'string' ? body.clienteCc.trim() : '';
   const clienteTelemovel = typeof body.clienteTelemovel === 'string' ? body.clienteTelemovel.trim() : '';
@@ -24,7 +25,8 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   const cotacaoSpot = Number(body.cotacaoSpot);
   const margem = Number(body.margemPercent);
 
-  if (!clienteNome || clienteNome.length > 200 || !clienteCc || clienteCc.length > 80 ||
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey) ||
+      !clienteNome || clienteNome.length > 200 || !clienteCc || clienteCc.length > 80 ||
       clienteTelemovel.length > 40 || !tipoPeca || tipoPeca.length > 100 ||
       !metal || metal.length > 100 || descricao.length > 2000 ||
       !Number.isFinite(peso) || peso <= 0 || peso > 100000 ||
@@ -37,6 +39,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
 
   try {
     const { data: transaction, error: purchaseError } = await supabaseAdmin.rpc('create_store_purchase', {
+      p_idempotency_key: idempotencyKey,
       p_funcionario_id: employee.id,
       p_loja_id: employee.loja_id,
       p_cliente_nome: clienteNome,
