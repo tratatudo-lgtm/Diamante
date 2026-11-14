@@ -81,7 +81,7 @@ export interface ClienteProtegido {
   historico_compras_count?: number;
   tipo_documento?: string | null;
   data_validade_documento?: string | null;
-  estado_documento?: 'valido' | 'a_expirar' | 'expirado' | 'sem_data';
+  estado_documento?: 'valido' | 'a_expirar' | 'expirado' | 'sem_data';\n  consentimento_whatsapp_aniversario?: boolean;
 }
 
 export interface UserSessionData {
