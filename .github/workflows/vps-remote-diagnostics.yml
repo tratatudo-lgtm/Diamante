@@ -12,6 +12,9 @@ on:
           - services
           - nginx
           - rebuild_git_status
+          - integration_status
+          - integration_bun_diagnostics
+          - integration_validate
 
 permissions:
   contents: read
@@ -47,7 +50,7 @@ jobs:
             fi
           done
           case "$REMOTE_ACTION" in
-            health|services|nginx|rebuild_git_status) ;;
+            health|services|nginx|rebuild_git_status|integration_status|integration_bun_diagnostics|integration_validate) ;;
             *) echo "::error::Operação não permitida."; exit 1 ;;
           esac
           if [[ ! "$VPS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]; then
@@ -65,9 +68,9 @@ jobs:
         run: |
           set -euo pipefail
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
-          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Run allowlisted remote diagnostic
@@ -78,9 +81,9 @@ jobs:
           REMOTE_ACTION: ${{ inputs.action }}
         run: |
           set -euo pipefail
-          ssh -i "$HOME/.ssh/id_ed25519" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o ConnectTimeout=10 \
+          ssh -i "$HOME/.ssh/id_ed25519" \\
+            -o BatchMode=yes \\
+            -o IdentitiesOnly=yes \\
+            -o StrictHostKeyChecking=yes \\
+            -o ConnectTimeout=10 \\
             "$VPS_USER@$VPS_HOST" "$REMOTE_ACTION"
