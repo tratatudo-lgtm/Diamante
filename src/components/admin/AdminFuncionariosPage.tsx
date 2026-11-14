@@ -479,7 +479,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
               </div>
             ) : filteredFuncionarios.map((func) => {
               const isAtivo = func.ativo !== false;
-              const isAdmin = func.role === 'admin' || func.role === 'master';
+              const isAdmin = func.role === 'admin';
               return (
                 <article key={func.id} className="rounded-2xl border border-slate-700/70 bg-gradient-to-br from-slate-900 to-[#0b1220] p-4 shadow-lg shadow-black/10">
                   <div className="flex items-start gap-3">
@@ -561,7 +561,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
                   ) : (
                     filteredFuncionarios.map((func) => {
                       const isAtivo = func.ativo !== false;
-                      const isAdmin = func.role === 'admin' || func.role === 'master';
+                      const isAdmin = func.role === 'admin';
 
                       return (
                         <tr
