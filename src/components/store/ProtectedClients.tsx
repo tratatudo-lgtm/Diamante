@@ -56,7 +56,8 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
     const nome = (c.nome || '').toLowerCase();
     const bi = (c.bi_cc_formatado || '').toLowerCase();
     const nif = (c.nif_formatado || '').toLowerCase();
-    return nome.includes(q) || bi.includes(q) || (digits.length > 0 && nif.includes(digits));
+    if (digits.length > 0) return true; // A API já filtrou pelo NIF completo/parcial.
+    return nome.includes(q) || bi.includes(q) || nif.includes(q);
   });
 
   const formatCurrency = (val: number) => {
