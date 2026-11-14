@@ -242,55 +242,42 @@ export function useEmployees() {
 }
 
 // =========================================================================
-// HOOK 3: useClients (Clientes & Fornecedores)
+// =========================================================================
+// HOOK 3: useClients (Clientes & Fornecedores) — API autenticada
 // =========================================================================
 export function useClients() {
   const [data, setData] = useState<Client[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const mapClient = (row: any): Client => ({
+    id: String(row.id),
+    codigoCliente: row.codigo_cliente || '',
+    nome: row.nome || '',
+    nif: row.nif || '',
+    telemovel: row.telemovel || '',
+    email: row.email || '',
+    docIdentificacao: row.bi_cc || '',
+    dataNascimento: row.data_nascimento || '',
+    morada: row.morada || '',
+    cidade: row.cidade || '',
+    lojaOrigemId: row.loja_registo_id || '',
+    lojaOrigemNome: row.loja_nome || '',
+    status: row.status === 'vip' || row.status === 'bloqueado' || row.status === 'normal' ? row.status as ClientStatus : 'normal',
+    totalTransacoes: Number(row.total_transacoes) || 0,
+    totalCompradoEUR: Number(row.total_comprado_eur) || 0,
+    ultimaVisita: row.ultima_visita || '',
+    dataRegisto: row.created_at ? new Date(row.created_at).toLocaleDateString('pt-PT') : '',
+    notasInternas: row.notas_internas || '',
+    historico: [],
+  });
+
   const fetchClients = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
-
-      if (isSupabaseConfigured()) {
-        const { data: dbClients, error: dbError } = await supabase
-          .from('clientes')
-          .select('*')
-          .order('nome', { ascending: true });
-
-        if (dbError) throw dbError;
-        {
-          const mapped: Client[] = (dbClients || []).map((row: any) => ({
-            id: String(row.id),
-            codigoCliente: row.codigo_cliente || '',
-            nome: row.nome || '',
-            nif: row.nif || '',
-            telemovel: row.telemovel || '',
-            email: row.email || '',
-            docIdentificacao: row.doc_identificacao || '',
-            dataNascimento: row.data_nascimento || '',
-            morada: row.morada || '',
-            cidade: row.cidade || '',
-            lojaOrigemId: row.loja_origem_id || '',
-            lojaOrigemNome: row.loja_origem_nome || '',
-            status: row.status === 'vip' || row.status === 'bloqueado' || row.status === 'normal' ? row.status as ClientStatus : '',
-            totalTransacoes: Number(row.total_transacoes) || 0,
-            totalCompradoEUR: Number(row.total_comprado_eur) || 0.0,
-            ultimaVisita: row.ultima_visita || '',
-            dataRegisto: row.created_at ? new Date(row.created_at).toLocaleDateString('pt-PT') : '',
-            notasInternas: row.notas_internas || '',
-            historico: Array.isArray(row.historico) ? row.historico : [],
-          }));
-
-          setData(mapped);
-          return;
-        }
-      }
-
-      setData([]);
+      const result = await adminApiRequest('/api/clients');
+      setData(Array.isArray(result?.clientes) ? result.clientes.map(mapClient) : []);
     } catch (err: any) {
       setError(err?.message || 'Falha ao sincronizar clientes');
       setData([]);
@@ -304,44 +291,52 @@ export function useClients() {
   }, [fetchClients]);
 
   const createClient = async (newCli: Client) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O cliente não foi criado.');
-    const { data: inserted, error } = await supabase.from('clientes').insert({
-      codigo_cliente: newCli.codigoCliente, nome: newCli.nome, nif: newCli.nif,
-      telemovel: newCli.telemovel, email: newCli.email, doc_identificacao: newCli.docIdentificacao,
-      data_nascimento: newCli.dataNascimento, morada: newCli.morada, cidade: newCli.cidade,
-      loja_origem_id: newCli.lojaOrigemId, status: newCli.status, notas_internas: newCli.notasInternas,
-    }).select('id').single();
-    if (error) throw error;
-    if (!inserted?.id) throw new Error('A base de dados não devolveu o identificador do cliente criado.');
-    setData((prev) => [{ ...newCli, id: String(inserted.id) }, ...prev]);
+    const result = await adminApiRequest('/api/clients', {
+      method: 'POST',
+      body: JSON.stringify({
+        nome: newCli.nome,
+        nif: newCli.nif,
+        biCc: newCli.docIdentificacao,
+        telemovel: newCli.telemovel,
+        email: newCli.email,
+        morada: newCli.morada,
+        cidade: newCli.cidade,
+        dataNascimento: newCli.dataNascimento,
+        notasInternas: newCli.notasInternas,
+        lojaOrigemId: newCli.lojaOrigemId,
+        status: newCli.status,
+        consentimentoRgpd: true,
+      }),
+    });
+    if (!result?.cliente?.id) throw new Error('A API não devolveu o identificador do cliente criado.');
+    const created = mapClient(result.cliente);
+    setData((prev) => [created, ...prev.filter((client) => client.id !== created.id)]);
+  };
+
+  const updateClientStatus = async (clientId: string, status: ClientStatus) => {
+    const result = await adminApiRequest(`/api/clients/${encodeURIComponent(clientId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    });
+    if (!result?.cliente?.id) throw new Error('Não foi possível confirmar a alteração do cliente.');
+    setData((prev) => prev.map((client) => client.id === clientId ? { ...client, status } : client));
   };
 
   const toggleBlockClient = async (clientId: string) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O estado do cliente não foi alterado.');
     const target = data.find((client) => client.id === clientId);
     if (!target) throw new Error('Cliente não encontrado.');
-    const nextStatus: ClientStatus = target.status === 'bloqueado' ? 'normal' : 'bloqueado';
-    const { data: updatedRows, error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId).select('id');
-    if (error) throw error;
-    if (!updatedRows?.length) throw new Error('O cliente não foi encontrado ou não foi atualizado.');
-    setData((prev) => prev.map((client) => client.id === clientId ? { ...client, status: nextStatus } : client));
+    await updateClientStatus(clientId, target.status === 'bloqueado' ? 'normal' : 'bloqueado');
   };
 
   const toggleVipClient = async (clientId: string) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O estado VIP não foi alterado.');
     const target = data.find((client) => client.id === clientId);
     if (!target) throw new Error('Cliente não encontrado.');
-    const nextStatus: ClientStatus = target.status === 'vip' ? 'normal' : 'vip';
-    const { data: updatedRows, error } = await supabase.from('clientes').update({ status: nextStatus }).eq('id', clientId).select('id');
-    if (error) throw error;
-    if (!updatedRows?.length) throw new Error('O cliente não foi encontrado ou não foi atualizado.');
-    setData((prev) => prev.map((client) => client.id === clientId ? { ...client, status: nextStatus } : client));
+    await updateClientStatus(clientId, target.status === 'vip' ? 'normal' : 'vip');
   };
 
   return { data, loading, error, refetch: fetchClients, createClient, toggleBlockClient, toggleVipClient };
 }
 
-// =========================================================================
 // HOOK 4: useFinanceTransactions (Financeiro & Tesouraria)
 // =========================================================================
 export function useFinanceTransactions() {
