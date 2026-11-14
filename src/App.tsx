@@ -29,9 +29,7 @@ function AppRouter() {
 
   const isAdmin =
     role === 'admin' ||
-    role === 'master' ||
-    userSession?.role === 'admin' ||
-    userSession?.role === 'master';
+    userSession?.role === 'admin';
 
   // Rotas suportadas: '/', '/login', '/register', '/dashboard-admin', '/admin/lojas', '/admin/funcionarios', '/admin/config', '/loja-atual'
   const [currentPath, setCurrentPath] = useState<string>(() => {
