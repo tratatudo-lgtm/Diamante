@@ -39,6 +39,8 @@ export interface AuthenticatedUser {
   role: string;
   loja_id: string | null;
   telemovel?: string;
+  loja_nome?: string | null;
+  codigo_loja?: string | null;
   ativo: boolean;
 }
 
@@ -84,7 +86,7 @@ export async function findUserInSupabaseByPhone(phone: string): Promise<Authenti
     // 1. Tentar consultar na tabela 'funcionarios' com as variantes do telemóvel
     const { data, error } = await supabaseAdmin
       .from('funcionarios')
-      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
       .in('telemovel', variants)
       .limit(2);
 
@@ -112,12 +114,15 @@ export async function findUserInSupabaseByPhone(phone: string): Promise<Authenti
         return null;
       }
 
+      const store = Array.isArray(matchedUser.lojas) ? matchedUser.lojas[0] : matchedUser.lojas;
       return {
         id: userId,
         nome_completo: fullName,
         email: typeof matchedUser.email === 'string' ? matchedUser.email : '',
         role: userRole,
         loja_id: matchedUser.loja_id ?? null,
+        loja_nome: typeof store?.nome === 'string' ? store.nome : null,
+        codigo_loja: typeof store?.codigo_loja === 'string' ? store.codigo_loja : null,
         telemovel:
           typeof matchedUser.telemovel === 'string' &&
           matchedUser.telemovel.trim()
@@ -142,7 +147,7 @@ export async function findUserInSupabaseByEmail(email: string): Promise<Authenti
   try {
     const { data, error } = await supabaseAdmin
       .from('funcionarios')
-      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
       .eq('email', normalizedEmail)
       .maybeSingle();
 
@@ -170,12 +175,15 @@ export async function findUserInSupabaseByEmail(email: string): Promise<Authenti
         return null;
       }
 
+      const store = Array.isArray(data.lojas) ? data.lojas[0] : data.lojas;
       return {
         id: userId,
         nome_completo: fullName,
         email: userEmail,
         role: userRole,
         loja_id: data.loja_id ?? null,
+        loja_nome: typeof store?.nome === 'string' ? store.nome : null,
+        codigo_loja: typeof store?.codigo_loja === 'string' ? store.codigo_loja : null,
         telemovel:
           typeof data.telemovel === 'string' ? data.telemovel : undefined,
         ativo: true,
