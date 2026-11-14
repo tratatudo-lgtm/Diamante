@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+
 import type { ClienteProtegido } from '../../types/database';
 import {
   ShieldCheck,
@@ -28,7 +28,6 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada.');
       const token = sessionStorage.getItem('diamante_jwt_token');
       if (!token) throw new Error('Sessão não encontrada.');
       const response = await fetch('/api/clients/protected?search=' + encodeURIComponent(search), {
