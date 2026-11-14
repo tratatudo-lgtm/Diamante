@@ -25,7 +25,7 @@ concurrency:
 jobs:
   remote-diagnostics:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Checkout selected branch
         uses: actions/checkout@v4
@@ -43,7 +43,10 @@ jobs:
         run: |
           set -euo pipefail
           for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_KNOWN_HOSTS; do
-            if [[ -z "${!name:-}" ]]; then
+            if [[ -z "$VPS_HOST" && "$name" == "VPS_HOST" ]] || \
+               [[ -z "$VPS_USER" && "$name" == "VPS_USER" ]] || \
+               [[ -z "$VPS_SSH_KEY" && "$name" == "VPS_SSH_KEY" ]] || \
+               [[ -z "$VPS_KNOWN_HOSTS" && "$name" == "VPS_KNOWN_HOSTS" ]]; then
               echo "::error::Falta configurar o secret $name."
               exit 1
             fi
@@ -67,9 +70,9 @@ jobs:
         run: |
           set -euo pipefail
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519"
-          printf '%s\\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/known_hosts"
 
       - name: Run allowlisted remote operation
@@ -80,9 +83,9 @@ jobs:
           REMOTE_ACTION: ${{ inputs.action }}
         run: |
           set -euo pipefail
-          ssh -i "$HOME/.ssh/id_ed25519" \\
-            -o BatchMode=yes \\
-            -o IdentitiesOnly=yes \\
-            -o StrictHostKeyChecking=yes \\
-            -o ConnectTimeout=10 \\
+          ssh -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=10 \
             "$VPS_USER@$VPS_HOST" "$REMOTE_ACTION"
