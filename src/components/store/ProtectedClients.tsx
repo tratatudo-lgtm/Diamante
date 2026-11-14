@@ -10,7 +10,9 @@ import {
   CreditCard,
   Receipt,
   FileLock,
-  AlertCircle
+  AlertCircle,
+  UploadCloud,
+  CalendarClock
 } from 'lucide-react';
 
 interface ProtectedClientsProps {
