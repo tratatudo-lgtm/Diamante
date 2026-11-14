@@ -5,6 +5,8 @@ import { verifyAdmin } from './middleware/verifyAdmin';
 const router = Router();
 router.use(verifyAdmin);
 
+// Este módulo utiliza supabaseAdmin; não expor dados do CRM a perfis de loja.
+
 function fail(res: Response, label: string) {
   console.error(`[CRM] ${label}`);
   return res.status(503).json({ success: false, error: 'Não foi possível carregar os dados do CRM.' });
