@@ -9,7 +9,7 @@ INTEGRATION_DIR="/opt/diamante-rebuild/Diamante-integracao"
 
 require_dir() {
   local dir="$1"
-  if [[ ! -d "$dir/.git" ]]; then
+  if [[ ! -e "$dir/.git" ]]; then
     echo "Diretório Git não encontrado: $dir"
     exit 2
   fi
