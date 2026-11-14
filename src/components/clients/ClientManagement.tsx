@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 import { useClients, useStores } from '../../hooks/useSupabaseData';
 
+const PHONE_COUNTRIES = [["PT","🇵🇹 Portugal","+351"],["ES","🇪🇸 Espanha","+34"],["FR","🇫🇷 França","+33"],["GB","🇬🇧 Reino Unido","+44"],["IE","🇮🇪 Irlanda","+353"],["DE","🇩🇪 Alemanha","+49"],["CH","🇨🇭 Suíça","+41"],["LU","🇱🇺 Luxemburgo","+352"],["BE","🇧🇪 Bélgica","+32"],["NL","🇳🇱 Países Baixos","+31"],["IT","🇮🇹 Itália","+39"],["BR","🇧🇷 Brasil","+55"],["AO","🇦🇴 Angola","+244"],["MZ","🇲🇿 Moçambique","+258"],["CV","🇨🇻 Cabo Verde","+238"],["US","🇺🇸 Estados Unidos","+1"],["CA","🇨🇦 Canadá","+1"],["UA","🇺🇦 Ucrânia","+380"],["RO","🇷🇴 Roménia","+40"],["PL","🇵🇱 Polónia","+48"],["MA","🇲🇦 Marrocos","+212"],["IN","🇮🇳 Índia","+91"],["CN","🇨🇳 China","+86"],["JP","🇯🇵 Japão","+81"],["ZA","🇿🇦 África do Sul","+27"],["SN","🇸🇳 Senegal","+221"],["NG","🇳🇬 Nigéria","+234"],["GH","🇬🇭 Gana","+233"],["TR","🇹🇷 Turquia","+90"],["AE","🇦🇪 Emirados Árabes Unidos","+971"],["SA","🇸🇦 Arábia Saudita","+966"],["MX","🇲🇽 México","+52"],["AR","🇦🇷 Argentina","+54"],["CL","🇨🇱 Chile","+56"],["CO","🇨🇴 Colômbia","+57"],["AU","🇦🇺 Austrália","+61"],["SE","🇸🇪 Suécia","+46"],["NO","🇳🇴 Noruega","+47"],["DK","🇩🇰 Dinamarca","+45"],["FI","🇫🇮 Finlândia","+358"],["GR","🇬🇷 Grécia","+30"],["AT","🇦🇹 Áustria","+43"],["CZ","🇨🇿 Chéquia","+420"],["HR","🇭🇷 Croácia","+385"],["SK","🇸🇰 Eslováquia","+421"],["SI","🇸🇮 Eslovénia","+386"],["HU","🇭🇺 Hungria","+36"],["BG","🇧🇬 Bulgária","+359"],["CY","🇨🇾 Chipre","+357"],["IS","🇮🇸 Islândia","+354"],["IL","🇮🇱 Israel","+972"],["PK","🇵🇰 Paquistão","+92"],["BD","🇧🇩 Bangladesh","+880"],["ID","🇮🇩 Indonésia","+62"],["PH","🇵🇭 Filipinas","+63"],["TH","🇹🇭 Tailândia","+66"],["KR","🇰🇷 Coreia do Sul","+82"],["NZ","🇳🇿 Nova Zelândia","+64"]] as const;
+
 export type ClientStatus = 'vip' | 'normal' | 'bloqueado' | '';
 
 export interface ClientTransactionRecord {
@@ -82,6 +84,10 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
   // Modais de Ação
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isNewClientModalOpen, setIsNewClientModalOpen] = useState(false);
+  const [phoneCountry, setPhoneCountry] = useState('PT');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [documentType, setDocumentType] = useState('cc');
+  const [addressCountry, setAddressCountry] = useState('PT');
 
   // Form State para Novo Cliente
   const [newClient, setNewClient] = useState({
@@ -89,6 +95,9 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
     nif: '',
     telemovel: '',
     email: '',
+    tipoDocumento: 'cc',
+    codigoPostal: '',
+    paisResidencia: 'PT',
     docIdentificacao: '',
     dataNascimento: '',
     morada: '',
@@ -193,15 +202,18 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClient.nome.trim() || !newClient.nif.trim() || !newClient.docIdentificacao.trim() || !newClient.consentimentoRgpd) { setActionError('Nome, NIF, Cartão de Cidadão e consentimento RGPD são obrigatórios.'); return; }
+    if (!newClient.nome.trim() || !newClient.nif.trim() || !newClient.docIdentificacao.trim() || !phoneNumber.trim() || !newClient.consentimentoRgpd) { setActionError('Nome, NIF, documento de identificação, telefone e consentimento RGPD são obrigatórios.'); return; }
     const nif = newClient.nif.replace(/\D/g, '');
     if (!/^\d{9}$/.test(nif)) { setActionError('O NIF deve conter exatamente 9 algarismos.'); return; }
+    const selectedPhoneCountry = PHONE_COUNTRIES.find((country) => country[0] === phoneCountry) || PHONE_COUNTRIES[0];
+    const internationalPhone = `${selectedPhoneCountry[2]}${phoneNumber.replace(/\D/g, '').replace(/^0+/, '')}`;
+    if (!/^\+[1-9]\d{7,14}$/.test(internationalPhone)) { setActionError('Introduza um número de telefone válido com o indicativo internacional selecionado.'); return; }
     const storeObj = storeOptions.find((store) => store.id === newClient.lojaOrigemId);
     const newId = `cli-${Date.now()}`;
     const nextCode = `CLI-${String(clients.length + 1).padStart(3, '0')}`;
     const created: Client = {
       id: newId, codigoCliente: nextCode, nome: newClient.nome.trim(), nif,
-      telemovel: newClient.telemovel.trim(), email: newClient.email.trim(),
+      telemovel: internationalPhone, email: newClient.email.trim(),
       docIdentificacao: newClient.docIdentificacao.trim(), dataNascimento: newClient.dataNascimento,
       morada: newClient.morada.trim(), cidade: newClient.cidade.trim(),
       lojaOrigemId: newClient.lojaOrigemId, lojaOrigemNome: storeObj?.nome || '',
@@ -212,7 +224,8 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
     try {
       await createClient(created);
       setIsNewClientModalOpen(false);
-      setNewClient({ nome: '', nif: '', telemovel: '', email: '', docIdentificacao: '', dataNascimento: '', morada: '', cidade: '', lojaOrigemId: '', status: 'normal', notasInternas: '', consentimentoRgpd: false });
+      setNewClient({ nome: '', nif: '', telemovel: '', email: '', docIdentificacao: '', tipoDocumento: 'cc', codigoPostal: '', paisResidencia: 'PT', dataNascimento: '', morada: '', cidade: '', lojaOrigemId: '', status: 'normal', notasInternas: '', consentimentoRgpd: false });
+      setPhoneCountry('PT'); setPhoneNumber(''); setDocumentType('cc'); setAddressCountry('PT');
     } catch (err: any) {
       setActionError(err?.message || 'Falha ao criar o cliente.');
     }
@@ -989,32 +1002,30 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                     />
                   </div>
 
-                  {/* Telemóvel */}
+                  {/* Telefone internacional */}
                   <div>
-                    <label className="block text-slate-400 mb-1">Telemóvel (+351) *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newClient.telemovel}
-                      onChange={(e) => setNewClient({ ...newClient, telemovel: e.target.value })}
-                      placeholder="+351 912 345 678"
-                      className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono focus:outline-hidden focus:border-[#D4AF37]"
-                    />
+                    <label className="block text-slate-400 mb-1">Telefone *</label>
+                    <div className="flex gap-2">
+                      <select value={phoneCountry} onChange={(e) => setPhoneCountry(e.target.value)} aria-label="País do indicativo telefónico" className="w-[48%] min-w-0 px-2 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white text-xs focus:outline-hidden focus:border-[#D4AF37]">
+                        {PHONE_COUNTRIES.map(([code, country, dial]) => <option key={code} value={code}>{country} {dial}</option>)}
+                      </select>
+                      <input type="tel" inputMode="tel" autoComplete="tel-national" required value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value.replace(/[^0-9 ()-]/g, ''))} placeholder="912 345 678" className="min-w-0 flex-1 px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono focus:outline-hidden focus:border-[#D4AF37]" />
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1">O indicativo internacional é incluído automaticamente.</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   {/* Doc Identificação */}
                   <div>
-                    <label className="block text-slate-400 mb-1">Cartão de Cidadão / Documento de Identificação *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newClient.docIdentificacao}
-                      onChange={(e) => setNewClient({ ...newClient, docIdentificacao: e.target.value })}
-                      placeholder="CC 12345678 9 ZX1"
-                      className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono focus:outline-hidden focus:border-[#D4AF37]"
-                    />
+                    <label className="block text-slate-400 mb-1">Tipo de documento *</label>
+                    <select required value={documentType} onChange={(e) => { setDocumentType(e.target.value); setNewClient({ ...newClient, tipoDocumento: e.target.value }); }} className="w-full mb-2 px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]">
+                      <option value="cc">Cartão de Cidadão</option>
+                      <option value="passaporte">Passaporte</option>
+                      <option value="cartao_residente">Cartão de Residência</option>
+                      <option value="outro">Outro documento</option>
+                    </select>
+                    <input type="text" required value={newClient.docIdentificacao} onChange={(e) => setNewClient({ ...newClient, docIdentificacao: e.target.value })} placeholder={documentType === 'cc' ? 'Número do Cartão de Cidadão' : documentType === 'passaporte' ? 'Número do passaporte' : documentType === 'cartao_residente' ? 'Número do cartão de residência' : 'Tipo e número do documento'} className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono focus:outline-hidden focus:border-[#D4AF37]" />
                   </div>
 
                   {/* Data Nascimento */}
@@ -1042,29 +1053,19 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                   />
                 </div>
 
-                {/* Morada & Cidade */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="col-span-2">
-                    <label className="block text-slate-400 mb-1">Morada Residência</label>
-                    <input
-                      type="text"
-                      required
-                      value={newClient.morada}
-                      onChange={(e) => setNewClient({ ...newClient, morada: e.target.value })}
-                      placeholder="Rua, Número, Andar"
-                      className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]"
-                    />
+                {/* Morada internacional opcional */}
+                <div className="space-y-3 rounded-xl border border-slate-800 p-3">
+                  <div className="flex items-center justify-between gap-2"><label className="block text-slate-300">Morada de residência</label><span className="text-[10px] text-slate-500">Opcional</span></div>
+                  <input type="text" value={newClient.morada} onChange={(e) => setNewClient({ ...newClient, morada: e.target.value })} placeholder="Rua, número, andar, complemento" className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]" />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input type="text" value={newClient.codigoPostal} onChange={(e) => setNewClient({ ...newClient, codigoPostal: e.target.value })} placeholder="Código postal (opcional)" className="w-full min-w-0 px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]" />
+                    <input type="text" value={newClient.cidade} onChange={(e) => setNewClient({ ...newClient, cidade: e.target.value })} placeholder="Cidade / Localidade" className="w-full min-w-0 px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]" />
+                    <select value={addressCountry} onChange={(e) => { setAddressCountry(e.target.value); setNewClient({ ...newClient, paisResidencia: e.target.value }); }} className="w-full min-w-0 px-2 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]">
+                      {PHONE_COUNTRIES.map(([code, country]) => <option key={code} value={code}>{country}</option>)}
+                      <option value="OUTRO">🌐 Outro país</option>
+                    </select>
                   </div>
-                  <div>
-                    <label className="block text-slate-400 mb-1">Cidade</label>
-                    <input
-                      type="text"
-                      value={newClient.cidade}
-                      onChange={(e) => setNewClient({ ...newClient, cidade: e.target.value })}
-                      placeholder="Lisboa"
-                      className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]"
-                    />
-                  </div>
+                  <p className="text-[10px] text-slate-500">Pode indicar uma morada em Portugal ou noutro país. Não é obrigatório preencher estes campos.</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
