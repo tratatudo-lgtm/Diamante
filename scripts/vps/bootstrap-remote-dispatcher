@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+TARGET="/usr/local/sbin/diamante-remote-diagnostics"
+SOURCE="https://raw.githubusercontent.com/tratatudo-lgtm/Diamante/rebuild/diamante-douro-secure/scripts/vps/diamante-remote-diagnostics"
+
+if [[ "${EUID}" -ne 0 ]]; then
+  echo "Executar como root."
+  exit 1
+fi
+command -v curl >/dev/null 2>&1 || { echo "curl não está instalado."; exit 2; }
+command -v bash >/dev/null 2>&1 || { echo "bash não está instalado."; exit 2; }
+
+install -d -m 0755 /usr/local/sbin
+TMP="$(mktemp /usr/local/sbin/diamante-remote-diagnostics.bootstrap.XXXXXX)"
+cleanup() { rm -f "$TMP"; }
+trap cleanup EXIT
+
+echo "A obter dispatcher versionado..."
+curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 "$SOURCE" --output "$TMP"
+
+echo "A validar sintaxe..."
+bash -n "$TMP"
+chmod 0755 "$TMP"
+
+if [[ -e "$TARGET" ]]; then
+  BACKUP="${TARGET}.backup-bootstrap-$(date +%Y%m%d-%H%M%S)"
+  cp -a "$TARGET" "$BACKUP"
+  echo "Backup criado: $BACKUP"
+fi
+
+mv -f "$TMP" "$TARGET"
+trap - EXIT
+bash -n "$TARGET"
+chmod 0755 "$TARGET"
+
+echo "Dispatcher instalado e validado."
+sha256sum "$TARGET"
+echo "Não foram reiniciados serviços nem alteradas configurações SSH."
