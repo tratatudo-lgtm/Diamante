@@ -96,6 +96,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
     lojaOrigemId: '',
     status: 'normal' as ClientStatus,
     notasInternas: '',
+    consentimentoRgpd: false,
   });
 
   // =========================================================
@@ -148,7 +149,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
         const matchNome = client.nome.toLowerCase().includes(q);
-        const matchNif = client.nif.includes(q);
+        const matchNif = (client.nif || '').replace(/\D/g, '').includes(q.replace(/\D/g, ''));
         const matchTel = client.telemovel.replace(/\s+/g, '').includes(q.replace(/\s+/g, ''));
         const matchDoc = client.docIdentificacao.toLowerCase().includes(q);
         const matchEmail = client.email.toLowerCase().includes(q);
@@ -191,12 +192,14 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClient.nome.trim() || !newClient.nif.trim()) return;
+    if (!newClient.nome.trim() || !newClient.nif.trim() || !newClient.docIdentificacao.trim() || !newClient.consentimentoRgpd) { setActionError('Nome, NIF, Cartão de Cidadão e consentimento RGPD são obrigatórios.'); return; }
+    const nif = newClient.nif.replace(/\D/g, '');
+    if (!/^\d{9}$/.test(nif)) { setActionError('O NIF deve conter exatamente 9 algarismos.'); return; }
     const storeObj = storeOptions.find((store) => store.id === newClient.lojaOrigemId);
     const newId = `cli-${Date.now()}`;
     const nextCode = `CLI-${String(clients.length + 1).padStart(3, '0')}`;
     const created: Client = {
-      id: newId, codigoCliente: nextCode, nome: newClient.nome.trim(), nif: newClient.nif.trim(),
+      id: newId, codigoCliente: nextCode, nome: newClient.nome.trim(), nif,
       telemovel: newClient.telemovel.trim(), email: newClient.email.trim(),
       docIdentificacao: newClient.docIdentificacao.trim(), dataNascimento: newClient.dataNascimento,
       morada: newClient.morada.trim(), cidade: newClient.cidade.trim(),
@@ -208,7 +211,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
     try {
       await createClient(created);
       setIsNewClientModalOpen(false);
-      setNewClient({ nome: '', nif: '', telemovel: '', email: '', docIdentificacao: '', dataNascimento: '', morada: '', cidade: '', lojaOrigemId: '', status: 'normal', notasInternas: '' });
+      setNewClient({ nome: '', nif: '', telemovel: '', email: '', docIdentificacao: '', dataNascimento: '', morada: '', cidade: '', lojaOrigemId: '', status: 'normal', notasInternas: '', consentimentoRgpd: false });
     } catch (err: any) {
       setActionError(err?.message || 'Falha ao criar o cliente.');
     }
@@ -979,7 +982,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                       required
                       maxLength={9}
                       value={newClient.nif}
-                      onChange={(e) => setNewClient({ ...newClient, nif: e.target.value.replace(/\D/g, '') })}
+                      onChange={(e) => setNewClient({ ...newClient, nif: e.target.value.replace(/\D/g, '').slice(0, 9) })}
                       placeholder="213456789"
                       className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono focus:outline-hidden focus:border-[#D4AF37]"
                     />
@@ -1002,7 +1005,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                 <div className="grid grid-cols-2 gap-3">
                   {/* Doc Identificação */}
                   <div>
-                    <label className="block text-slate-400 mb-1">Documento (CC / Passaporte) *</label>
+                    <label className="block text-slate-400 mb-1">Cartão de Cidadão / Documento de Identificação *</label>
                     <input
                       type="text"
                       required
@@ -1105,6 +1108,11 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                     className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]"
                   />
                 </div>
+
+                <label className="flex items-start gap-2 rounded-xl border border-slate-700 bg-[#0b0f19] p-3 text-slate-300">
+                  <input type="checkbox" required checked={newClient.consentimentoRgpd} onChange={(e) => setNewClient({ ...newClient, consentimentoRgpd: e.target.checked })} className="mt-0.5 accent-[#D4AF37]" />
+                  <span>Confirmo que o cliente foi informado e deu consentimento para o tratamento dos seus dados pessoais, nos termos aplicáveis do RGPD. *</span>
+                </label>
 
                 {/* Botões */}
                 <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">
