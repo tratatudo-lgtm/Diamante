@@ -8,7 +8,7 @@ const storeRouter = Router();
 storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (!employee || !employee.ativo || !employee.loja_id ||
-      !['funcionario', 'operador', 'gerente'].includes(employee.role)) {
+      employee.role !== 'funcionario') {
     return res.status(403).json({ success: false, message: 'A sua conta não tem permissões para registar compras nesta loja.' });
   }
 
