@@ -179,7 +179,7 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
       const [byName, byBi, byNif] = await Promise.all([
         base().ilike('nome', `%${search}%`),
         base().ilike('bi_cc', `%${search}%`),
-        /^\d{9}$/.test(digits) ? base().eq('nif', digits) : Promise.resolve({ data: [], error: null }),
+        digits.length > 0 ? base().ilike('nif', `%${digits}%`) : Promise.resolve({ data: [], error: null }),
       ]);
       if (byName.error || byBi.error || byNif.error) throw new Error('Falha na pesquisa protegida.');
       const merged = new Map<string, any>();
