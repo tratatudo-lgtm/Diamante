@@ -73,7 +73,7 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
   const status = employee.role === 'admin' ? requestedStatus : 'normal';
 
   if (!nome || nome.length > 200 || !validatePortugueseNIF(nif) ||
-      !biCc || biCc.length > 80 || !['cc', 'passaporte', 'cartao_residente', 'outro'].includes(tipoDocumento) || !/^\\+[1-9]\\d{7,14}$/.test(telemovel) ||
+      !biCc || biCc.length > 80 || !['cc', 'passaporte', 'cartao_residente', 'outro'].includes(tipoDocumento) || !/^\+[1-9]\d{7,14}$/.test(telemovel) ||
       morada.length > 300 || codigoPostal.length > 20 || paisResidencia.length > 10 || email.length > 254 ||
       cidade.length > 100 || dataNascimento.length > 20 || notasInternas.length > 2000 ||
       !lojaId || !consentimentoRgpd) {
