@@ -80,14 +80,17 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
     }
     setUpdatingId(itemId);
     try {
-      const { data: updatedRows, error } = await supabase
-        .from('inventario_fisico')
-        .update({ estado: 'enviado_sede' })
-        .eq('id', itemId)
-        .select('id');
-
-      if (error) throw error;
-      if (!updatedRows?.length) throw new Error('O artigo não foi encontrado ou não foi atualizado.');
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão de API não encontrada.');
+      const response = await fetch(`/api/store/inventory/${encodeURIComponent(itemId)}/dispatch`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || 'Não foi possível registar a expedição.');
+      }
 
       setItems((prev) =>
         prev.map((item) => (item.id === itemId ? { ...item, estado: 'enviado_sede' } : item))
