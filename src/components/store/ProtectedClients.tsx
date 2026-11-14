@@ -51,7 +51,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
 
   const filteredClientes = clientes.filter((c) => {
     const q = searchQuery.toLowerCase();
-    const digits = searchQuery.replace(/\\D/g, '');
+    const digits = searchQuery.replace(/\D/g, '');
     const nome = (c.nome || '').toLowerCase();
     const bi = (c.bi_cc_formatado || '').toLowerCase();
     const nif = (c.nif_formatado || '').toLowerCase();
