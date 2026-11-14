@@ -1,7 +1,7 @@
 // PATH: src/types/supabase-schema.ts
 /**
  * Diamante OS v2 - Schema Supabase Estrito
- * Tabelas: 'lojas', 'funcionarios', 'clientes', 'transacoes_financeiras', 'configuracoes_sistema'
+ * Tabelas: lojas, funcionarios, clientes, transacoes_financeiras e configuracoes_sistema
  */
 
 export interface Store {
@@ -90,13 +90,9 @@ export interface DatabaseTransacaoFinanceira {
 }
 
 export interface DatabaseConfiguracaoSistema {
-  id: string;
   chave: string;
-  valor: any; // JSONB ou texto estruturado
-  descricao?: string | null;
-  updated_by?: string | null;
-  created_at?: string;
-  updated_at?: string;
+  valor: Record<string, unknown>;
+  updated_at: string;
 }
 
 export interface SupabaseDatabaseSchema {
