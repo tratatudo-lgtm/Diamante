@@ -38,7 +38,7 @@ export async function verifyAuth(req: AuthenticatedRequest, res: Response, next:
 
     const { data, error } = await supabaseAdmin
       .from('funcionarios')
-      .select('id, nome_completo, email, role, loja_id, telemovel, ativo')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
       .eq('id', userId)
       .eq('ativo', true)
       .maybeSingle();
@@ -72,12 +72,15 @@ export async function verifyAuth(req: AuthenticatedRequest, res: Response, next:
       return;
     }
 
+    const store = Array.isArray(data.lojas) ? data.lojas[0] : data.lojas;
     req.authenticatedUser = {
       id: data.id,
       nome_completo: fullName,
       email: typeof data.email === 'string' ? data.email : '',
       role: userRole,
       loja_id: data.loja_id ?? null,
+      loja_nome: typeof store?.nome === 'string' ? store.nome : null,
+      codigo_loja: typeof store?.codigo_loja === 'string' ? store.codigo_loja : null,
       telemovel:
         typeof data.telemovel === 'string' ? data.telemovel : undefined,
       ativo: true,
