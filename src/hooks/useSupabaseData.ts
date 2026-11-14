@@ -1,6 +1,27 @@
 // PATH: src/hooks/useSupabaseData.ts
 import { useState, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+
+async function adminApiRequest(path: string, init: RequestInit = {}) {
+  const token = typeof window !== 'undefined' ? sessionStorage.getItem('diamante_jwt_token') : null;
+  if (!token) throw new Error('Sessão administrativa não encontrada. Volte a iniciar sessão.');
+  const response = await fetch(path, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      ...(init.headers || {}),
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || result?.success === false) {
+    throw new Error(result?.message || 'Não foi possível concluir a operação.');
+  }
+  return result;
+}
+
 import type { Store } from '../types/supabase-schema';
 import type { Employee, EmployeeRole, EmployeeStatus } from '../components/employees/EmployeeManagement';
 import type { Client, ClientStatus, ClientTransactionRecord } from '../components/clients/ClientManagement';
@@ -328,48 +349,34 @@ export function useFinanceTransactions() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const mapPayment = (row: any): FinancialTransaction => ({
+    id: String(row.id),
+    referencia: row.referencia || '',
+    lojaId: row.loja_id || '',
+    lojaNome: row.lojas?.nome || row.loja_nome || '',
+    beneficiarioNome: row.beneficiario_nome || '',
+    beneficiarioNif: row.beneficiario_nif || '',
+    beneficiarioIban: row.beneficiario_iban || '',
+    valor: Number(row.valor) || 0,
+    estado: row.estado === 'pago' || row.estado === 'rejeitado' || row.estado === 'pendente' ? row.estado as PaymentStatus : '',
+    data: row.data || (row.created_at ? new Date(row.created_at).toLocaleDateString('pt-PT') : ''),
+    hora: row.hora || '',
+    metodo: (row.metodo as PaymentMethod) || '',
+    contaOrigem: row.conta_origem || '',
+    descricao: row.descricao || '',
+    pesoOuroGramas: Number(row.peso_ouro_gramas) || 0,
+    tipoMetal: row.tipo_metal || '',
+    operadorNome: row.operador_nome || '',
+    comprovativoRef: row.comprovativo_ref || '',
+  });
+
   const fetchTransactions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
-
-      if (isSupabaseConfigured()) {
-        // Pagamentos de tesouraria: entidade separada das compras de ouro em 'transacoes'.
-        const { data: dbTx, error: dbError } = await supabase
-          .from('transacoes_financeiras')
-          .select('*, lojas(nome)')
-          .order('created_at', { ascending: false });
-
-        if (dbError) throw dbError;
-        {
-          const mapped: FinancialTransaction[] = (dbTx || []).map((row: any) => ({
-            id: String(row.id),
-            referencia: row.referencia || '',
-            lojaId: row.loja_id || '',
-            lojaNome: row.lojas?.nome || row.loja_nome || '',
-            beneficiarioNome: row.beneficiario_nome || '',
-            beneficiarioNif: row.beneficiario_nif || '',
-            beneficiarioIban: row.beneficiario_iban || '',
-            valor: Number(row.valor) || 0,
-            estado: row.estado === 'pago' || row.estado === 'rejeitado' || row.estado === 'pendente' ? row.estado as PaymentStatus : '',
-            data: row.data || (row.created_at ? new Date(row.created_at).toLocaleDateString('pt-PT') : ''),
-            hora: row.hora || '',
-            metodo: (row.metodo as PaymentMethod) || '',
-            contaOrigem: row.conta_origem || '',
-            descricao: row.descricao || '',
-            pesoOuroGramas: Number(row.peso_ouro_gramas) || 0,
-            tipoMetal: row.tipo_metal || '',
-            operadorNome: row.operador_nome || '',
-            comprovativoRef: row.comprovativo_ref || '',
-          }));
-
-          setData(mapped);
-          return;
-        }
-      }
-
-      setData([]);
+      const result = await adminApiRequest('/api/admin/finance/payments');
+      if (!Array.isArray(result?.data)) throw new Error('A resposta da API financeira é inválida.');
+      setData(result.data.map(mapPayment));
     } catch (err: any) {
       setError(err?.message || 'Falha ao sincronizar transações financeiras');
       setData([]);
@@ -379,39 +386,45 @@ export function useFinanceTransactions() {
   }, []);
 
   useEffect(() => {
-    fetchTransactions();
+    void fetchTransactions();
   }, [fetchTransactions]);
 
-  const confirmPayment = async (txId: string) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi confirmado.');
-    const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'pago', updated_at: new Date().toISOString() }).eq('id', txId).eq('estado', 'pendente').select('id');
-    if (error) throw error;
-    if (!updatedRows?.length) throw new Error('Pagamento não encontrado ou já processado. Só pagamentos pendentes podem ser confirmados.');
-    setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'pago' } : tx));
+  const updatePaymentStatus = async (txId: string, estado: 'pago' | 'rejeitado') => {
+    await adminApiRequest(`/api/admin/finance/payments/${encodeURIComponent(txId)}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ estado }),
+    });
+    setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado } : tx));
   };
 
-  const rejectPayment = async (txId: string) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi rejeitado.');
-    const { data: updatedRows, error } = await supabase.from('transacoes_financeiras').update({ estado: 'rejeitado', updated_at: new Date().toISOString() }).eq('id', txId).eq('estado', 'pendente').select('id');
-    if (error) throw error;
-    if (!updatedRows?.length) throw new Error('Pagamento não encontrado ou já processado. Só pagamentos pendentes podem ser rejeitados.');
-    setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado: 'rejeitado' } : tx));
-  };
+  const confirmPayment = (txId: string) => updatePaymentStatus(txId, 'pago');
+  const rejectPayment = (txId: string) => updatePaymentStatus(txId, 'rejeitado');
 
   const createPayment = async (newTx: FinancialTransaction) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O pagamento não foi criado.');
-    const { data: inserted, error } = await supabase.from('transacoes_financeiras').insert({
-      referencia: newTx.referencia, loja_id: newTx.lojaId, loja_nome: newTx.lojaNome,
-      beneficiario_nome: newTx.beneficiarioNome, beneficiario_nif: newTx.beneficiarioNif,
-      beneficiario_iban: newTx.beneficiarioIban, valor: newTx.valor, estado: newTx.estado,
-      metodo: newTx.metodo, conta_origem: newTx.contaOrigem, descricao: newTx.descricao,
-      peso_ouro_gramas: newTx.pesoOuroGramas, tipo_metal: newTx.tipoMetal,
-      operador_nome: newTx.operadorNome, data: newTx.data, hora: newTx.hora,
-      comprovativo_ref: newTx.comprovativoRef,
-    }).select('id').single();
-    if (error) throw error;
-    if (!inserted?.id) throw new Error('A base de dados não devolveu o identificador do pagamento criado.');
-    setData((prev) => [{ ...newTx, id: String(inserted.id) }, ...prev]);
+    const result = await adminApiRequest('/api/admin/finance/payments', {
+      method: 'POST',
+      body: JSON.stringify({
+        referencia: newTx.referencia,
+        loja_id: newTx.lojaId,
+        beneficiario_nome: newTx.beneficiarioNome,
+        beneficiario_nif: newTx.beneficiarioNif,
+        beneficiario_iban: newTx.beneficiarioIban,
+        valor: newTx.valor,
+        metodo: newTx.metodo,
+        conta_origem: newTx.contaOrigem,
+        descricao: newTx.descricao,
+        peso_ouro_gramas: newTx.pesoOuroGramas,
+        tipo_metal: newTx.tipoMetal,
+        operador_nome: newTx.operadorNome,
+        data: newTx.data,
+        hora: newTx.hora,
+        comprovativo_ref: newTx.comprovativoRef,
+      }),
+    });
+    if (!result?.data?.id) throw new Error('A API não devolveu o pagamento criado.');
+    const created = mapPayment(result.data);
+    setData((prev) => [created, ...prev]);
+    return created;
   };
 
   return { data, loading, error, refetch: fetchTransactions, confirmPayment, rejectPayment, createPayment };
@@ -462,23 +475,8 @@ export function useSystemSettings() {
     try {
       setLoading(true);
       setError(null);
-      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
-
-      if (isSupabaseConfigured()) {
-        const { data: dbConfig, error: dbError } = await supabase
-          .from('configuracoes_sistema')
-          .select('*')
-          .eq('chave', 'geral_sistema')
-          .single();
-
-        if (dbError && dbError.code !== 'PGRST116') throw dbError;
-        if (dbConfig?.valor) {
-          setData(dbConfig.valor as SystemConfigData);
-          return;
-        }
-      }
-
-      setData(EMPTY_SETTINGS);
+      const result = await adminApiRequest('/api/admin/settings');
+      setData(result?.settings && typeof result.settings === 'object' ? result.settings as SystemConfigData : EMPTY_SETTINGS);
     } catch (err: any) {
       setError(err?.message || 'Falha ao sincronizar configurações');
       setData(EMPTY_SETTINGS);
@@ -488,17 +486,17 @@ export function useSystemSettings() {
   }, []);
 
   useEffect(() => {
-    fetchSettings();
+    void fetchSettings();
   }, [fetchSettings]);
 
   const saveSettings = async (newConfig: Partial<SystemConfigData>) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. As definições não foram guardadas.');
     const updated = { ...data, ...newConfig };
-    const { error } = await supabase.from('configuracoes_sistema').upsert({
-      chave: 'geral_sistema', valor: updated, updated_at: new Date().toISOString(),
+    const result = await adminApiRequest('/api/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify({ settings: updated }),
     });
-    if (error) throw error;
-    setData(updated);
+    if (!result?.settings) throw new Error('A API não confirmou a gravação das configurações.');
+    setData(result.settings as SystemConfigData);
   };
 
   return { data, loading, error, refetch: fetchSettings, saveSettings };
