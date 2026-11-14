@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Users, Building2, ArrowLeft, RefreshCw, FileText, Image as ImageIcon, Clock3, Coins, Scale, ShieldCheck, AlertCircle, UserRound, Paperclip } from 'lucide-react';
 
 type Client = {
-  id: string; nome: string; bi_cc?: string | null; telemovel?: string | null; email?: string | null;
+  id: string; nome: string; nif?: string | null; tipo_documento?: string | null; data_nascimento?: string | null; data_emissao_documento?: string | null; data_validade_documento?: string | null; bi_cc?: string | null; telemovel?: string | null; email?: string | null;
   morada?: string | null; contacto?: string | null; total_transacoes?: number; total_volume?: number;
   ultima_transacao?: string | null; loja_nome?: string | null; created_at?: string | null;
 };
@@ -60,10 +60,14 @@ export const CRMWorkspace: React.FC = () => {
   const openClient = useCallback(async (id: string) => {
     setSelected(id); setDetail(null); setDetailLoading(true); setError('');
     try {
-      const r = await fetch(`/api/admin/crm/clients/${encodeURIComponent(id)}`, { headers: headers() });
+      const [r, docsResponse] = await Promise.all([
+        fetch(`/api/admin/crm/clients/${encodeURIComponent(id)}`, { headers: headers() }),
+        fetch(`/api/clients/${encodeURIComponent(id)}/documents`, { headers: headers() }),
+      ]);
       if (!r.ok) throw new Error('Não foi possível abrir a ficha do cliente.');
       const j = await r.json();
-      setDetail({ client: j.client, transactions: j.transactions || [], articles: j.articles || [], attachments: j.attachments || [] });
+      const docsJson = docsResponse.ok ? await docsResponse.json() : { documentos: [] };
+      setDetail({ client: j.client, transactions: j.transactions || [], articles: j.articles || [], attachments: j.attachments || [], documents: docsJson.documentos || [] });
     } catch (e: any) { setError(e?.message || 'Falha ao abrir a ficha.'); }
     finally { setDetailLoading(false); }
   }, []);
