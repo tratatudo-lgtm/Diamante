@@ -58,7 +58,7 @@ export interface DatabaseCliente {
   codigo_postal?: string | null;
   pais_residencia?: string | null;
   cidade?: string | null;
-  data_nascimento?: string | null;
+  data_nascimento: string;
   loja_registo_id: string;
   status: 'vip' | 'normal' | 'bloqueado' | string;
   notas_internas?: string | null;
@@ -110,7 +110,7 @@ export interface SupabaseDatabaseSchema {
       };
       clientes: {
         Row: DatabaseCliente;
-        Insert: Partial<DatabaseCliente> & Pick<DatabaseCliente, 'nome' | 'bi_cc' | 'morada' | 'loja_registo_id'>;
+        Insert: Partial<DatabaseCliente> & Pick<DatabaseCliente, 'nome' | 'bi_cc' | 'data_nascimento' | 'morada' | 'loja_registo_id'>;
         Update: Partial<DatabaseCliente>;
       };
       transacoes_financeiras: {
