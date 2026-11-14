@@ -21,7 +21,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
   const [clientes, setClientes] = useState<ClienteProtegido[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);\n  const [documentClientId, setDocumentClientId] = useState<string | null>(null);\n  const [documentFile, setDocumentFile] = useState<File | null>(null);\n  const [documentType, setDocumentType] = useState('cc');\n  const [documentNumber, setDocumentNumber] = useState('');\n  const [documentIssueDate, setDocumentIssueDate] = useState('');\n  const [documentExpiryDate, setDocumentExpiryDate] = useState('');\n  const [documentSaving, setDocumentSaving] = useState(false);
 
   // Consulta obrigatória à VIEW v_clientes_protegidos (NUNCA à tabela clientes)
   const fetchProtectedClients = useCallback(async (search = '') => {
@@ -58,6 +58,39 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
     if (digits.length > 0) return true; // A API já filtrou pelo NIF completo/parcial.
     return nome.includes(q) || bi.includes(q) || nif.includes(q);
   });
+
+  const submitDocument = async (clientId: string) => {
+    if (!documentFile || !documentNumber.trim() || !documentExpiryDate) {
+      onShowToast('error', 'Indique o número, a validade e a digitalização do documento.');
+      return;
+    }
+    if (documentFile.size > 6 * 1024 * 1024 || !['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(documentFile.type)) {
+      onShowToast('error', 'Utilize PDF, JPEG, PNG ou WebP até 6 MB.');
+      return;
+    }
+    setDocumentSaving(true);
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Não foi possível ler o ficheiro.'));
+        reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '');
+        reader.readAsDataURL(documentFile);
+      });
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      const response = await fetch(`/api/clients/${encodeURIComponent(clientId)}/documents`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
+        body: JSON.stringify({ tipoDocumento: documentType, numeroDocumento: documentNumber, dataEmissao: documentIssueDate || null, dataValidade: documentExpiryDate, mimeType: documentFile.type, fileName: documentFile.name, fileBase64: base64 }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.success !== true) throw new Error(result?.message || 'Falha ao actualizar documento.');
+      setDocumentClientId(null); setDocumentFile(null); setDocumentNumber(''); setDocumentIssueDate(''); setDocumentExpiryDate('');
+      onShowToast('success', 'Documento actualizado. A versão anterior foi preservada no histórico.');
+      await fetchProtectedClients(searchQuery);
+    } catch (e: any) {
+      onShowToast('error', e?.message || 'Não foi possível guardar o documento.');
+    } finally { setDocumentSaving(false); }
+  };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-PT', {
@@ -168,13 +201,35 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
                 </div>
 
                 <div className="pt-2 border-t border-gray-800/80 flex items-center justify-between text-xs text-gray-400">
-                  <div className="flex items-center gap-1 font-mono text-[11px]">
-                    <Phone className="w-3 h-3 text-gray-500" />
-                    <span>{telExibido}</span>
+                  <div className="flex items-center gap-1 font-mono text-[11px]"><Phone className="w-3 h-3 text-gray-500" /><span>{telExibido}</span></div>
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <CalendarClock className="h-3 w-3"/>
+                    <span className={cliente.estado_documento==='expirado'?'text-rose-300':cliente.estado_documento==='a_expirar'?'text-amber-300':'text-gray-500'}>
+                      {cliente.estado_documento==='expirado'?'Documento expirado':cliente.estado_documento==='a_expirar'?'Documento a expirar':cliente.estado_documento==='valido'?'Documento válido':'Validade não registada'}
+                    </span>
                   </div>
-
-
                 </div>
+                {cliente.estado_documento !== 'valido' && (
+                  <button type="button" onClick={()=>{setDocumentClientId(documentClientId===cliente.id?null:(cliente.id || null));setDocumentType('cc');setDocumentNumber('');setDocumentIssueDate('');setDocumentExpiryDate('');setDocumentFile(null);}} className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-400/15">
+                    <UploadCloud className="h-4 w-4"/> {documentClientId===cliente.id?'Fechar actualização':'Digitalizar / actualizar documento'}
+                  </button>
+                )}
+                {documentClientId===cliente.id && (
+                  <div className="space-y-2 rounded-xl border border-amber-400/20 bg-gray-950/50 p-3">
+                    <label className="block text-[11px] text-gray-400">Tipo de documento
+                      <select value={documentType} onChange={e=>setDocumentType(e.target.value)} className="mt-1 h-9 w-full rounded-lg border border-gray-700 bg-gray-900 px-2 text-xs text-white"><option value="cc">Cartão de Cidadão</option><option value="passaporte">Passaporte</option><option value="cartao_residente">Cartão de Residência</option><option value="outro">Outro</option></select>
+                    </label>
+                    <label className="block text-[11px] text-gray-400">Número do documento
+                      <input value={documentNumber} onChange={e=>setDocumentNumber(e.target.value)} maxLength={80} className="mt-1 h-9 w-full rounded-lg border border-gray-700 bg-gray-900 px-2 text-xs text-white"/>
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className="text-[11px] text-gray-400">Emissão<input type="date" value={documentIssueDate} onChange={e=>setDocumentIssueDate(e.target.value)} className="mt-1 h-9 w-full rounded-lg border border-gray-700 bg-gray-900 px-2 text-xs text-white"/></label>
+                      <label className="text-[11px] text-gray-400">Validade *<input type="date" min={new Date().toISOString().slice(0,10)} value={documentExpiryDate} onChange={e=>setDocumentExpiryDate(e.target.value)} className="mt-1 h-9 w-full rounded-lg border border-gray-700 bg-gray-900 px-2 text-xs text-white"/></label>
+                    </div>
+                    <label className="block text-[11px] text-gray-400">Ficheiro PDF/JPEG/PNG/WebP até 6 MB<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" onChange={e=>setDocumentFile(e.target.files?.[0] || null)} className="mt-1 block w-full text-[10px] text-gray-300"/></label>
+                    <button type="button" disabled={documentSaving} onClick={()=>cliente.id && void submitDocument(cliente.id)} className="w-full rounded-lg bg-[#D4AF37] px-3 py-2 text-xs font-bold text-gray-950 disabled:opacity-50">{documentSaving?'A guardar documento…':'Guardar e substituir documento'}</button>
+                  </div>
+                )}
               </div>
             );
           })
