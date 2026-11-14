@@ -25,7 +25,7 @@ clientsRouter.get('/', verifyAuth, async (req: AuthenticatedRequest, res: Respon
   try {
     let query = supabaseAdmin
       .from('clientes')
-      .select('id,codigo_cliente,nome,nif,bi_cc,telemovel,email,morada,cidade,loja_registo_id,status,data_nascimento,notas_internas,created_at')
+      .select('id,codigo_cliente,nome,nif,bi_cc,tipo_documento,telemovel,email,morada,codigo_postal,pais_residencia,cidade,loja_registo_id,status,data_nascimento,notas_internas,created_at')
       .order('nome', { ascending: true });
     if (employee.role !== 'admin') query = query.eq('loja_registo_id', employee.loja_id as string);
 
