@@ -767,8 +767,12 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
                   className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs text-slate-200 focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
                 >
                   <option value="funcionario">Funcionário de Balcão</option>
-                  <option value="aprovador">Responsável por Aprovações</option>
-                  <option value="admin">Administrador Master (Acesso Total)</option>
+                  {editingFuncionario && formData.role === 'aprovador' && (
+                    <option value="aprovador" disabled>
+                      Aprovador legado (sem permissão para aprovar operações)
+                    </option>
+                  )}
+                  <option value="admin">Administrador (Acesso Total)</option>
                 </select>
               </div>
 
