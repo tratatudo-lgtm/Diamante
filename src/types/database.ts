@@ -71,13 +71,13 @@ export interface InventarioFisico {
 export interface ClienteProtegido {
   id?: string;
   nome?: string;
-  cliente_nome?: string;
-  bi_mascarado?: string;
-  cliente_cc?: string;
-  telemovel_mascarado?: string;
-  total_compras?: number;
-  ultimo_contacto?: string;
-  total_gasto?: number;
+  bi_cc_formatado?: string;
+  telemovel?: string;
+  email?: string;
+  morada_protegida?: string;
+  loja_registo_id?: string;
+  created_at?: string;
+  historico_compras_count?: number;
 }
 
 export interface UserSessionData {
