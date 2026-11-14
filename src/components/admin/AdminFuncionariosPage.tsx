@@ -190,11 +190,12 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: Record<string, string> = {};
+    const email = formData.email?.trim() ?? '';
 
     if (!formData.nome_completo.trim()) {
       errors.nome_completo = 'Nome completo é obrigatório.';
     }
-    if (!editingFuncionario && !formData.email.trim()) {
+    if (!editingFuncionario && !email) {
       errors.email = 'Email obrigatório para enviar o convite de acesso.';
     }
 
@@ -223,7 +224,7 @@ export const AdminFuncionariosPage: React.FC<AdminFuncionariosPageProps> = ({ on
         telemovel: phoneCheck.normalized,
         loja_id: formData.loja_id,
         role: formData.role,
-        ...(editingFuncionario ? {} : { email: formData.email.trim() }),
+        ...(editingFuncionario ? {} : { email }),
         ...(editingFuncionario ? { ativo: formData.ativo } : {}),
       };
 
