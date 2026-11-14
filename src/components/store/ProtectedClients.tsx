@@ -21,7 +21,14 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
   const [clientes, setClientes] = useState<ClienteProtegido[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);\n  const [documentClientId, setDocumentClientId] = useState<string | null>(null);\n  const [documentFile, setDocumentFile] = useState<File | null>(null);\n  const [documentType, setDocumentType] = useState('cc');\n  const [documentNumber, setDocumentNumber] = useState('');\n  const [documentIssueDate, setDocumentIssueDate] = useState('');\n  const [documentExpiryDate, setDocumentExpiryDate] = useState('');\n  const [documentSaving, setDocumentSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [documentClientId, setDocumentClientId] = useState<string | null>(null);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentType, setDocumentType] = useState('cc');
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [documentIssueDate, setDocumentIssueDate] = useState('');
+  const [documentExpiryDate, setDocumentExpiryDate] = useState('');
+  const [documentSaving, setDocumentSaving] = useState(false);
 
   // Consulta obrigatória à VIEW v_clientes_protegidos (NUNCA à tabela clientes)
   const fetchProtectedClients = useCallback(async (search = '') => {
