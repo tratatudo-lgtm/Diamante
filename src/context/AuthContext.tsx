@@ -50,48 +50,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isConfigured, setIsConfigured] = useState<boolean>(isSupabaseConfigured());
 
-  // Helper to fetch session data via RPC or funcionarios table fallback
-  const fetchSessionMetadata = useCallback(async (userEmail: string, userId: string): Promise<UserSessionData | null> => {
+  // Os metadados de sessão são obtidos exclusivamente pela RPC protegida.
+  // A tabela funcionarios não concede SELECT directo ao cliente autenticado.
+  const fetchSessionMetadata = useCallback(async (_userId: string): Promise<UserSessionData | null> => {
     try {
-      // 1. Primary: await supabase.rpc('get_user_session_data')
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_user_session_data');
-      
-      if (!rpcError && rpcData) {
-        const metadata = Array.isArray(rpcData) ? (rpcData[0] as UserSessionData) : (rpcData as UserSessionData);
-        if (metadata && (metadata.ativo === false)) {
-          throw new Error('Conta inativa');
-        }
-        return metadata;
+      if (rpcError || !rpcData) {
+        console.warn('[AuthContext] Falha ao obter metadados de sessão pela RPC.');
+        return null;
       }
 
-      // 2. Fallback: Query funcionarios table if RPC is not defined or has signature mismatch
-      const { data: funcData, error: funcError } = await supabase
-        .from('funcionarios')
-        .select('*')
-        .eq('email', userEmail)
-        .maybeSingle();
-
-      if (!funcError && funcData) {
-        if (funcData.ativo === false) {
-          throw new Error('Conta inativa');
-        }
-        return {
-          id: funcData.id,
-          user_id: userId,
-          email: funcData.email,
-          nome_completo: funcData.nome_completo,
-          role: funcData.role,
-          loja_id: funcData.loja_id,
-          ativo: funcData.ativo,
-        };
+      const metadata = Array.isArray(rpcData) ? (rpcData[0] as UserSessionData) : (rpcData as UserSessionData);
+      if (metadata?.ativo === false) {
+        throw new Error('Conta inativa');
       }
+      return metadata || null;
     } catch (err: unknown) {
-      if (err instanceof Error && err.message === 'Conta inativa') {
-        throw err;
-      }
+      if (err instanceof Error && err.message === 'Conta inativa') throw err;
       console.warn('[AuthContext] Falha ao obter metadados de sessão.');
+      return null;
     }
-    return null;
   }, []);
 
   const applySession = (data: ValidUserSessionData) => {
@@ -147,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const metadata = await fetchSessionMetadata(session.user.email || '', session.user.id);
+      const metadata = await fetchSessionMetadata(session.user.id);
       if (!isValidSessionData(metadata) || metadata.id !== session.user.id) {
         await supabase.auth.signOut();
         setUserSession(null);
@@ -203,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 2. await supabase.rpc('get_user_session_data')
       let sessionData: UserSessionData | null = null;
       try {
-        sessionData = await fetchSessionMetadata(authData.user.email || email, authData.user.id);
+        sessionData = await fetchSessionMetadata(authData.user.id);
       } catch {
         // If inactive, force sign out and throw standard error
         await supabase.auth.signOut();
