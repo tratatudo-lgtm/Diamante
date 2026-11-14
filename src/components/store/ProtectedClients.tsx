@@ -133,9 +133,9 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
           </div>
         ) : (
           filteredClientes.map((cliente, index) => {
-            const nomeExibido = cliente.nome || cliente.cliente_nome || 'Cliente Protegido';
-            const biExibido = cliente.bi_mascarado || (cliente.cliente_cc ? `${cliente.cliente_cc.slice(0, 4)}****` : '****');
-            const telExibido = cliente.telemovel_mascarado || '9******45';
+            const nomeExibido = cliente.nome || 'Cliente Protegido';
+            const biExibido = cliente.bi_cc_formatado || '****';
+            const telExibido = cliente.telemovel || 'Não disponível';
 
             return (
               <div
@@ -157,7 +157,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
                   </div>
 
                   <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950/60 text-amber-300 border border-amber-800/40">
-                    {cliente.total_compras || 1} compras
+                    {Number(cliente.historico_compras_count || 0)} compras
                   </span>
                 </div>
 
