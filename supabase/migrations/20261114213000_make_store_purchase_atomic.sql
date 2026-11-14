@@ -67,5 +67,5 @@ REVOKE ALL ON FUNCTION public.create_store_purchase(
 ) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.create_store_purchase(
-  uuid, uuid, text, text, text, text, text, text, numeric, numeric, numeric, numeric, numeric, text
+  uuid, uuid, text, text, text, text, text, numeric, numeric, numeric, numeric, numeric, text
 ) TO service_role;
