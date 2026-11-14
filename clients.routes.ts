@@ -72,14 +72,26 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
   const requestedStatus = body.status === 'vip' || body.status === 'bloqueado' ? body.status : 'normal';
   const status = employee.role === 'admin' ? requestedStatus : 'normal';
 
+  const birthDate = /^\d{4}-\d{2}-\d{2}$/.test(dataNascimento)
+    ? new Date(`${dataNascimento}T00:00:00.000Z`)
+    : null;
+  const validBirthDate = Boolean(
+    birthDate &&
+    !Number.isNaN(birthDate.getTime()) &&
+    birthDate.toISOString().slice(0, 10) === dataNascimento
+  );
+  const latestAllowedBirthDate = new Date();
+  latestAllowedBirthDate.setUTCHours(0, 0, 0, 0);
+  latestAllowedBirthDate.setUTCFullYear(latestAllowedBirthDate.getUTCFullYear() - 18);
+
   if (!nome || nome.length > 200 || !validatePortugueseNIF(nif) ||
       !biCc || biCc.length > 80 || !['cc', 'passaporte', 'cartao_residente', 'outro'].includes(tipoDocumento) || !/^\+[1-9]\d{7,14}$/.test(telemovel) ||
       morada.length > 300 || codigoPostal.length > 20 || paisResidencia.length > 10 || email.length > 254 ||
-      cidade.length > 100 || dataNascimento.length > 20 || notasInternas.length > 2000 ||
+      cidade.length > 100 || !validBirthDate || (birthDate && birthDate > latestAllowedBirthDate) || notasInternas.length > 2000 ||
       !lojaId || !consentimentoRgpd) {
     return res.status(400).json({
       success: false,
-      message: 'Preencha nome, NIF português válido, tipo e número de documento, telefone internacional válido, loja e confirme o consentimento RGPD.',
+      message: 'Preencha nome, NIF português válido, tipo e número de documento, data de nascimento válida (mínimo 18 anos), telefone internacional válido, loja e confirme o consentimento RGPD.',
     });
   }
 
