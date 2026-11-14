@@ -10,6 +10,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS transacoes_idempotency_key_uidx
   ON public.transacoes (idempotency_key)
   WHERE idempotency_key IS NOT NULL;
 
+-- Enforce at most one physical inventory item per originating purchase.
+CREATE UNIQUE INDEX IF NOT EXISTS inventario_fisico_transacao_origem_uidx
+  ON public.inventario_fisico (transacao_origem_id)
+  WHERE transacao_origem_id IS NOT NULL;
+
 CREATE OR REPLACE FUNCTION public.create_store_purchase(
   p_idempotency_key uuid,
   p_funcionario_id uuid,
