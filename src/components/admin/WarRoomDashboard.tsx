@@ -27,7 +27,7 @@ export const WarRoomDashboard = () => {
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [businessKpis, setBusinessKpis] = useState<{active:number;estimatedMonthly:number;initialInvestment:number;estimatedResult:number}>({active:0,estimatedMonthly:0,initialInvestment:0,estimatedResult:0});
   const [financialMonth, setFinancialMonth] = useState(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7));
-  const [financialKpis, setFinancialKpis] = useState<{month:string;totals:{paid:number;pending:number;rejected:number};stores:{loja_id:string;nome:string;paid:number;pending:number;rejected:number}[]}|null>(null);
+  const [financialKpis, setFinancialKpis] = useState<{month:string;totals:{paid:number;pending:number;rejected:number};stores:{loja_id:string;nome:string;paid:number;pending:number;rejected:number;byCategory:Record<string,number>}[]}|null>(null);
 
   const fetchKpis = useCallback(async () => {
     try {
@@ -220,6 +220,7 @@ export const WarRoomDashboard = () => {
             <div className="rounded-lg border border-slate-700 bg-black/10 p-4"><p className="text-xs text-slate-400">Despesas rejeitadas</p><p className="mt-1 text-xl font-bold text-slate-300">{financialKpis.totals.rejected.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</p></div>
           </div>
           <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-sm"><thead className="text-[11px] uppercase text-slate-500"><tr><th className="p-3">Loja</th><th className="p-3">Pagas</th><th className="p-3">Pendentes</th><th className="p-3">Rejeitadas</th></tr></thead><tbody className="divide-y divide-slate-800">{financialKpis.stores.map(store=><tr key={store.loja_id}><td className="p-3 text-slate-300">{store.nome || store.loja_id.slice(0,8)}</td><td className="p-3 text-emerald-300">{store.paid.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</td><td className="p-3 text-amber-300">{store.pending.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</td><td className="p-3 text-slate-400">{store.rejected.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</td></tr>)}</tbody></table>{financialKpis.stores.length===0&&<p className="p-3 text-center text-xs text-slate-500">Sem despesas registadas neste mês.</p>}</div>
+          <div className="mt-4 rounded-lg border border-slate-800 p-4"><h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Despesas pagas por categoria</h3><div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{Object.entries(financialKpis.stores.reduce<Record<string,number>>((totals,store)=>{for(const [category,amount] of Object.entries(store.byCategory||{})) totals[category]=(totals[category]||0)+Number(amount||0);return totals;},{})).sort((a,b)=>b[1]-a[1]).map(([category,amount])=><div key={category} className="flex items-center justify-between gap-3 rounded-md bg-black/10 px-3 py-2"><span className="text-xs text-slate-300">{category}</span><span className="text-xs font-semibold text-emerald-300">{amount.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</span></div>)}{financialKpis.totals.paid===0&&<p className="text-xs text-slate-500">Sem despesas pagas neste período.</p>}</div></div>
         </section>
       )}
 
