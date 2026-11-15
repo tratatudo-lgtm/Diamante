@@ -29,10 +29,12 @@ import {
   ArrowUpRight,
   ShieldCheck,
   Radio,
-  Zap
+  Zap,
+  Flag,
+  AlertTriangle
 } from 'lucide-react';
 
-interface AdminDashboardProps {
+type OperationalIncident = { id: string; reference: string; titulo: string; categoria: string; prioridade: string; estado: string; created_at: string; loja_id: string | null };\n\ninterface AdminDashboardProps {
   onNavigate: (path: string) => void;
 }
 
@@ -62,7 +64,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [isOnline, setIsOnline] = useState(true);
   const [recentTxs, setRecentTxs] = useState<Transacao[]>([]);
   const [totalTransactions, setTotalTransactions] = useState(0);
-  const [dataError, setDataError] = useState<string | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);\n  const [incidents, setIncidents] = useState<OperationalIncident[]>([]);
 
   const addToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
     const newToast: ToastMessage = {
@@ -109,6 +111,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       });
 
       const apiData = await res.json().catch(() => null);
+      const incidentsResponse = await fetch('/api/collaboration/reports?limit=20', {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      const incidentsPayload = await incidentsResponse.json().catch(() => null);
+      if (incidentsResponse.ok && incidentsPayload?.success === true && Array.isArray(incidentsPayload.reports)) {
+        setIncidents(incidentsPayload.reports.slice(0, 8));
+      }
       if (!res.ok || !apiData?.success) {
         throw new Error(
           typeof apiData?.error === 'string'
@@ -510,6 +520,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 }}
               />
             </div>
+          </div>
+        </section>
+
+        <section aria-label="Centro de ocorrências" className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Acompanhamento interno</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Centro de ocorrências</h2><p className="mt-1 text-xs text-slate-500">Situações comunicadas pela equipa e respectivo estado.</p></div>
+            <button onClick={() => onNavigate('/collaboration')} className="inline-flex items-center gap-2 rounded-xl border border-[#d8b85d]/25 bg-[#d8b85d]/[0.07] px-3 py-2 text-xs font-semibold text-[#e7ca78] hover:bg-[#d8b85d]/[0.12]">Abrir gestão <ArrowUpRight className="h-3.5 w-3.5" /></button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-white/[0.08] bg-[#101c2c]/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Ocorrências activas</p><p className="mt-2 text-2xl font-semibold text-white tabular-nums">{incidents.filter((item) => !['resolvido','fechado'].includes(item.estado)).length}</p></div>
+            <div className="rounded-2xl border border-rose-400/20 bg-rose-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-rose-200/70">Prioridade urgente</p><p className="mt-2 text-2xl font-semibold text-rose-200 tabular-nums">{incidents.filter((item) => item.prioridade === 'urgente' && !['resolvido','fechado'].includes(item.estado)).length}</p></div>
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-amber-100/70">Prioridade alta</p><p className="mt-2 text-2xl font-semibold text-amber-100 tabular-nums">{incidents.filter((item) => item.prioridade === 'alta' && !['resolvido','fechado'].includes(item.estado)).length}</p></div>
+            <div className="rounded-2xl border border-white/[0.08] bg-[#101c2c]/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Registos recentes</p><p className="mt-2 text-2xl font-semibold text-white tabular-nums">{incidents.length}</p></div>
+          </div>
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101c2c]/80">
+            {incidents.length === 0 ? <div className="flex items-center gap-3 p-5 text-sm text-slate-500"><Flag className="h-4 w-4 text-[#d8b85d]" />Sem ocorrências recentes para apresentar.</div> : incidents.slice(0, 6).map((incident) => <button key={incident.id} onClick={() => onNavigate('/collaboration')} className="flex w-full items-center gap-3 border-b border-white/[0.05] p-4 text-left last:border-0 hover:bg-white/[0.035]"><span className={'rounded-xl p-2 ' + (incident.prioridade === 'urgente' ? 'bg-rose-400/10 text-rose-300' : incident.prioridade === 'alta' ? 'bg-amber-400/10 text-amber-200' : 'bg-white/5 text-slate-400')}><AlertTriangle className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-bold text-[#d8b85d]">{incident.reference}</span><span className="text-[10px] text-slate-500">{incident.categoria}</span></span><span className="mt-1 block truncate text-sm font-medium text-slate-100">{incident.titulo}</span></span><span className="shrink-0 text-right"><span className={'block text-[10px] font-semibold ' + (incident.prioridade === 'urgente' ? 'text-rose-300' : incident.prioridade === 'alta' ? 'text-amber-200' : 'text-slate-400')}>{incident.prioridade.toUpperCase()}</span><span className="mt-1 block text-[10px] text-slate-500">{incident.estado.replaceAll('_',' ')}</span></span></button>)}
           </div>
         </section>
 
