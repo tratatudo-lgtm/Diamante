@@ -8,7 +8,8 @@ type Directory={stores:{id:string;nome:string}[];employees:{id:string;nome_compl
 type Event={id:string;action:string;old_values:any;new_values:any;created_at:string;funcionarios?:{nome_completo:string}};
 const metricLabels={transacoes_aprovadas:'Transacções aprovadas',volume_aprovado:'Volume aprovado (€)',peso_aprovado_g:'Peso aprovado (g)'};
 const statusLabels={activa:'Activa',suspensa:'Suspensa',concluida:'Concluída'};
-const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Europe/Lisbon'});\nconst monthEnd=()=>{const [year,month]=today().split('-').map(Number);return new Date(Date.UTC(year,month,0)).toISOString().slice(0,10);};
+const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Europe/Lisbon'});
+const monthEnd=()=>{const [year,month]=today().split('-').map(Number);return new Date(Date.UTC(year,month,0)).toISOString().slice(0,10);};
 const euro=(n:number)=>new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR',maximumFractionDigits:2}).format(n);
 const number=(n:number)=>new Intl.NumberFormat('pt-PT',{maximumFractionDigits:2}).format(n);
 export const AdminGoalsPage:React.FC=()=>{
