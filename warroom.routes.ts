@@ -47,7 +47,7 @@ router.get('/financial-summary', verifyAdmin, async (req, res) => {
     const [year, monthNumber] = month.split('-').map(Number);
     const start = `${month}-01`;
     const end = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
-    const rows: Array<{ loja_id: string; categoria: string; valor: number | string; estado: string; lojas?: { nome?: string } | null }> = [];
+    const rows: Array<{ loja_id: string; categoria: string; valor: number | string; estado: string; lojas?: { nome?: string }[] | null }> = [];
     const pageSize = 500;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase.from('despesas_operacionais')
