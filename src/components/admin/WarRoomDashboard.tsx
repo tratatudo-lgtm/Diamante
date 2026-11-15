@@ -25,6 +25,7 @@ export const WarRoomDashboard = () => {
   const [pendingList, setPendingList] = useState<any[]>([]);
   const [authorizing, setAuthorizing] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
+  const [businessKpis, setBusinessKpis] = useState<{active:number;estimatedMonthly:number;initialInvestment:number;estimatedResult:number}>({active:0,estimatedMonthly:0,initialInvestment:0,estimatedResult:0});
 
   const fetchKpis = useCallback(async () => {
     try {
@@ -52,6 +53,24 @@ export const WarRoomDashboard = () => {
       const data = await res.json();
       if (!res.ok || !data || typeof data !== 'object' || data.totalLojas === undefined) throw new Error(data?.error || 'Não foi possível carregar os indicadores.');
       setKpis(data);
+      try {
+        const expansionRes = await fetch('/api/admin/expansion-sites', {
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        const expansionData = await expansionRes.json().catch(() => null);
+        if (expansionRes.ok && expansionData?.success === true && Array.isArray(expansionData.sites)) {
+          const activeSites = expansionData.sites.filter((site: any) => !['rejeitado', 'arquivado'].includes(site.status));
+          setBusinessKpis({
+            active: activeSites.length,
+            estimatedMonthly: activeSites.reduce((sum: number, site: any) => sum + Math.max(0, Number(site.estimated_monthly_revenue) || 0), 0),
+            initialInvestment: activeSites.reduce((sum: number, site: any) => sum + (Number(site.estimated_setup_cost) || 0) + (Number(site.estimated_initial_stock) || 0), 0),
+            estimatedResult: activeSites.reduce((sum: number, site: any) => sum + (Number(site.estimated_monthly_revenue) || 0) - (Number(site.monthly_rent) || 0) - (Number(site.estimated_monthly_other_costs) || 0), 0),
+          });
+        }
+      } catch (expansionError) {
+        console.warn('[WarRoom] Indicadores de expansão indisponíveis.', expansionError);
+      }
       setLastUpdate(new Date());
       setDebugMsg('✅ Dados carregados com sucesso!');
     } catch (err: any) {
@@ -180,7 +199,12 @@ export const WarRoomDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-[#151b2b] rounded-xl p-5 border border-[#D4AF37]/20 min-h-[300px] flex flex-col items-center justify-center text-center">
           <p className="text-[#D4AF37] font-bold text-lg">Mapa de Calor da Rede</p>
-          <p className="text-sm text-slate-500 mt-2">Módulo em desenvolvimento</p>
+          <div className="mt-4 grid w-full grid-cols-2 gap-3 text-left">
+            <div className="rounded-lg bg-black/20 p-3"><p className="text-[10px] uppercase text-slate-500">Estudos activos</p><p className="mt-1 text-xl font-semibold text-white">{businessKpis.active}</p></div>
+            <div className="rounded-lg bg-black/20 p-3"><p className="text-[10px] uppercase text-slate-500">Receita mensal potencial</p><p className="mt-1 text-xl font-semibold text-white">{businessKpis.estimatedMonthly.toLocaleString('pt-PT',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</p></div>
+            <div className="rounded-lg bg-black/20 p-3"><p className="text-[10px] uppercase text-slate-500">Investimento inicial</p><p className="mt-1 text-xl font-semibold text-white">{businessKpis.initialInvestment.toLocaleString('pt-PT',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</p></div>
+            <div className="rounded-lg bg-black/20 p-3"><p className="text-[10px] uppercase text-slate-500">Resultado mensal estimado</p><p className="mt-1 text-xl font-semibold text-white">{businessKpis.estimatedResult.toLocaleString('pt-PT',{style:'currency',currency:'EUR',maximumFractionDigits:0})}</p></div>
+          </div>
         </div>
         <div className="bg-[#151b2b] rounded-xl p-5 border border-[#D4AF37]/20 min-h-[300px] flex flex-col items-center justify-center text-center">
           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse mb-3"></div>
