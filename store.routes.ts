@@ -206,7 +206,6 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   const descricao = typeof body.descricao === 'string' ? body.descricao.trim() : '';
   const peso = Number(body.pesoGramas);
   const valorFinal = Number(body.valorFinal);
-  const valorSugerido = Number(body.valorSugerido);
   const cotacaoSpot = Number(body.cotacaoSpot);
   const margem = Number(body.margemPercent);
 
@@ -216,11 +215,13 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       !metal || metal.length > 100 || descricao.length > 2000 ||
       !Number.isFinite(peso) || peso <= 0 || peso > 100000 ||
       !Number.isFinite(valorFinal) || valorFinal <= 0 || valorFinal > 100000000 ||
-      !Number.isFinite(valorSugerido) || valorSugerido < 0 ||
       !Number.isFinite(cotacaoSpot) || cotacaoSpot < 0 ||
       !Number.isFinite(margem) || margem < 0 || margem > 100) {
     return res.status(400).json({ success: false, message: 'Os dados da compra são inválidos. Verifique os campos e tente novamente.' });
   }
+
+  // Recalcular no servidor: nunca confiar no valor sugerido enviado pelo browser.
+  const valorSugerido = Number(Math.max(0, peso * cotacaoSpot * (1 - margem / 100)).toFixed(2));
 
   try {
     const { data: transaction, error: purchaseError } = await supabaseAdmin.rpc('create_store_purchase', {
