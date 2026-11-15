@@ -41,7 +41,7 @@ function getLisbonDayRange(now = new Date()): { start: string; end: string } {
 router.get('/financial-summary', verifyAdmin, async (req, res) => {
   try {
     const month = typeof req.query.month === 'string' ? req.query.month : new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7);
-    if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
       return res.status(400).json({ success: false, error: 'Mês inválido. Use AAAA-MM.' });
     }
     const [year, monthNumber] = month.split('-').map(Number);
@@ -87,38 +87,25 @@ router.get('/kpis', verifyAdmin, async (req, res) => {
   try {
     const dayRange = getLisbonDayRange();
     
-    // Indicadores calculados sobre as transacções reais do dia em Portugal continental.
-    const [transacoesRes, pendentesRes, lojasRes, totalLojasRes] = await Promise.all([
-      supabase.from('transacoes').select('valor_final, peso_gramas')
-        .gte('created_at', dayRange.start).lt('created_at', dayRange.end),
-      supabase.from('transacoes').select('id', { count: 'exact', head: true }).eq('estado', 'pendente_aprovacao'),
-      supabase.from('lojas').select('id', { count: 'exact', head: true }).eq('ativo', true),
-      supabase.from('lojas').select('id', { count: 'exact', head: true })
-    ]);
-
-    if (
-      transacoesRes.error ||
-      pendentesRes.error ||
-      lojasRes.error ||
-      totalLojasRes.error ||
-      !transacoesRes.data ||
-      pendentesRes.count === null ||
-      lojasRes.count === null ||
-      totalLojasRes.count === null
-    ) {
-      console.error('[WarRoom KPIs] Uma ou mais consultas não foram concluídas.');
-      res.status(503).json({ error: 'Indicadores temporariamente indisponíveis.' });
-      return;
-    }
-
+    // Paginação completa: não truncar o volume/peso quando há mais de 1.000 transacções.
+    const pageSize = 500;
     let volumeTotal = 0;
     let pesoTotal = 0;
-    
-    if (transacoesRes.data && transacoesRes.data.length > 0) {
-      for (const t of transacoesRes.data) {
-        volumeTotal += Number(t.valor_final) || 0;
-        pesoTotal += Number(t.peso_gramas) || 0;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data: page, error } = await supabase.from('transacoes')
+        .select('valor_final, peso_gramas')
+        .gte('created_at', dayRange.start).lt('created_at', dayRange.end)
+        .order('created_at', { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error || !page) {
+        console.error('[WarRoom KPIs] Falha ao consultar todas as transacções do dia.');
+        return res.status(503).json({ error: 'Indicadores temporariamente indisponíveis.' });
       }
+      for (const transaction of page) {
+        volumeTotal += Number(transaction.valor_final) || 0;
+        pesoTotal += Number(transaction.peso_gramas) || 0;
+      }
+      if (page.length < pageSize) break;
     }
 
     res.json({
