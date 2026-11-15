@@ -322,7 +322,7 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
     }
 
     const now = new Date().toISOString();
-    const { data: approved, error: approvalError } = await supabaseAdmin
+    let approvalQuery = supabaseAdmin
       .from('transacoes')
       .update({
         estado: 'aprovado',
@@ -330,7 +330,15 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
         data_aprovacao: now,
       })
       .eq('id', transactionId)
-      .eq('estado', 'pendente_aprovacao')
+      .eq('estado', 'pendente_aprovacao');
+
+    // Revalidar a identidade do segundo aprovador na própria escrita,
+    // evitando que uma verificação anterior fique desactualizada.
+    if (requiresDoubleSignature) {
+      approvalQuery = approvalQuery.neq('primeira_aprovacao_por', adminId);
+    }
+
+    const { data: approved, error: approvalError } = await approvalQuery
       .select('id, loja_id')
       .maybeSingle();
 
