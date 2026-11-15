@@ -112,6 +112,12 @@ router.post('/', async (req: AuthenticatedRequest,res: Response) => {
   const { error:eventError } = await supabaseAdmin.from('operational_goal_events').insert({goal_id:goal.id,actor_id:actor(req).id,action:'created',new_values:goal});
   if (eventError) { await supabaseAdmin.from('operational_goals').delete().eq('id',goal.id); return fail(res,503,'Não foi possível registar o histórico do objectivo.'); }
   if (notifyId) await notify(notifyId,goal.id,'goal_assigned','Novo objectivo atribuído',title);
+  if (lojaId) {
+    const {data:team} = await supabaseAdmin.from('funcionarios').select('id').eq('loja_id',lojaId).eq('ativo',true);
+    for (const person of team || []) await notify(person.id,goal.id,'goal_assigned','Novo objectivo da loja',title);
+    (globalThis as any).io?.to('store:'+lojaId).emit('goal:created',{id:goal.id,loja_id:lojaId});
+  }
+  (globalThis as any).io?.to('admin').emit('goal:created',{id:goal.id});
   return res.status(201).json({success:true,goal,progress:await goalProgress(goal)});
 });
 
@@ -137,6 +143,12 @@ router.patch('/:id', async (req: AuthenticatedRequest,res: Response) => {
   const {error:eventError}=await supabaseAdmin.from('operational_goal_events').insert({goal_id:current.id,actor_id:actor(req).id,action,old_values:current,new_values:updated});
   if(eventError){await supabaseAdmin.from('operational_goals').update({title:current.title,description:current.description,target_value:current.target_value,status:current.status,starts_on:current.starts_on,ends_on:current.ends_on,updated_at:current.updated_at}).eq('id',current.id).eq('updated_at',updated.updated_at);return fail(res,503,'Não foi possível guardar o histórico. A alteração foi revertida.');}
   if(current.scope==='funcionario'&&current.funcionario_id)await notify(current.funcionario_id,current.id,'goal_updated','Objectivo actualizado',updated.title);
+  if(current.scope==='loja'&&current.loja_id) {
+    const {data:team}=await supabaseAdmin.from('funcionarios').select('id').eq('loja_id',current.loja_id).eq('ativo',true);
+    for(const person of team||[]) await notify(person.id,current.id,'goal_updated','Objectivo da loja actualizado',updated.title);
+    (globalThis as any).io?.to('store:'+current.loja_id).emit('goal:updated',{id:current.id,loja_id:current.loja_id});
+  }
+  (globalThis as any).io?.to('admin').emit('goal:updated',{id:current.id});
   return res.json({success:true,goal:updated,progress:await goalProgress(updated)});
 });
 
