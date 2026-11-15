@@ -212,15 +212,17 @@ router.get('/reports', async (req: AuthenticatedRequest, res: Response) => {
 
 router.get('/reports/:id', async (req: AuthenticatedRequest, res: Response) => {
   if (!(await canAccessReport(req.params.id, req))) return fail(res, 404, 'Ocorrência não encontrada.');
-  const [{ data: report, error }, { data: comments, error: commentsError }, { data: events, error: eventsError }] = await Promise.all([
+  const [{ data: report, error }, { data: comments, error: commentsError }, { data: events, error: eventsError }, { data: attachments, error: attachmentsError }] = await Promise.all([
     supabaseAdmin.from('collab_reports').select('*, funcionarios!collab_reports_reporter_id_fkey(nome_completo, role)').eq('id', req.params.id).single(),
     supabaseAdmin.from('collab_report_comments').select('id, funcionario_id, comentario, interno, created_at, funcionarios(nome_completo, role)')
       .eq('report_id', req.params.id).eq('interno', false).order('created_at'),
     supabaseAdmin.from('collab_report_events').select('id, actor_id, action, old_values, new_values, created_at, funcionarios!collab_report_events_actor_id_fkey(nome_completo, role)')
       .eq('report_id', req.params.id).order('created_at', { ascending: false }).limit(100),
+    supabaseAdmin.from('collab_report_attachments').select('id, original_name, mime_type, size_bytes, created_at')
+      .eq('report_id', req.params.id).order('created_at', { ascending: false }),
   ]);
-  if (error || commentsError || eventsError) return fail(res, 503, 'Não foi possível carregar os detalhes da ocorrência.');
-  return res.json({ success: true, report, comments: comments || [], events: events || [] });
+  if (error || commentsError || eventsError || attachmentsError) return fail(res, 503, 'Não foi possível carregar os detalhes da ocorrência.');
+  return res.json({ success: true, report, comments: comments || [], events: events || [], attachments: attachments || [] });
 });
 
 router.post('/reports/:id/comments', async (req: AuthenticatedRequest, res: Response) => {
