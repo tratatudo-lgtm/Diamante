@@ -48,6 +48,9 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
   const [kpiHoje, setKpiHoje] = useState<KpiLojaDiaria | null>(null);
   const [kpiOntem, setKpiOntem] = useState<KpiLojaDiaria | null>(null);
   const [stockEmLojaCount, setStockEmLojaCount] = useState<number>(0);
+  const [stockEmLojaPesoGramas, setStockEmLojaPesoGramas] = useState<number>(0);
+  const [comprasPendentesCount, setComprasPendentesCount] = useState<number>(0);
+  const [comprasPendentesPesoGramas, setComprasPendentesPesoGramas] = useState<number>(0);
   const [ultimoPonto, setUltimoPonto] = useState<RegistoPonto | null>(null);
   const [isClockedIn, setIsClockedIn] = useState<boolean>(false);
   const [feedActivities, setFeedActivities] = useState<FeedActivity[]>([]);
@@ -93,6 +96,9 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
       setKpiHoje(payload.kpiHoje || null);
       setKpiOntem(payload.kpiOntem || null);
       setStockEmLojaCount(Number(payload.stockEmLojaCount) || 0);
+      setStockEmLojaPesoGramas(Number(payload.stockEmLojaPesoGramas) || 0);
+      setComprasPendentesCount(Number(payload.comprasPendentesCount) || 0);
+      setComprasPendentesPesoGramas(Number(payload.comprasPendentesPesoGramas) || 0);
 
       const points = Array.isArray(payload.pontos) ? payload.pontos as RegistoPonto[] : [];
       const lastPoint = points[0] || null;
@@ -392,7 +398,14 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
                 {stockEmLojaCount}
               </p>
             )}
-            <p className="mt-1 text-[11px] text-gray-400">Peças em inventário físico</p>
+            <p className="mt-1 text-[11px] text-gray-400">
+              {stockEmLojaPesoGramas.toFixed(2)} g disponíveis no cofre
+            </p>
+            {comprasPendentesCount > 0 && (
+              <p className="mt-1 text-[11px] text-amber-300">
+                {comprasPendentesCount} pendentes · {comprasPendentesPesoGramas.toFixed(2)} g por aprovar
+              </p>
+            )}
           </div>
         </div>
       </section>
