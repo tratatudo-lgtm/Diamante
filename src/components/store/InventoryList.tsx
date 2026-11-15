@@ -22,7 +22,7 @@ interface InventoryListProps {
 export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => {
   const [items, setItems] = useState<InventarioFisico[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'todos' | 'pendente_aprovacao' | 'em_loja' | 'enviado_sede' | 'fundido'>('em_loja');
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'pendente_aprovacao' | 'em_loja' | 'enviado_sede' | 'fundido'>('todos');
   const [searchQuery, setSearchQuery] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -73,7 +73,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
       onShowToast('success', `Lote ${codigoUnico} marcado como enviado para a Sede.`, 'Inventário Atualizado');
     } catch (err: unknown) {
       console.warn('[Inventário] Falha ao atualizar estado.');
-      onShowToast('error', 'Erro ao atualizar estado no inventário.');
+      onShowToast('error', err instanceof Error ? err.message : 'Não foi possível actualizar o estado do inventário.');
     } finally {
       setUpdatingId(null);
     }
