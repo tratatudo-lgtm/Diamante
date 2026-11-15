@@ -170,7 +170,7 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
       .eq('id', itemId)
       .eq('loja_atual_id', employee.loja_id)
       .eq('estado', 'em_loja')
-      .select('id, codigo_unico, estado, data_saida')
+      .select('id, codigo_unico, estado, data_saida, peso_gramas, transacao_origem_id')
       .maybeSingle();
 
     if (error) {
@@ -183,8 +183,8 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
 
     const io = (globalThis as any).io;
     if (io) {
-      io.to('admin').emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico });
-      io.to('store:' + employee.loja_id).emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico });
+      io.to('admin').emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: employee.loja_id });
+      io.to('store:' + employee.loja_id).emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: employee.loja_id });
     }
     return res.json({ success: true, item: data });
   } catch {
