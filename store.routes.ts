@@ -217,9 +217,7 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
     );
     const byMetal = new Map<string, any>();
     for (const item of active) {
-      const key = String(item.metal_tipo).toLowerCase().match(/(\\d+(?:\\.\\d+)?)\\s*k/)?.[1]
-        ? 'ouro-' + String(item.metal_tipo).toLowerCase().match(/(\\d+(?:\\.\\d+)?)\\s*k/)![1]
-        : (/prata.*925|925.*prata/i.test(String(item.metal_tipo)) ? 'prata-925' : String(item.metal_tipo).trim().toLowerCase());
+      const key = 'toque-' + String(item.toque_millesimos);
       const existing = byMetal.get(key);
       if (!existing || (item.loja_id === employee.loja_id && existing.loja_id == null)) byMetal.set(key, item);
     }
@@ -285,8 +283,9 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     }
 
     const configs = Array.isArray(configRow?.valor?.margens) ? configRow.valor.margens : [];
+    const toqueSolicitado = Number(metal.match(/(\\d{3})\\s*‰/)?.[1] || 0);
     const matching = configs.filter((item: any) =>
-      item && item.ativo === true && item.metal_tipo === metal &&
+      item && item.ativo === true && Number(item.toque_millesimos) === toqueSolicitado &&
       (item.loja_id == null || item.loja_id === employee.loja_id)
     );
     const metalConfig = matching.find((item: any) => item.loja_id === employee.loja_id) ||
