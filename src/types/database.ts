@@ -87,6 +87,34 @@ export interface InventarioFisico {
   data_prevista_fundicao?: string | null;
 }
 
+export interface OuroFundicaoLote {
+  id: string;
+  codigo_lote: string;
+  estado: 'em_preparacao' | 'concluido';
+  quantidade_pecas: number;
+  peso_entrada_gramas: number;
+  peso_recuperado_gramas?: number | null;
+  toque_milesimos?: number | null;
+  ouro_fino_recuperado_gramas?: number | null;
+  perda_processo_gramas?: number | null;
+  rendimento_percentagem?: number | null;
+  criado_por: string;
+  criado_em: string;
+  concluido_por?: string | null;
+  concluido_em?: string | null;
+  observacoes?: string | null;
+}
+
+export interface OuroFundicaoLotePeca {
+  id: string;
+  lote_id: string;
+  inventario_id: string;
+  transacao_origem_id?: string | null;
+  codigo_peca: string;
+  peso_recebido_gramas: number;
+  adicionado_em: string;
+}
+
 export interface ClienteProtegido {
   id?: string;
   nome?: string;
