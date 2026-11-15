@@ -532,6 +532,7 @@ app.get('/api/admin/refining/eligible', verifyAdmin, async (_req, res) => {
       .from('inventario_fisico')
       .select('id, codigo_unico, metal, tipo_peca, peso_gramas, peso_recebido_gramas, diferenca_peso_gramas, transacao_origem_id, data_rececao')
       .eq('estado', 'recebido_sede')
+      .ilike('metal', 'Ouro%')
       .order('data_rececao', { ascending: true })
       .limit(500);
     if (error) {
