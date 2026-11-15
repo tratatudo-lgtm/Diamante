@@ -439,6 +439,8 @@ app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin
       kpiTodayRes,
       kpiYesterdayRes,
       recentTxsRes,
+      activeEmployeesRes,
+      stockCountRes,
     ] = await Promise.all([
       supabaseAdmin.from('lojas').select('id, nome, codigo_loja, morada, latitude, longitude, ativo').order('nome', { ascending: true }),
       supabaseAdmin.from('transacoes').select('id, loja_id, estado, valor_final, peso_gramas').gte('created_at', todayStartIso),
@@ -446,6 +448,8 @@ app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin
       supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, total_peso_ouro_g, pendentes_aprovacao_qtd').eq('data', todayStr),
       supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, total_peso_ouro_g, pendentes_aprovacao_qtd').eq('data', yesterdayStr),
       supabaseAdmin.from('transacoes').select('id, loja_id, estado, valor_final, peso_gramas, created_at', { count: 'exact' }).order('created_at', { ascending: false }).limit(20),
+      supabaseAdmin.from('funcionarios').select('id', { count: 'exact', head: true }).eq('ativo', true),
+      supabaseAdmin.from('inventario_fisico').select('id', { count: 'exact', head: true }).eq('estado', 'em_loja'),
     ]);
 
     const queryResults = [
@@ -455,6 +459,8 @@ app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin
       kpiTodayRes,
       kpiYesterdayRes,
       recentTxsRes,
+      activeEmployeesRes,
+      stockCountRes,
     ];
 
     if (queryResults.some((result) => result.error)) {
@@ -475,6 +481,8 @@ app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin
       kpiYesterday: kpiYesterdayRes.data || [],
       recentTxs: recentTxsRes.data || [],
       recentTxsCount: recentTxsRes.count || 0,
+      activeEmployees: activeEmployeesRes.count || 0,
+      stockItemsInStores: stockCountRes.count || 0,
     });
   } catch (_err: unknown) {
     console.error('[War Room] Erro interno ao carregar dados administrativos.');
