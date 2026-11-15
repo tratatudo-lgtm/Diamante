@@ -28,6 +28,7 @@ import { AdminGoalsPage } from './components/admin/AdminGoalsPage';
 import { CommercialOpportunitiesPage } from './components/admin/CommercialOpportunitiesPage';
 import { ExpansionSitesPage } from './components/admin/ExpansionSitesPage';
 import { GoldReceivingPage } from './components/admin/GoldReceivingPage';
+import { GoldRefiningPage } from './components/admin/GoldRefiningPage';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
@@ -48,6 +49,7 @@ function AppRouter() {
         p === '/admin/config' ||
         p === '/admin/transacoes' ||
         p === '/admin/recepcao-ouro' ||
+        p === '/admin/lotes-fundicao' ||
         p === '/admin/transacoes-pendentes' ||
         p === '/admin/logs' ||
         p === '/collaboration' ||
@@ -191,6 +193,9 @@ function AppRouter() {
 
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
   if (isAdmin) {
+    if (currentPath === '/admin/lotes-fundicao') {
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><GoldRefiningPage /></AdminPageLayout>;
+    }
     if (currentPath === '/admin/recepcao-ouro') {
       return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><GoldReceivingPage /></AdminPageLayout>;
     }
