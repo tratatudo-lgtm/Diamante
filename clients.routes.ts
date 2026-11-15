@@ -222,10 +222,40 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
     return res.status(400).json({ success: false, message: 'O novo documento tem de estar dentro da validade.' });
   }
   let fileBuffer: Buffer;
-  try { fileBuffer = Buffer.from(encoded.replace(/^data:[^;]+;base64,/, ''), 'base64'); }
-  catch { return res.status(400).json({ success: false, message: 'Ficheiro inválido.' }); }
+  try {
+    const dataUriMatch = encoded.match(/^data:([^;]+);base64,(.*)$/s);
+    if (encoded.startsWith('data:') && (!dataUriMatch || dataUriMatch[1] !== mimeType)) {
+      return res.status(400).json({ success: false, message: 'O conteúdo do ficheiro não corresponde ao tipo declarado.' });
+    }
+    const base64Content = dataUriMatch ? dataUriMatch[2] : encoded;
+    if (!base64Content || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64Content) ||
+        base64Content.length % 4 === 1) {
+      return res.status(400).json({ success: false, message: 'Codificação do ficheiro inválida.' });
+    }
+    fileBuffer = Buffer.from(base64Content, 'base64');
+    if (fileBuffer.toString('base64').replace(/=+$/, '') !== base64Content.replace(/=+$/, '')) {
+      return res.status(400).json({ success: false, message: 'Codificação do ficheiro inválida.' });
+    }
+  } catch {
+    return res.status(400).json({ success: false, message: 'Ficheiro inválido.' });
+  }
   if (!fileBuffer.length || fileBuffer.length > 6 * 1024 * 1024) {
     return res.status(400).json({ success: false, message: 'O ficheiro excede o limite de 6 MB ou está vazio.' });
+  }
+
+  // Não confiar no MIME enviado pelo browser: confirmar a assinatura real do ficheiro.
+  const hasFileSignature = mimeType === 'application/pdf'
+    ? fileBuffer.subarray(0, 5).toString('ascii') === '%PDF-'
+    : mimeType === 'image/jpeg'
+      ? fileBuffer.length >= 3 && fileBuffer[0] === 0xff && fileBuffer[1] === 0xd8 && fileBuffer[2] === 0xff
+      : mimeType === 'image/png'
+        ? fileBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+        : mimeType === 'image/webp'
+          ? fileBuffer.length >= 12 && fileBuffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+            fileBuffer.subarray(8, 12).toString('ascii') === 'WEBP'
+          : false;
+  if (!hasFileSignature) {
+    return res.status(400).json({ success: false, message: 'O conteúdo não corresponde a um PDF, JPEG, PNG ou WebP válido.' });
   }
 
   let storagePath = '';
