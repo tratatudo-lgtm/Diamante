@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   MessageCircle, Users, Send, Plus, Search, Flag, AlertTriangle, Clock3,
   CheckCircle2, CircleDot, Paperclip, RefreshCw, X, ArrowLeft, UserRound,
-  ShieldAlert, MessagesSquare
+  ShieldAlert, MessagesSquare, Bell, Check
 } from 'lucide-react';
 
 type Employee = { id: string; nome_completo: string; role: string; loja_id: string | null; lojas?: { nome?: string } | null };
@@ -12,7 +12,7 @@ type Conversation = { id: string; tipo: 'directa' | 'grupo'; titulo: string | nu
 type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; funcionarios?: { nome_completo?: string; role?: string } };
 type Report = { id: string; reference: string; titulo: string; descricao: string; categoria: string; prioridade: string; estado: string; reporter_id: string; assigned_to: string | null; created_at: string; funcionarios?: { nome_completo?: string } };
 type Comment = { id: string; funcionario_id: string; comentario: string; created_at: string; funcionarios?: { nome_completo?: string } };
-type ReportEvent = { id: string; actor_id: string; action: string; old_values: Record<string, unknown>; new_values: Record<string, unknown>; created_at: string; funcionarios?: { nome_completo?: string } };
+type Notification = { id: string; kind: string; entity_id: string; title: string; body: string; read_at: string | null; created_at: string };\ntype ReportEvent = { id: string; actor_id: string; action: string; old_values: Record<string, unknown>; new_values: Record<string, unknown>; created_at: string; funcionarios?: { nome_completo?: string } };
 
 const categories = [
   ['sistema', 'Sistema / aplicação'], ['equipamento', 'Equipamento'], ['caixa', 'Caixa / financeiro'],
@@ -35,7 +35,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
   const [activeConversation, setActiveConversation] = useState<string>('');
   const [activeReport, setActiveReport] = useState<Report | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);
+  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);\n  const [notifications, setNotifications] = useState<Notification[]>([]);\n  const [showNotifications, setShowNotifications] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [commentText, setCommentText] = useState('');
   const [search, setSearch] = useState('');
@@ -102,7 +102,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
     ]).catch((err) => { if (!cancelled) setError(err.message || 'Falha ao carregar colaboração.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [api, loadConversations, loadReports]);
+  }, [api, loadConversations, loadReports, loadNotifications]);
 
   useEffect(() => {
     if (!currentUserId || !token()) return;
@@ -126,14 +126,14 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
       }
     });
     connection.on('chat:conversation', () => void loadConversations());
-    connection.on('report:created', () => void loadReports());
+    connection.on('report:created', () => void loadReports());\n    connection.on('notification:new', () => void loadNotifications());
     connection.on('report:updated', (event: { id?: string }) => {
       void loadReports();
       if (event?.id && activeReport?.id === event.id) void loadReport(event.id);
     });
     connection.on('connect_error', () => setError('Ligação em tempo real indisponível. As mensagens continuam acessíveis através da actualização.'));
     return () => { connection.removeAllListeners(); connection.disconnect(); setSocket(null); };
-  }, [currentUserId, isAdmin, activeConversation, activeReport?.id, loadConversations, loadReports, loadReport]);
+  }, [currentUserId, isAdmin, activeConversation, activeReport?.id, loadConversations, loadReports, loadReport, loadNotifications]);
 
   useEffect(() => {
     if (!activeConversation) { setMessages([]); return; }
@@ -228,9 +228,19 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
             <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Comunicação & Ocorrências</h1>
             <p className="mt-1 text-sm text-slate-400">Comunicação interna e acompanhamento de situações operacionais.</p>
           </div>
-          <button onClick={() => { void Promise.all([loadConversations(), loadReports()]); }} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5">
+          <div className="relative flex items-center gap-2">
+            <button onClick={() => setShowNotifications((value) => !value)} className="relative rounded-xl border border-white/10 p-2.5 text-slate-300 hover:bg-white/5" aria-label="Notificações">
+              <Bell className="h-4 w-4" />
+              {notifications.filter((item) => !item.read_at).length > 0 && <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-rose-500 px-1 text-center text-[9px] font-bold text-white">{notifications.filter((item) => !item.read_at).length}</span>}
+            </button>
+            {showNotifications && <div className="absolute right-0 top-12 z-50 w-[min(90vw,360px)] overflow-hidden rounded-2xl border border-white/10 bg-[#101827] shadow-2xl">
+              <div className="flex items-center justify-between border-b border-white/10 p-3"><span className="text-sm font-semibold text-white">Notificações</span><button onClick={() => void api('/notifications/read-all', { method: 'PATCH' }).then(loadNotifications).catch((err) => setError(err.message))} className="text-[11px] text-[#E6C66B]">Marcar todas como lidas</button></div>
+              <div className="max-h-80 overflow-y-auto">{notifications.map((item) => <button key={item.id} onClick={() => { void api('/notifications/' + encodeURIComponent(item.id) + '/read', { method: 'PATCH' }).then(loadNotifications).catch((err) => setError(err.message)); setShowNotifications(false); if (item.kind.startsWith('report_')) { setSection('reports'); setActiveConversation(''); void loadReport(item.entity_id).catch((err) => setError(err.message)); } }} className={'block w-full border-b border-white/[0.06] p-3 text-left hover:bg-white/5 ' + (!item.read_at ? 'bg-[#D4AF37]/[0.06]' : '')}><div className="flex items-start gap-2"><span className={'mt-1 h-2 w-2 shrink-0 rounded-full ' + (!item.read_at ? 'bg-[#D4AF37]' : 'bg-slate-600')} /><span className="min-w-0 flex-1"><span className="block text-xs font-semibold text-white">{item.title}</span><span className="mt-1 block text-[11px] text-slate-400">{item.body}</span><span className="mt-1 block text-[10px] text-slate-600">{dateLabel(item.created_at)}</span></span></div></button>)}{notifications.length === 0 && <p className="p-5 text-center text-xs text-slate-500">Não tens notificações.</p>}</div>
+            </div>}
+            <button onClick={() => { void Promise.all([loadConversations(), loadReports(), loadNotifications()]); }} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/5">
             <RefreshCw className="h-4 w-4" /> Actualizar
-          </button>
+            </button>
+          </div>
         </div>
 
         <div className="mb-4 flex gap-2 rounded-2xl border border-white/10 bg-[#101827] p-1.5">
