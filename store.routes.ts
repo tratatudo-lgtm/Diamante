@@ -125,6 +125,70 @@ storeRouter.post('/clock', verifyAuth, async (req: AuthenticatedRequest, res: Re
   }
 });
 
+storeRouter.get('/inventory', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
+    return res.status(403).json({ success: false, message: 'A sua conta não tem acesso ao inventário desta loja.' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('inventario_fisico')
+      .select('*')
+      .eq('loja_atual_id', employee.loja_id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[STORE INVENTORY] Falha ao consultar inventário da loja.');
+      return res.status(503).json({ success: false, message: 'Não foi possível carregar o inventário da loja.' });
+    }
+    return res.json({ success: true, items: data || [] });
+  } catch {
+    console.error('[STORE INVENTORY] Erro interno ao consultar inventário.');
+    return res.status(500).json({ success: false, message: 'Erro interno ao carregar o inventário.' });
+  }
+});
+
+storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  const itemId = typeof req.params.id === 'string' ? req.params.id : '';
+  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
+    return res.status(403).json({ success: false, message: 'A sua conta não pode expedir inventário.' });
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(itemId)) {
+    return res.status(400).json({ success: false, message: 'Identificador de inventário inválido.' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('inventario_fisico')
+      .update({ estado: 'enviado_sede', data_saida: new Date().toISOString() })
+      .eq('id', itemId)
+      .eq('loja_atual_id', employee.loja_id)
+      .eq('estado', 'em_loja')
+      .select('id, codigo_unico, estado, data_saida')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[STORE INVENTORY] Falha ao expedir peça.');
+      return res.status(503).json({ success: false, message: 'Não foi possível registar a expedição do inventário.' });
+    }
+    if (!data) {
+      return res.status(409).json({ success: false, message: 'A peça já não está disponível nesta loja ou já foi expedida.' });
+    }
+
+    const io = (globalThis as any).io;
+    if (io) {
+      io.to('admin').emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico });
+      io.to('store:' + employee.loja_id).emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico });
+    }
+    return res.json({ success: true, item: data });
+  } catch {
+    console.error('[STORE INVENTORY] Erro interno ao expedir peça.');
+    return res.status(500).json({ success: false, message: 'Erro interno ao registar a expedição.' });
+  }
+});
+
 storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (!employee || !employee.ativo || !employee.loja_id ||
