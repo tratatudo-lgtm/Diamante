@@ -251,7 +251,7 @@ router.post('/reports/:id/comments', async (req: AuthenticatedRequest, res: Resp
 router.post('/reports/:id/attachments', async (req: AuthenticatedRequest, res: Response) => {
   const reportId = req.params.id;
   if (!(await canAccessReport(reportId, req))) return fail(res, 404, 'Ocorrência não encontrada.');
-  const name = typeof req.body?.name === 'string' ? path.basename(req.body.name.replace(/[\\\\/]/g, '_')).replace(/[\\u0000-\\u001f\\u007f]/g, '').trim().slice(0, 180) : '';
+  const name = typeof req.body?.name === 'string' ? path.basename(req.body.name.replace(/[\\/]/g, '_')).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 180) : '';
   const mime = typeof req.body?.mime_type === 'string' ? req.body.mime_type : '';
   const encoded = typeof req.body?.data === 'string' ? req.body.data : '';
   const allowed = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
