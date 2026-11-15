@@ -23,6 +23,7 @@ import {
   ListTodo,
   Target,
   BriefcaseBusiness,
+  MapPinned,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -52,6 +53,7 @@ export const menuItems: MenuItem[] = [
   { id: 'tasks', label: 'Gestão de Tarefas', path: '/tasks', icon: ListTodo, badge: 'OPS' },
   { id: 'goals', label: 'Objectivos & Desempenho', path: '/goals', icon: Target, badge: 'KPI' },
   { id: 'opportunities', label: 'Oportunidades Comerciais', path: '/opportunities', icon: BriefcaseBusiness, badge: 'CRM' },
+  { id: 'expansion-sites', label: 'Estudos de Localização', path: '/expansion-sites', icon: MapPinned, badge: 'NEW' },
 ];
 
 export const navItems = menuItems;
@@ -90,7 +92,8 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
     (path === '/admin/logs' && ['/logs', '/auditoria'].includes(currentPath)) ||
     (path === '/tasks' && currentPath === '/admin/tasks') ||
     (path === '/goals' && currentPath === '/admin/goals') ||
-    (path === '/opportunities' && currentPath === '/admin/opportunities');
+    (path === '/opportunities' && currentPath === '/admin/opportunities') ||
+    (path === '/expansion-sites' && currentPath === '/admin/expansion-sites');
 
   return (
     <>
