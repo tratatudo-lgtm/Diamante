@@ -13,6 +13,12 @@ interface RoomAcknowledgement {
   reason?: string;
 }
 
+interface TransactionStatusEvent {
+  id: string;
+  loja_id?: string;
+  estado: string;
+}
+
 /**
  * Liga um ecrã à sala Socket.IO autorizada pelo servidor.
  * O JWT é usado apenas no handshake autenticado.
@@ -82,6 +88,17 @@ export function useTransactionRealtime(
       if (!event || typeof event.id !== 'string' || !event.id) return;
       console.info('[Diamante Realtime] Nova transação recebida.');
       callbackRef.current(event);
+    });
+
+    socket.on('transaction:approved', (event: TransactionStatusEvent) => {
+      if (!event || typeof event.id !== 'string' || !event.id) return;
+      console.info('[Diamante Realtime] Aprovação administrativa recebida.');
+      callbackRef.current({
+        id: event.id,
+        loja_id: event.loja_id,
+        estado: event.estado,
+        created_at: new Date().toISOString(),
+      });
     });
 
     socket.on('disconnect', (reason) => {
