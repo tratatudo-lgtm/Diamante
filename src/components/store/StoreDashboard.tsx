@@ -186,7 +186,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
     }
   };
 
-  Submissão do Modal de Alerta à Sede
+  // Submissão do Modal de Alerta à Sede
   const handleSendIncident = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!incidentDescription.trim()) return;
