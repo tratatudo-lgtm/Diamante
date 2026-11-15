@@ -556,7 +556,27 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
       console.error('[Refining] Falha ao carregar lotes.');
       return res.status(503).json({ success: false, error: 'Não foi possível carregar os lotes de fundição.' });
     }
-    return res.json({ success: true, data: data || [] });
+    const batchIds = (data || []).map((batch: any) => batch.id);
+    const { data: pieces, error: piecesError } = batchIds.length
+      ? await supabaseAdmin
+          .from('ouro_fundicao_lote_pecas')
+          .select('lote_id, inventario_id, transacao_origem_id, codigo_peca, peso_recebido_gramas')
+          .in('lote_id', batchIds)
+      : { data: [], error: null };
+    if (piecesError) {
+      console.error('[Refining] Falha ao carregar peças dos lotes.');
+      return res.status(503).json({ success: false, error: 'Não foi possível carregar a rastreabilidade das peças.' });
+    }
+    const piecesByBatch = new Map<string, any[]>();
+    for (const piece of pieces || []) {
+      const current = piecesByBatch.get(piece.lote_id) || [];
+      current.push(piece);
+      piecesByBatch.set(piece.lote_id, current);
+    }
+    return res.json({
+      success: true,
+      data: (data || []).map((batch: any) => ({ ...batch, pecas: piecesByBatch.get(batch.id) || [] })),
+    });
   } catch {
     return res.status(500).json({ success: false, error: 'Erro interno ao carregar lotes.' });
   }
