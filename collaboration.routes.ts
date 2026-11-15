@@ -178,7 +178,7 @@ router.get('/reports/:id', async (req: AuthenticatedRequest, res: Response) => {
     supabaseAdmin.from('collab_reports').select('*, funcionarios!collab_reports_reporter_id_fkey(nome_completo, role)').eq('id', req.params.id).single(),
     supabaseAdmin.from('collab_report_comments').select('id, funcionario_id, comentario, interno, created_at, funcionarios(nome_completo, role)')
       .eq('report_id', req.params.id).eq('interno', false).order('created_at'),
-    supabaseAdmin.from('collab_report_events').select('id, actor_id, action, old_values, new_values, created_at, funcionarios:actor_id(nome_completo, role)')
+    supabaseAdmin.from('collab_report_events').select('id, actor_id, action, old_values, new_values, created_at, funcionarios!collab_report_events_actor_id_fkey(nome_completo, role)')
       .eq('report_id', req.params.id).order('created_at', { ascending: false }).limit(100),
   ]);
   if (error || commentsError || eventsError) return fail(res, 503, 'Não foi possível carregar os detalhes da ocorrência.');
