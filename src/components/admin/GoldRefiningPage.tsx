@@ -74,7 +74,7 @@ export const GoldRefiningPage: React.FC = () => {
       const token = sessionStorage.getItem('diamante_jwt_token');
       const response = await fetch('/api/admin/refining/batches/' + encodeURIComponent(batch.id) + '/complete', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ peso_recuperado_gramas: recovered[batch.id], toque_milesimos: touch[batch.id] }),
+        body: JSON.stringify({ peso_recuperado_gramas: (recovered[batch.id] || '').replace(',', '.'), toque_milesimos: (touch[batch.id] || '').replace(',', '.') }),
         signal: AbortSignal.timeout(20000),
       });
       const payload = await response.json().catch(() => null);
