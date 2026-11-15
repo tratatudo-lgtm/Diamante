@@ -131,8 +131,12 @@ router.post('/conversations/:id/messages', async (req: AuthenticatedRequest, res
   }).select('id, conversation_id, sender_id, body, created_at, funcionarios(nome_completo, role)').single();
   if (error || !data) return fail(res, 503, 'Não foi possível enviar a mensagem.');
   await supabaseAdmin.from('collab_conversations').update({ last_message_at: data.created_at, updated_at: data.created_at }).eq('id', id);
+  const { data: recipients } = await supabaseAdmin.from('collab_conversation_members')
+    .select('funcionario_id').eq('conversation_id', id);
   const io = (globalThis as any).io;
-  io?.to('chat:' + id).emit('chat:message', data);
+  for (const recipient of recipients || []) {
+    io?.to(recipient.funcionario_id).emit('chat:message', data);
+  }
   return res.status(201).json({ success: true, message: data });
 });
 
