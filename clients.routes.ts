@@ -157,7 +157,8 @@ clientsRouter.get('/document-alerts', verifyAuth, async (req: AuthenticatedReque
     return res.status(403).json({ success: false, message: 'Não tem autorização para consultar alertas.' });
   }
   try {
-    let query = supabaseAdmin.from('v_clientes_documentos_alerta').select('*')
+    let query = supabaseAdmin.from('v_clientes_documentos_alerta')
+      .select('cliente_id,nome,loja_registo_id,tipo_documento,data_validade_documento,dias_ate_validade,estado_documento')
       .in('estado_documento', ['expirado', 'a_expirar'])
       .order('data_validade_documento', { ascending: true }).limit(500);
     if (employee.role !== 'admin') query = query.eq('loja_registo_id', employee.loja_id as string);
@@ -393,10 +394,13 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
     const ids = [...new Set(rows.map((row) => row.bi_cc).filter(Boolean))];
     const counts = new Map<string, number>();
     if (ids.length) {
-      const { data: txRows, error } = await supabaseAdmin
+      let transactionsQuery = supabaseAdmin
         .from('transacoes')
         .select('cliente_cc')
         .in('cliente_cc', ids);
+      // Funcionários não podem inferir actividade de compras de outras lojas.
+      if (employee.role !== 'admin') transactionsQuery = transactionsQuery.eq('loja_id', employee.loja_id as string);
+      const { data: txRows, error } = await transactionsQuery;
       if (error) throw error;
       for (const tx of txRows || []) counts.set(tx.cliente_cc, (counts.get(tx.cliente_cc) || 0) + 1);
     }
