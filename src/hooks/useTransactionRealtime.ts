@@ -101,6 +101,12 @@ export function useTransactionRealtime(
       });
     });
 
+    socket.on('inventory:dispatched', (event: { id?: string }) => {
+      if (!event || typeof event.id !== 'string' || !event.id) return;
+      console.info('[Diamante Realtime] Alteração de inventário recebida.');
+      callbackRef.current();
+    });
+
     socket.on('disconnect', (reason) => {
       console.warn('[Diamante Realtime] Ligação terminada:', reason);
     });
