@@ -17,7 +17,7 @@ const SafeKPICard = ({ title, value, icon, variant = 'default', subtext }: any) 
 );
 
 export const WarRoomDashboard = () => {
-  const [kpis, setKpis] = useState({ volume: 0, pendentes: 0, peso: 0, lojasAtivas: 0, totalLojas: 24 });
+  const [kpis, setKpis] = useState({ volume: 0, pendentes: 0, peso: 0, lojasAtivas: 0, totalLojas: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [debugMsg, setDebugMsg] = useState<string>('');
@@ -31,19 +31,16 @@ export const WarRoomDashboard = () => {
       setIsLoading(true);
       setError(null);
       
-      const phone = localStorage.getItem('otp_phone') || '+351937230116';
-      setDebugMsg(`📡 A pedir KPIs (API v1)... Phone: ${phone}`);
-      
-      const res = await fetch(`${window.location.origin}/api/v1/admin/dashboard/kpis?t=${Date.now()}`, { 
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão administrativa expirada. Volte a iniciar sessão.');
+      const res = await fetch(`/api/v1/admin/dashboard/kpis?t=${Date.now()}`, {
         method: 'GET',
-        credentials: 'include',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
           'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'x-user-phone': phone
-        }
+        },
+        signal: AbortSignal.timeout(10000),
       });
 
       const contentType = res.headers.get('content-type');
@@ -53,6 +50,7 @@ export const WarRoomDashboard = () => {
       }
       
       const data = await res.json();
+      if (!res.ok || !data || typeof data !== 'object' || data.totalLojas === undefined) throw new Error(data?.error || 'Não foi possível carregar os indicadores.');
       setKpis(data);
       setLastUpdate(new Date());
       setDebugMsg('✅ Dados carregados com sucesso!');
@@ -70,12 +68,15 @@ export const WarRoomDashboard = () => {
   // Carregar lista de pendentes
   const loadPendingTransactions = async () => {
     try {
-      const phone = localStorage.getItem('otp_phone') || '+351937230116';
-      const res = await fetch(`${window.location.origin}/api/v1/admin/dashboard/pending?t=${Date.now()}`, {
-        headers: { 'x-user-phone': phone, 'Cache-Control': 'no-cache' }
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão administrativa expirada. Volte a iniciar sessão.');
+      const res = await fetch(`/api/v1/admin/dashboard/pending?t=${Date.now()}`, {
+        headers: { Authorization: `Bearer ${token}`, 'Cache-Control': 'no-cache' },
+        signal: AbortSignal.timeout(10000),
       });
-      const data = await res.json();
-      if (data.success) setPendingList(data.data);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success !== true || !Array.isArray(data.data)) throw new Error(data?.error || 'Não foi possível carregar as transacções pendentes.');
+      setPendingList(data.data);
       setShowPendingModal(true);
     } catch(e) {
       console.error('Erro ao carregar pendentes:', e);
@@ -87,23 +88,21 @@ export const WarRoomDashboard = () => {
   const authorizeTransaction = async (id: string) => {
     setAuthorizing(id);
     try {
-      const phone = localStorage.getItem('otp_phone') || '+351937230116';
-      const res = await fetch(`${window.location.origin}/api/v1/admin/dashboard/authorize`, {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão administrativa expirada. Volte a iniciar sessão.');
+      const res = await fetch('/api/v1/admin/dashboard/authorize', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'x-user-phone': phone 
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ transactionId: id })
+        body: JSON.stringify({ transactionId: id }),
+        signal: AbortSignal.timeout(10000),
       });
-      const data = await res.json();
-      if (data.success) {
-        setDebugMsg(`✅ Transação autorizada!`);
-        await loadPendingTransactions(); // Recarrega lista
-        await fetchKpis(); // Atualiza KPIs
-      } else {
-        setDebugMsg(`❌ Erro: ${data.error}`);
-      }
+      const data = await res.json().catch(() => null);
+      if (!res.ok || data?.success !== true) throw new Error(data?.error || 'Não foi possível aprovar a transacção.');
+      setDebugMsg('Transacção aprovada.');
+      await Promise.all([loadPendingTransactions(), fetchKpis()]);
     } catch(e: any) {
       setDebugMsg(`❌ Erro na autorização: ${e.message}`);
     } finally {
