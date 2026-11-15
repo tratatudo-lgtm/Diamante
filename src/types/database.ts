@@ -57,6 +57,14 @@ export interface RegistoPonto {
   localizacao?: { lat: number; lng: number } | string | null;
 }
 
+export type InventarioFisicoEstado =
+  | 'pendente_aprovacao'
+  | 'em_loja'
+  | 'enviado_sede'
+  | 'recebido_sede'
+  | 'em_lote_fundicao'
+  | 'fundido';
+
 export interface InventarioFisico {
   id: string;
   loja_atual_id: string;
@@ -64,10 +72,16 @@ export interface InventarioFisico {
   codigo_unico: string;
   tipo_peca?: string;
   metal: string;
+  /** Peso registado na compra e mantido como referência de expedição. */
   peso_gramas: number;
-  estado: 'em_loja' | 'enviado_sede' | 'fundido' | string;
+  estado: InventarioFisicoEstado | string;
   data_entrada?: string;
   data_saida?: string | null;
+  peso_recebido_gramas?: number | null;
+  diferenca_peso_gramas?: number | null;
+  recebido_por?: string | null;
+  data_rececao?: string | null;
+  observacoes_rececao?: string | null;
   observacoes?: string | null;
   localizacao_cofre?: string | null;
   data_prevista_fundicao?: string | null;
