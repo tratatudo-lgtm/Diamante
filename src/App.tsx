@@ -160,8 +160,8 @@ function AppRouter() {
   if (currentPath === '/collaboration' || currentPath === '/reportar-situacao') {
     const initialSection = currentPath === '/reportar-situacao' ? 'reports' : 'chat';
     return isAdmin
-      ? <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><CollaborationWorkspace initialSection={initialSection} /></AdminPageLayout>
-      : <CollaborationWorkspace initialSection={initialSection} />;
+      ? <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><CollaborationWorkspace initialSection={initialSection} onNavigate={navigate} /></AdminPageLayout>
+      : <CollaborationWorkspace initialSection={initialSection} onNavigate={navigate} />;
   }
 
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
