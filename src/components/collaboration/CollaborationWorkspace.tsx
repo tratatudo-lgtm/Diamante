@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 
 type Employee = { id: string; nome_completo: string; role: string; loja_id: string | null; lojas?: { nome?: string } | null };
-type Conversation = { id: string; tipo: 'directa' | 'grupo'; titulo: string | null; last_message_at: string; members: Array<{ funcionario_id: string; funcionarios?: Employee }>; unread_count: number };
+type Conversation = { id: string; tipo: 'directa' | 'grupo'; titulo: string | null; last_message_at: string; members: Array<{ funcionario_id: string; last_read_at?: string | null; funcionarios?: Employee }>; unread_count: number };
 type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; funcionarios?: { nome_completo?: string; role?: string } };
 type Report = { id: string; reference: string; titulo: string; descricao: string; categoria: string; prioridade: string; estado: string; reporter_id: string; assigned_to: string | null; created_at: string; funcionarios?: { nome_completo?: string } };
 type Comment = { id: string; funcionario_id: string; comentario: string; created_at: string; funcionarios?: { nome_completo?: string } };
@@ -91,7 +91,8 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
   const loadMessages = useCallback(async (id: string) => {
     const result = await api('/conversations/' + encodeURIComponent(id) + '/messages');
     setMessages(result.messages || []);
-  }, [api]);
+    await loadConversations();
+  }, [api, loadConversations]);
 
   const loadReport = useCallback(async (id: string) => {
     const result = await api('/reports/' + encodeURIComponent(id));
@@ -290,7 +291,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
               {activeConversation ? <>
                 <div className="flex items-center gap-3 border-b border-white/10 p-4"><button onClick={() => setActiveConversation('')} className="rounded-lg p-1 text-slate-400 hover:bg-white/5 lg:hidden"><ArrowLeft className="h-5 w-5" /></button><div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#D4AF37]/10 text-[#E6C66B]"><MessageCircle className="h-4 w-4" /></div><div><h2 className="font-semibold text-white">{activeName}</h2><p className="text-[11px] text-slate-500">{active?.members.length || 0} participantes</p></div></div>
                 <div className="flex-1 space-y-3 overflow-y-auto p-4">
-                  {messages.map((item) => <div key={item.id} className={'flex ' + (item.sender_id === currentUserId ? 'justify-end' : 'justify-start')}><div className={'max-w-[85%] rounded-2xl px-4 py-2.5 sm:max-w-[70%] ' + (item.sender_id === currentUserId ? 'rounded-br-md bg-[#9b7b22] text-white' : 'rounded-bl-md border border-white/10 bg-[#182337] text-slate-100')}><p className="mb-1 text-[10px] font-semibold opacity-70">{item.sender_id === currentUserId ? 'Tu' : item.funcionarios?.nome_completo || 'Colega'}</p><p className="whitespace-pre-wrap break-words text-sm">{item.body}</p><p className="mt-1 text-right text-[10px] opacity-60">{dateLabel(item.created_at)}</p></div></div>)}
+                  {messages.map((item) => <div key={item.id} className={'flex ' + (item.sender_id === currentUserId ? 'justify-end' : 'justify-start')}><div className={'max-w-[85%] rounded-2xl px-4 py-2.5 sm:max-w-[70%] ' + (item.sender_id === currentUserId ? 'rounded-br-md bg-[#9b7b22] text-white' : 'rounded-bl-md border border-white/10 bg-[#182337] text-slate-100')}><p className="mb-1 text-[10px] font-semibold opacity-70">{item.sender_id === currentUserId ? 'Tu' : item.funcionarios?.nome_completo || 'Colega'}</p><p className="whitespace-pre-wrap break-words text-sm">{item.body}</p><p className="mt-1 text-right text-[10px] opacity-60">{dateLabel(item.created_at)}{item.sender_id === currentUserId && active?.members.some((member) => member.funcionario_id !== currentUserId && member.last_read_at && new Date(member.last_read_at).getTime() >= new Date(item.created_at).getTime()) ? ' · Visto' : ''}</p></div></div>)}
                   {messages.length === 0 && <p className="py-12 text-center text-sm text-slate-500">Esta conversa ainda não tem mensagens.</p>}
                 </div>
                 <form onSubmit={sendMessage} className="flex items-end gap-2 border-t border-white/10 p-3"><textarea value={messageText} onChange={(e) => setMessageText(e.target.value)} rows={2} maxLength={4000} placeholder="Escreva uma mensagem…" className="max-h-32 min-h-12 flex-1 resize-y rounded-xl border border-white/10 bg-[#080d17] px-3 py-3 text-sm outline-none focus:border-[#D4AF37]/50" /><button disabled={!messageText.trim()} className="rounded-xl bg-[#D4AF37] p-3 text-black disabled:opacity-40"><Send className="h-5 w-5" /></button></form>
