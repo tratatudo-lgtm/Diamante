@@ -206,8 +206,6 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   const descricao = typeof body.descricao === 'string' ? body.descricao.trim() : '';
   const peso = Number(body.pesoGramas);
   const valorFinal = Number(body.valorFinal);
-  const cotacaoSpot = Number(body.cotacaoSpot);
-  const margem = Number(body.margemPercent);
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey) ||
       !clienteNome || clienteNome.length > 200 || !clienteCc || clienteCc.length > 80 ||
@@ -215,13 +213,47 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       !metal || metal.length > 100 || descricao.length > 2000 ||
       !Number.isFinite(peso) || peso <= 0 || peso > 100000 ||
       !Number.isFinite(valorFinal) || valorFinal <= 0 || valorFinal > 100000000 ||
-      !Number.isFinite(cotacaoSpot) || cotacaoSpot < 0 ||
-      !Number.isFinite(margem) || margem < 0 || margem > 100) {
+      false) {
     return res.status(400).json({ success: false, message: 'Os dados da compra são inválidos. Verifique os campos e tente novamente.' });
   }
 
-  // Recalcular no servidor: nunca confiar no valor sugerido enviado pelo browser.
-  const valorSugerido = Number(Math.max(0, peso * cotacaoSpot * (1 - margem / 100)).toFixed(2));
+  // A cotação e a margem são sempre lidas da configuração aprovada pela administração.
+  let cotacaoSpot = 0;
+  let margem = 0;
+  let valorSugerido = 0;
+  try {
+    const { data: configRow, error: configError } = await supabaseAdmin
+      .from('configuracoes_sistema')
+      .select('valor')
+      .eq('chave', 'parametros_compra_ouro')
+      .maybeSingle();
+    if (configError) {
+      console.error('[Store Purchase] Falha ao consultar parâmetros aprovados.');
+      return res.status(503).json({ success: false, message: 'Não foi possível validar os parâmetros de compra. Tente novamente.' });
+    }
+
+    const configs = Array.isArray(configRow?.valor?.margens) ? configRow.valor.margens : [];
+    const matching = configs.filter((item: any) =>
+      item && item.ativo === true && item.metal_tipo === metal &&
+      (item.loja_id == null || item.loja_id === employee.loja_id)
+    );
+    const metalConfig = matching.find((item: any) => item.loja_id === employee.loja_id) ||
+      matching.find((item: any) => item.loja_id == null);
+    if (!metalConfig || !Number.isInteger(metalConfig.toque_millesimos) ||
+        metalConfig.toque_millesimos <= 0 || metalConfig.toque_millesimos > 1000 ||
+        !Number.isFinite(metalConfig.cotacao_referencia_g) || metalConfig.cotacao_referencia_g <= 0 ||
+        !Number.isFinite(metalConfig.margem_percentagem) || metalConfig.margem_percentagem < 0 || metalConfig.margem_percentagem > 100) {
+      return res.status(409).json({ success: false, message: 'Este metal não tem uma cotação e margem activas configuradas pela sede para a sua loja. Contacte a administração.' });
+    }
+
+    cotacaoSpot = Number(metalConfig.cotacao_referencia_g);
+    margem = Number(metalConfig.margem_percentagem);
+    const precoCompraGrama = cotacaoSpot * (metalConfig.toque_millesimos / 1000) * (1 - margem / 100);
+    valorSugerido = Number((peso * precoCompraGrama).toFixed(2));
+  } catch {
+    console.error('[Store Purchase] Erro ao validar parâmetros de compra.');
+    return res.status(503).json({ success: false, message: 'Não foi possível validar os parâmetros de compra.' });
+  }
 
   try {
     const { data: transaction, error: purchaseError } = await supabaseAdmin.rpc('create_store_purchase', {
