@@ -1,6 +1,5 @@
 // PATH: src/hooks/useSupabaseData.ts
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 async function adminApiRequest(path: string, init: RequestInit = {}) {
   const token = typeof window !== 'undefined' ? sessionStorage.getItem('diamante_jwt_token') : null;
