@@ -272,7 +272,7 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
       })
       .eq('id', transactionId.trim())
       .eq('estado', 'pendente_aprovacao')
-      .select('id')
+      .select('id, loja_id')
       .maybeSingle();
 
     if (error) throw error;
@@ -282,6 +282,13 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
         success: false,
         error: 'A transação não está pendente ou já foi processada'
       });
+    }
+
+    const io = (globalThis as any).io;
+    if (io) {
+      const event = { id: data.id, loja_id: data.loja_id, estado: 'aprovado', approved_at: new Date().toISOString() };
+      io.to('admin').emit('transaction:approved', event);
+      if (data.loja_id) io.to('store:' + data.loja_id).emit('transaction:approved', event);
     }
 
     console.log('[ADMIN] Transação autorizada com sucesso.');
@@ -436,8 +443,8 @@ app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin
       supabaseAdmin.from('lojas').select('id, nome, codigo_loja, morada, latitude, longitude, ativo').order('nome', { ascending: true }),
       supabaseAdmin.from('transacoes').select('id, loja_id, estado, valor_final, peso_gramas').gte('created_at', todayStartIso),
       supabaseAdmin.from('transacoes').select('id, loja_id, valor_final, peso_gramas, estado').eq('estado', 'pendente_aprovacao'),
-      supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, pendentes_aprovacao_qtd').eq('data', todayStr),
-      supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, pendentes_aprovacao_qtd').eq('data', yesterdayStr),
+      supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, total_peso_ouro_g, pendentes_aprovacao_qtd').eq('data', todayStr),
+      supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, total_peso_ouro_g, pendentes_aprovacao_qtd').eq('data', yesterdayStr),
       supabaseAdmin.from('transacoes').select('id, loja_id, estado, valor_final, peso_gramas, created_at', { count: 'exact' }).order('created_at', { ascending: false }).limit(20),
     ]);
 
