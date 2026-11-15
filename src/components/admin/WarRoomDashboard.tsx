@@ -192,7 +192,7 @@ export const WarRoomDashboard = () => {
         />
       </div>
         <SafeKPICard title="PESO TOTAL DA REDE" value={`${(kpis.peso || 0).toFixed(1)} g`} icon={<Scale className="w-5 h-5" />} subtext="Ouro comprado hoje" />
-        <SafeKPICard title="LOJAS CONECTADAS" value={`${kpis.lojasAtivas || 0} / ${kpis.totalLojas || 24}`} icon={<Building2 className="w-5 h-5" />} subtext="Lojas em operação" />
+        <SafeKPICard title="LOJAS ACTIVAS" value={`${kpis.lojasAtivas || 0} / ${kpis.totalLojas || 0}`} icon={<Building2 className="w-5 h-5" />} subtext="Lojas activas registadas" />
       </div>
 
       {/* Placeholders para Mapa e Feed */}
