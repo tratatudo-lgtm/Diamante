@@ -25,6 +25,7 @@ import { LogAuditPage } from './components/admin/LogAuditPage';
 import { CollaborationWorkspace } from './components/collaboration/CollaborationWorkspace';
 import { AdminTasksPage } from './components/admin/AdminTasksPage';
 import { AdminGoalsPage } from './components/admin/AdminGoalsPage';
+import { CommercialOpportunitiesPage } from './components/admin/CommercialOpportunitiesPage';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
@@ -51,6 +52,8 @@ function AppRouter() {
         p === '/admin/tasks' ||
         p === '/goals' ||
         p === '/admin/goals' ||
+        p === '/opportunities' ||
+        p === '/admin/opportunities' ||
         p === '/reportar-situacao' ||
         p === '/logs' ||
         p === '/auditoria' ||
@@ -152,6 +155,10 @@ function AppRouter() {
   // 4. Sala de Operações de Loja
   if (currentPath === '/loja-atual') {
     return <StoreOperatorView onNavigate={navigate} />;
+  }
+
+  if (currentPath === '/opportunities' || currentPath === '/admin/opportunities') {
+    return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><CommercialOpportunitiesPage /></AdminPageLayout>;
   }
 
   if (currentPath === '/goals' || currentPath === '/admin/goals') {
