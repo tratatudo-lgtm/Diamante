@@ -36,7 +36,8 @@ import {
 
 type OperationalIncident = { id: string; reference: string; titulo: string; categoria: string; prioridade: string; estado: string; created_at: string; loja_id: string | null };
 type OperationalTaskSummary = { id: string; title: string; status: string; priority: string; due_at: string | null; assignee?: { nome_completo?: string } };
-type OperationalGoalSummary = { id: string; title: string; status: string; ends_on: string; progress?: { percentage: number; achieved: boolean } | null; lojas?: { nome?: string } | null; funcionarios?: { nome_completo?: string } | null };\ntype CommercialOpportunitySummary = { id: string; title: string; stage: string; priority: string; expected_value: number | null; next_action_at: string | null; assignee?: { nome_completo?: string } | null };
+type OperationalGoalSummary = { id: string; title: string; status: string; ends_on: string; progress?: { percentage: number; achieved: boolean } | null; lojas?: { nome?: string } | null; funcionarios?: { nome_completo?: string } | null };
+type CommercialOpportunitySummary = { id: string; title: string; stage: string; priority: string; expected_value: number | null; next_action_at: string | null; assignee?: { nome_completo?: string } | null };
 
 interface AdminDashboardProps {
   onNavigate: (path: string) => void;
@@ -71,7 +72,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [dataError, setDataError] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<OperationalIncident[]>([]);
   const [operationalTasks, setOperationalTasks] = useState<OperationalTaskSummary[]>([]);
-  const [operationalGoals, setOperationalGoals] = useState<OperationalGoalSummary[]>([]);\n  const [commercialOpportunities, setCommercialOpportunities] = useState<CommercialOpportunitySummary[]>([]);
+  const [operationalGoals, setOperationalGoals] = useState<OperationalGoalSummary[]>([]);
+  const [commercialOpportunities, setCommercialOpportunities] = useState<CommercialOpportunitySummary[]>([]);
 
   const addToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
     const newToast: ToastMessage = {
