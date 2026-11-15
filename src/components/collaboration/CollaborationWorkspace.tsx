@@ -21,12 +21,12 @@ const categories = [
 const priorities = [['baixa', 'Baixa'], ['normal', 'Normal'], ['alta', 'Alta'], ['urgente', 'Urgente']];
 const statuses = [['novo', 'Novo'], ['em_analise', 'Em análise'], ['em_resolucao', 'Em resolução'], ['aguarda_informacao', 'Aguarda informação'], ['resolvido', 'Resolvido'], ['fechado', 'Fechado']];
 
-export const CollaborationWorkspace: React.FC = () => {
+export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'reports' }> = ({ initialSection = 'chat' }) => {
   const { userSession, funcionario, role } = useAuth();
   const currentUserId = userSession?.id || funcionario?.id || '';
   const isAdmin = role === 'admin' || userSession?.role === 'admin';
   const token = () => sessionStorage.getItem('diamante_jwt_token') || '';
-  const [section, setSection] = useState<'chat' | 'reports'>('chat');
+  const [section, setSection] = useState<'chat' | 'reports'>(initialSection);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [directory, setDirectory] = useState<Employee[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
