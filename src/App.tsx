@@ -24,6 +24,7 @@ import { SettingsPage } from './components/settings/SettingsPage';
 import { LogAuditPage } from './components/admin/LogAuditPage';
 import { CollaborationWorkspace } from './components/collaboration/CollaborationWorkspace';
 import { AdminTasksPage } from './components/admin/AdminTasksPage';
+import { AdminGoalsPage } from './components/admin/AdminGoalsPage';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
@@ -48,6 +49,8 @@ function AppRouter() {
         p === '/collaboration' ||
         p === '/tasks' ||
         p === '/admin/tasks' ||
+        p === '/goals' ||
+        p === '/admin/goals' ||
         p === '/reportar-situacao' ||
         p === '/logs' ||
         p === '/auditoria' ||
@@ -113,7 +116,7 @@ function AppRouter() {
         }
       } else {
         // Se não estiver autenticado e tentar aceder a rota protegida
-        if (isAdminRoute || currentPath === '/loja-atual' || currentPath === '/collaboration' || currentPath === '/reportar-situacao' || currentPath === '/tasks') {
+        if (isAdminRoute || currentPath === '/loja-atual' || currentPath === '/collaboration' || currentPath === '/reportar-situacao' || currentPath === '/tasks' || currentPath === '/goals') {
           navigate('/login');
         }
       }
@@ -149,6 +152,12 @@ function AppRouter() {
   // 4. Sala de Operações de Loja
   if (currentPath === '/loja-atual') {
     return <StoreOperatorView onNavigate={navigate} />;
+  }
+
+  if (currentPath === '/goals' || currentPath === '/admin/goals') {
+    return isAdmin
+      ? <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><AdminGoalsPage /></AdminPageLayout>
+      : <AdminGoalsPage />;
   }
 
   if (currentPath === '/tasks' || currentPath === '/admin/tasks') {
