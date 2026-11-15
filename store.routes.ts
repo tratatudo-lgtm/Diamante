@@ -213,7 +213,8 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       !metal || metal.length > 100 || descricao.length > 2000 ||
       !Number.isFinite(peso) || peso <= 0 || peso > 100000 ||
       !Number.isFinite(valorFinal) || valorFinal <= 0 || valorFinal > 100000000 ||
-      false) {
+      !Number.isFinite(peso) || peso <= 0 || peso > 100000 ||
+      !Number.isFinite(valorFinal) || valorFinal <= 0 || valorFinal > 100000000) {
     return res.status(400).json({ success: false, message: 'Os dados da compra são inválidos. Verifique os campos e tente novamente.' });
   }
 
