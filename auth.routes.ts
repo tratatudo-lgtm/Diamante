@@ -663,22 +663,133 @@ async function handleGetFuncionarios(_req: AdminRequest, res: Response): Promise
 }
 
 // -------------------------------------------------------------------------
-// e) GET /admin/config/margens - Ler configurações e margens
+// e) GET /admin/config/margens - Ler e guardar parâmetros comerciais
 // -------------------------------------------------------------------------
-// A persistência das configurações financeiras ainda não está implementada.
-// Não devolver valores de demonstração nem aceitar gravações apenas em memória.
-function handleGetMargensConfig(_req: Request, res: Response): void {
-  res.status(503).json({
-    success: false,
-    message: 'A persistência das configurações de negócio ainda não está disponível.',
-  });
+const DEFAULT_BUSINESS_SETTINGS = {
+  margens: [],
+  tetos: {
+    id: '',
+    loja_id: null,
+    valor_limite_sem_aprovacao: 0,
+    peso_limite_sem_aprovacao_g: 0,
+    exigir_dupla_assinatura_acima: 0,
+    notificar_whatsapp_master: false,
+    telemovel_alerta: '',
+    ativo: false,
+  },
+  contasBancarias: [],
+};
+
+async function handleGetMargensConfig(_req: Request, res: Response): Promise<void> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('configuracoes_sistema')
+      .select('valor')
+      .eq('chave', 'parametros_compra_ouro')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[Admin Purchase Settings] Falha ao consultar parâmetros.');
+      res.status(503).json({ success: false, message: 'Não foi possível carregar os parâmetros de compra.' });
+      return;
+    }
+
+    const stored = data?.valor && typeof data.valor === 'object' && !Array.isArray(data.valor)
+      ? data.valor
+      : {};
+    res.status(200).json({
+      success: true,
+      margens: Array.isArray(stored.margens) ? stored.margens : DEFAULT_BUSINESS_SETTINGS.margens,
+      tetos: stored.tetos && typeof stored.tetos === 'object' ? stored.tetos : DEFAULT_BUSINESS_SETTINGS.tetos,
+      contasBancarias: Array.isArray(stored.contasBancarias) ? stored.contasBancarias : DEFAULT_BUSINESS_SETTINGS.contasBancarias,
+    });
+  } catch {
+    console.error('[Admin Purchase Settings] Erro interno ao consultar parâmetros.');
+    res.status(500).json({ success: false, message: 'Erro interno ao carregar os parâmetros de compra.' });
+  }
 }
 
-function handleUpdateMargensConfig(_req: AdminRequest, res: Response): void {
-  res.status(503).json({
-    success: false,
-    message: 'A persistência das configurações de negócio ainda não está disponível. Nenhuma alteração foi guardada.',
-  });
+async function handleUpdateMargensConfig(req: AdminRequest, res: Response): Promise<void> {
+  const settings = req.body;
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings) ||
+      !Array.isArray(settings.margens) || !Array.isArray(settings.contasBancarias) ||
+      !settings.tetos || typeof settings.tetos !== 'object' || Array.isArray(settings.tetos)) {
+    res.status(400).json({ success: false, message: 'Estrutura dos parâmetros de negócio inválida.' });
+    return;
+  }
+
+  const validMargins = settings.margens.every((item: any) =>
+    item && typeof item.id === 'string' && item.id.length <= 100 &&
+    typeof item.metal_tipo === 'string' && item.metal_tipo.trim().length > 0 && item.metal_tipo.length <= 100 &&
+    typeof item.descricao === 'string' && item.descricao.length <= 500 &&
+    Number.isInteger(item.toque_millesimos) && item.toque_millesimos > 0 && item.toque_millesimos <= 1000 &&
+    Number.isFinite(item.cotacao_referencia_g) && item.cotacao_referencia_g >= 0 && item.cotacao_referencia_g <= 100000 &&
+    Number.isFinite(item.margem_percentagem) && item.margem_percentagem >= 0 && item.margem_percentagem <= 100 &&
+    Number.isFinite(item.desconto_maximo_loja_perc) && item.desconto_maximo_loja_perc >= 0 && item.desconto_maximo_loja_perc <= 100 &&
+    (item.loja_id === null || item.loja_id === undefined || typeof item.loja_id === 'string') &&
+    typeof item.ativo === 'boolean'
+  );
+
+  const t = settings.tetos;
+  const validThresholds =
+    Number.isFinite(t.valor_limite_sem_aprovacao) && t.valor_limite_sem_aprovacao >= 0 &&
+    Number.isFinite(t.peso_limite_sem_aprovacao_g) && t.peso_limite_sem_aprovacao_g >= 0 &&
+    Number.isFinite(t.exigir_dupla_assinatura_acima) && t.exigir_dupla_assinatura_acima >= 0 &&
+    typeof t.notificar_whatsapp_master === 'boolean' &&
+    typeof t.ativo === 'boolean' &&
+    (t.telemovel_alerta === undefined || (typeof t.telemovel_alerta === 'string' && t.telemovel_alerta.length <= 40));
+
+  const validAccounts = settings.contasBancarias.every((item: any) =>
+    item && typeof item.id === 'string' && item.id.length <= 100 &&
+    typeof item.banco === 'string' && item.banco.length <= 120 &&
+    typeof item.iban === 'string' && item.iban.length <= 64 &&
+    typeof item.titular === 'string' && item.titular.length <= 200 &&
+    (item.descricao === undefined || (typeof item.descricao === 'string' && item.descricao.length <= 500)) &&
+    typeof item.ativo === 'boolean' && typeof item.padrao === 'boolean'
+  );
+
+  if (!validMargins || settings.margens.length > 100 ||
+      !validThresholds || !validAccounts || settings.contasBancarias.length > 30 ||
+      settings.margens.filter((item: any) => item.ativo && item.loja_id == null).length > 30) {
+    res.status(400).json({ success: false, message: 'Existem margens, limites ou contas bancárias com valores inválidos.' });
+    return;
+  }
+
+  try {
+    const payload = {
+      margens: settings.margens.map((item: any) => ({
+        ...item,
+        metal_tipo: item.metal_tipo.trim(),
+        preco_compra_grama: Number((item.cotacao_referencia_g * (item.toque_millesimos / 1000) * (1 - item.margem_percentagem / 100)).toFixed(2)),
+      })),
+      tetos: settings.tetos,
+      contasBancarias: settings.contasBancarias,
+    };
+    const { data, error } = await supabaseAdmin
+      .from('configuracoes_sistema')
+      .upsert({
+        chave: 'parametros_compra_ouro',
+        valor: payload,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'chave' })
+      .select('valor')
+      .single();
+
+    if (error || !data) {
+      console.error('[Admin Purchase Settings] Falha ao guardar parâmetros.');
+      res.status(503).json({ success: false, message: 'Não foi possível guardar os parâmetros de compra.' });
+      return;
+    }
+    res.status(200).json({
+      success: true,
+      margens: data.valor.margens,
+      tetos: data.valor.tetos,
+      contasBancarias: data.valor.contasBancarias,
+    });
+  } catch {
+    console.error('[Admin Purchase Settings] Erro interno ao guardar parâmetros.');
+    res.status(500).json({ success: false, message: 'Erro interno ao guardar os parâmetros de compra.' });
+  }
 }
 
 // Registo de Rotas Administrativas em authRouter (suporte com e sem prefixo /admin)
