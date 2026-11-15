@@ -290,17 +290,15 @@ clientsRouter.patch('/:id/birthday-consent', verifyAuth, async (req: Authenticat
     return res.status(400).json({ success: false, message: 'Indique o consentimento de forma explícita.' });
   }
   try {
-    let query = supabaseAdmin.from('clientes')
-      .update({
-        consentimento_whatsapp_aniversario: consent,
-        consentimento_whatsapp_aniversario_data: new Date().toISOString(),
-      })
-      .eq('id', req.params.id);
-    if (employee.role !== 'admin') query = query.eq('loja_registo_id', employee.loja_id as string);
-    const { data, error } = await query.select('id,consentimento_whatsapp_aniversario').maybeSingle();
+    const { data, error } = await supabaseAdmin.rpc('set_client_birthday_whatsapp_consent', {
+      p_client_id: req.params.id,
+      p_consent: consent,
+      p_employee_id: employee.id,
+    });
     if (error) throw error;
-    if (!data) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
-    return res.json({ success: true, cliente: data });
+    const updated = Array.isArray(data) ? data[0] : null;
+    if (!updated) return res.status(404).json({ success: false, message: 'Cliente não encontrado.' });
+    return res.json({ success: true, cliente: updated });
   } catch {
     return res.status(503).json({ success: false, message: 'Não foi possível actualizar o consentimento.' });
   }
