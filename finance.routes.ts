@@ -175,16 +175,23 @@ router.get('/expenses/summary', async (req: Request, res: Response) => {
     const start = `${month}-01`;
     const [year, monthNumber] = month.split('-').map(Number);
     const endDate = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
-    const { data, error } = await supabaseAdmin.from('despesas_operacionais')
-      .select('loja_id,categoria,valor,estado,data_despesa')
-      .gte('data_despesa', start).lt('data_despesa', endDate).limit(10000);
-    if (error) {
-      console.error('[FINANCE] Falha ao calcular resumo de despesas.');
-      return res.status(503).json({ success: false, message: 'Não foi possível calcular o resumo financeiro.' });
+    const allRows: Array<{ loja_id: string; categoria: string; valor: number | string; estado: string; data_despesa: string }> = [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data: page, error } = await supabaseAdmin.from('despesas_operacionais')
+        .select('loja_id,categoria,valor,estado,data_despesa')
+        .gte('data_despesa', start).lt('data_despesa', endDate)
+        .order('data_despesa', { ascending: true }).range(offset, offset + pageSize - 1);
+      if (error) {
+        console.error('[FINANCE] Falha ao calcular resumo de despesas.');
+        return res.status(503).json({ success: false, message: 'Não foi possível calcular o resumo financeiro.' });
+      }
+      allRows.push(...(page || []));
+      if (!page || page.length < pageSize) break;
     }
     const stores = new Map<string, { loja_id: string; paid: number; pending: number; rejected: number; byCategory: Record<string, number> }>();
     let paid = 0, pending = 0, rejected = 0;
-    for (const row of data || []) {
+    for (const row of allRows) {
       const value = Number(row.valor) || 0;
       if (!stores.has(row.loja_id)) stores.set(row.loja_id, { loja_id: row.loja_id, paid: 0, pending: 0, rejected: 0, byCategory: {} });
       const store = stores.get(row.loja_id)!;
