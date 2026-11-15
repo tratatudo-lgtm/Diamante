@@ -478,7 +478,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               value={globalKpis.pecasEmLoja}
               icon={Package}
               isLoading={isLoading}
-              onClick={() => onNavigate('/admin/inventario')}
               subtitle="Inventário físico em circulação"
             />
           </div>
