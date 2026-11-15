@@ -24,39 +24,11 @@ function validDate(value: unknown): value is string {
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
-function lisbonMidnightUtc(dateValue: string): string {
-  const [year, month, day] = dateValue.split('-').map(Number);
-  const approximate = new Date(Date.UTC(year, month - 1, day, 12));
-  const zone = new Intl.DateTimeFormat('en', { timeZone: 'Europe/Lisbon', timeZoneName: 'shortOffset' })
-    .formatToParts(approximate).find((part) => part.type === 'timeZoneName')?.value || 'GMT';
-  const match = zone.match(/^GMT([+-])(\\d{1,2})(?::(\\d{2}))?$/);
-  const offset = match ? (match[1] === '-' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3] || 0)) : 0;
-  return new Date(Date.UTC(year, month - 1, day) - offset * 60_000).toISOString();
-}
-
 async function goalProgress(goal: any) {
-  const [year, month, day] = String(goal.ends_on).split('-').map(Number);
-  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
-  const endDate = [nextDay.getUTCFullYear(), String(nextDay.getUTCMonth() + 1).padStart(2,'0'), String(nextDay.getUTCDate()).padStart(2,'0')].join('-');
-  let query = supabaseAdmin.from('transacoes').select('id,valor_final,peso_gramas', { count: 'exact' })
-    .eq('estado','aprovado').gte('created_at', lisbonMidnightUtc(goal.starts_on))
-    .lt('created_at', lisbonMidnightUtc(endDate));
-  if (goal.scope === 'loja') query = query.eq('loja_id', goal.loja_id);
-  else query = query.eq('funcionario_id', goal.funcionario_id);
-  const first = await query.range(0, 999);
-  if (first.error || !first.data) throw new Error('Não foi possível calcular o progresso da meta.');
-  if (goal.metric === 'transacoes_aprovadas') {
-    const current = Number(first.count || 0);
-    return { current, target: Number(goal.target_value), percentage: Math.min(100, Number((current / Number(goal.target_value) * 100).toFixed(1))), achieved: current >= Number(goal.target_value) };
-  }
-  let current = first.data.reduce((sum: number, row: any) => sum + Number(goal.metric === 'volume_aprovado' ? row.valor_final || 0 : row.peso_gramas || 0), 0);
-  for (let offset = 1000; offset < (first.count || 0); offset += 1000) {
-    const page = await query.range(offset, offset + 999);
-    if (page.error || !page.data) throw new Error('Não foi possível calcular o progresso da meta.');
-    current += page.data.reduce((sum: number, row: any) => sum + Number(goal.metric === 'volume_aprovado' ? row.valor_final || 0 : row.peso_gramas || 0), 0);
-  }
-  const safeCurrent = Number.isFinite(current) ? current : 0;
-  return { current: Number(safeCurrent.toFixed(3)), target: Number(goal.target_value), percentage: Math.min(100, Number((safeCurrent / Number(goal.target_value) * 100).toFixed(1))), achieved: safeCurrent >= Number(goal.target_value) };
+  const { data, error } = await supabaseAdmin.rpc('get_operational_goal_progress', { p_goal_ids: [goal.id] });
+  if (error || !data?.[0]) throw new Error('Não foi possível calcular o progresso da meta.');
+  const current = Number(data[0].current_value || 0);
+  return { current: Number(current.toFixed(3)), target: Number(goal.target_value), percentage: Math.min(100, Number((current / Number(goal.target_value) * 100).toFixed(1))), achieved: current >= Number(goal.target_value) };
 }
 
 async function visibleGoal(goalId: string, req: AuthenticatedRequest) {
@@ -85,10 +57,15 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status',req.query.status);
   const { data, error } = await query;
   if (error) return fail(res,503,'Não foi possível carregar os objectivos.');
-  const goals = await Promise.all((data || []).map(async (goal: any) => {
-    try { return { ...goal, progress: await goalProgress(goal) }; }
-    catch { return { ...goal, progress: null }; }
-  }));
+  const ids = (data || []).map((goal: any) => goal.id);
+  if (!ids.length) return res.json({ success:true, goals:[] });
+  const { data: progressRows, error: progressError } = await supabaseAdmin.rpc('get_operational_goal_progress', { p_goal_ids: ids });
+  if (progressError || !progressRows) return fail(res,503,'Não foi possível calcular o desempenho dos objectivos.');
+  const progressById = new Map(progressRows.map((row: any) => [row.goal_id, Number(row.current_value || 0)]));
+  const goals = (data || []).map((goal: any) => {
+    const current = progressById.get(goal.id) || 0;
+    return { ...goal, progress: { current:Number(current.toFixed(3)), target:Number(goal.target_value), percentage:Math.min(100,Number((current/Number(goal.target_value)*100).toFixed(1))), achieved:current>=Number(goal.target_value) } };
+  });
   return res.json({ success:true, goals });
 });
 
