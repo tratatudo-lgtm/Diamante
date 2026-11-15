@@ -104,6 +104,7 @@ router.get('/kpis', verifyAdmin, async (req, res) => {
     for (let offset = 0; ; offset += pageSize) {
       const { data: page, error } = await supabase.from('transacoes')
         .select('valor_final, peso_gramas')
+        .eq('estado', 'aprovado')
         .gte('created_at', dayRange.start).lt('created_at', dayRange.end)
         .order('created_at', { ascending: true })
         .range(offset, offset + pageSize - 1);
