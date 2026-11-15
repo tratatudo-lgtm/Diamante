@@ -62,10 +62,15 @@ export interface InventarioFisico {
   loja_atual_id: string;
   transacao_origem_id?: string | null;
   codigo_unico: string;
+  tipo_peca?: string;
   metal: string;
   peso_gramas: number;
   estado: 'em_loja' | 'enviado_sede' | 'fundido' | string;
-  created_at?: string;
+  data_entrada?: string;
+  data_saida?: string | null;
+  observacoes?: string | null;
+  localizacao_cofre?: string | null;
+  data_prevista_fundicao?: string | null;
 }
 
 export interface ClienteProtegido {
