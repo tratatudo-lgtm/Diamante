@@ -39,7 +39,7 @@ storeRouter.get('/dashboard', verifyAuth, async (req: AuthenticatedRequest, res:
       supabaseAdmin.from('transacoes')
         .select('id, loja_id, estado, valor_final, peso_gramas, created_at')
         .eq('loja_id', employee.loja_id)
-        .order('created_at', { ascending: false }).limit(5),
+        .order('data_entrada', { ascending: false }).limit(5),
     ]);
 
     if (storeRes.error || pointsRes.error || todayKpiRes.error || yesterdayKpiRes.error || stockRes.error || transactionsRes.error) {
