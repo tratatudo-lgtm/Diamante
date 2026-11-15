@@ -35,7 +35,8 @@ import {
 } from 'lucide-react';
 
 type OperationalIncident = { id: string; reference: string; titulo: string; categoria: string; prioridade: string; estado: string; created_at: string; loja_id: string | null };
-type OperationalTaskSummary = { id: string; title: string; status: string; priority: string; due_at: string | null; assignee?: { nome_completo?: string } };\ntype OperationalGoalSummary = { id: string; title: string; status: string; ends_on: string; progress?: { percentage: number; achieved: boolean } | null; lojas?: { nome?: string } | null; funcionarios?: { nome_completo?: string } | null };
+type OperationalTaskSummary = { id: string; title: string; status: string; priority: string; due_at: string | null; assignee?: { nome_completo?: string } };
+type OperationalGoalSummary = { id: string; title: string; status: string; ends_on: string; progress?: { percentage: number; achieved: boolean } | null; lojas?: { nome?: string } | null; funcionarios?: { nome_completo?: string } | null };
 
 interface AdminDashboardProps {
   onNavigate: (path: string) => void;
@@ -69,7 +70,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [dataError, setDataError] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<OperationalIncident[]>([]);
-  const [operationalTasks, setOperationalTasks] = useState<OperationalTaskSummary[]>([]);\n  const [operationalGoals, setOperationalGoals] = useState<OperationalGoalSummary[]>([]);
+  const [operationalTasks, setOperationalTasks] = useState<OperationalTaskSummary[]>([]);
+  const [operationalGoals, setOperationalGoals] = useState<OperationalGoalSummary[]>([]);
 
   const addToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
     const newToast: ToastMessage = {
