@@ -283,7 +283,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     }
 
     const configs = Array.isArray(configRow?.valor?.margens) ? configRow.valor.margens : [];
-    const toqueSolicitado = Number(metal.match(/(\\d{3})\\s*‰/)?.[1] || 0);
+    const toqueSolicitado = Number(metal.match(/(\d{3})\s*‰/)?.[1] || 0);
     const matching = configs.filter((item: any) =>
       item && item.ativo === true && Number(item.toque_millesimos) === toqueSolicitado &&
       (item.loja_id == null || item.loja_id === employee.loja_id)
