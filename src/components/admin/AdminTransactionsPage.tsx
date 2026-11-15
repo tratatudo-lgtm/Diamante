@@ -12,6 +12,8 @@ interface AdminTransaction {
   peso_gramas: number | null;
   created_at: string;
   cliente_nome?: string | null;
+  primeira_aprovacao_por?: string | null;
+  data_primeira_aprovacao?: string | null;
 }
 
 interface AdminTransactionsPageProps {
@@ -83,6 +85,9 @@ export const AdminTransactionsPage: React.FC<AdminTransactionsPageProps> = ({
       const payload = await response.json().catch(() => null);
       if (!response.ok || !payload?.success) {
         throw new Error(payload?.error || 'Não foi possível aprovar esta compra.');
+      }
+      if (payload?.requiresSecondApproval) {
+        setError(payload.message || 'Primeira assinatura registada. Falta a segunda assinatura de outro administrador.');
       }
       await loadTransactions();
     } catch (err) {
@@ -201,7 +206,7 @@ export const AdminTransactionsPage: React.FC<AdminTransactionsPageProps> = ({
                       <td className="px-3 py-4 text-right">{tx.estado === 'pendente_aprovacao' ? (
                         <button type="button" onClick={() => void approveTransaction(tx.id)} disabled={Boolean(approvingId)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Aprovar compra ${tx.id}`}>
                           {approvingId === tx.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                          Aprovar compra
+                          {tx.primeira_aprovacao_por ? 'Registar 2.ª assinatura' : 'Aprovar compra'}
                         </button>
                       ) : <span className="text-xs text-slate-600">—</span>}</td>
                     </tr>
