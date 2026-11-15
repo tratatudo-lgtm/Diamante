@@ -1,6 +1,5 @@
 // PATH: src/components/admin/LogAuditPage.tsx
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { AdminSidebar } from './AdminSidebar';
 import {
   ShieldAlert,
@@ -98,44 +97,67 @@ export const LogAuditPage: React.FC<LogAuditPageProps> = ({ onNavigate }) => {
   const fetchLogsFromDatabase = useCallback(async () => {
     setIsLoading(true);
     try {
-      if (!isSupabaseConfigured()) {
-        setLogs([]);
-        setLastSyncTime('');
-        return;
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão administrativa expirada. Volte a iniciar sessão.');
+      const response = await fetch('/api/admin/audit-logs?limit=100', {
+        headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+        signal: AbortSignal.timeout(10000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true || !Array.isArray(payload.logs)) {
+        throw new Error(payload?.message || 'Não foi possível consultar o histórico de auditoria.');
       }
 
-      const { data: dbLogs, error } = await supabase
-        .from('logs_auditoria')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-
-      const formatted: AuditLogItem[] = (dbLogs || []).map((item: any) => ({
-        id: String(item.id || ''),
-        timestamp: item.created_at || '',
-        severity: (['critical', 'security', 'warning', 'info', 'success'].includes(item.severity) ? item.severity : 'info') as LogSeverity,
-        category: (['auth', 'transaction', 'store', 'employee', 'pricing', 'finance', 'security'].includes(item.category) ? item.category : 'transaction') as LogCategory,
-        action: item.action || '',
-        description: item.description || item.detalhes || '',
-        actorNome: item.actor_nome || item.user_name || '',
-        actorRole: item.actor_role || '',
-        actorPhone: item.actor_phone || '',
-        lojaNome: item.loja_nome || '',
-        lojaId: item.loja_id || undefined,
-        ipAddress: item.ip_address || '',
-        userAgent: item.user_agent || '',
-        hashIntegridade: item.hash || '',
-        metadados: item.metadata || {},
-      }));
+      const formatted: AuditLogItem[] = payload.logs.map((item: any) => {
+        const employee = Array.isArray(item.funcionarios) ? item.funcionarios[0] : item.funcionarios;
+        const table = String(item.tabela_afetada || '').toLowerCase();
+        const action = String(item.acao || 'Operação registada');
+        const actionLower = action.toLowerCase();
+        const category: LogCategory = table.includes('funcion') ? 'employee'
+          : table.includes('loja') ? 'store'
+          : table.includes('transac') || table.includes('transa') ? 'transaction'
+          : table.includes('finance') || table.includes('caixa') ? 'finance'
+          : table.includes('config') ? 'pricing'
+          : actionLower.includes('login') || actionLower.includes('auth') ? 'auth'
+          : 'security';
+        const severity: LogSeverity = actionLower.includes('delete') || actionLower.includes('elimin') ? 'critical'
+          : actionLower.includes('update') || actionLower.includes('alter') ? 'warning'
+          : 'info';
+        return {
+          id: String(item.id || ''),
+          timestamp: item.created_at || '',
+          severity,
+          category,
+          action,
+          description: JSON.stringify({
+            tabela: item.tabela_afetada || null,
+            registo: item.registo_id || null,
+            anteriores: item.detalhes_antigos || null,
+            novos: item.detalhes_novos || null,
+          }),
+          actorNome: employee?.nome_completo || 'Sistema',
+          actorRole: employee?.role || 'sistema',
+          actorPhone: employee?.telemovel || '',
+          lojaNome: '',
+          lojaId: employee?.loja_id || undefined,
+          ipAddress: item.ip_origem || '',
+          userAgent: '',
+          hashIntegridade: '',
+          metadados: {
+            tabela_afetada: item.tabela_afetada || null,
+            registo_id: item.registo_id || null,
+            detalhes_antigos: item.detalhes_antigos || null,
+            detalhes_novos: item.detalhes_novos || null,
+          },
+        };
+      });
 
       setLogs(formatted);
       setLastSyncTime(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    } catch (err) {
+    } catch {
       setLogs([]);
       setLastSyncTime('');
-      console.warn('[LogAudit] Falha ao consultar registos de auditoria.');
+      console.warn('[LogAudit] Falha ao consultar registos pela API protegida.');
     } finally {
       setIsLoading(false);
     }
