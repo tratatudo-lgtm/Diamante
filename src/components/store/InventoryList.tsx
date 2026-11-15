@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
-import { useAuth } from '../../hooks/useAuth';
 import type { InventarioFisico } from '../../types/database';
 import {
   Boxes,
@@ -22,62 +20,41 @@ interface InventoryListProps {
 }
 
 export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => {
-  const { userSession, funcionario } = useAuth();
   const [items, setItems] = useState<InventarioFisico[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'todos' | 'em_loja' | 'enviado_sede' | 'fundido'>('em_loja');
   const [searchQuery, setSearchQuery] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  // Carregar inventário da loja real via Supabase
+  // Consultar inventário exclusivamente através da API autenticada.
   const fetchInventory = useCallback(async () => {
     setIsLoading(true);
-    if (!isSupabaseConfigured()) {
-      setItems([]);
-      onShowToast('error', 'Supabase não está configurada. O inventário não está disponível.');
-      setIsLoading(false);
-      return;
-    }
     try {
-      // RLS já filtra por loja_id automaticamente
-      let query = supabase
-        .from('inventario_fisico')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      const { data, error } = await query;
-      if (error) throw error;
-      setItems(data || []);
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
+      const response = await fetch('/api/store/inventory', {
+        headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+        signal: AbortSignal.timeout(10000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true || !Array.isArray(payload.items)) {
+        throw new Error(payload?.message || 'Não foi possível obter o inventário.');
+      }
+      setItems(payload.items as InventarioFisico[]);
     } catch (err) {
       console.warn('[Inventário] Falha ao carregar inventário físico.');
-      onShowToast('error', 'Não foi possível obter os dados do inventário.');
+      onShowToast('error', err instanceof Error ? err.message : 'Não foi possível obter os dados do inventário.');
     } finally {
       setIsLoading(false);
     }
   }, [onShowToast]);
 
   useEffect(() => {
-    fetchInventory();
-    if (!isSupabaseConfigured()) return;
-
-    const channel = supabase
-      .channel('inventario-realtime-feed')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_fisico' }, () => {
-        fetchInventory();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    void fetchInventory();
   }, [fetchInventory]);
 
   // Ação: Marcar como enviado para a sede
   const handleMarkAsSent = async (itemId: string, codigoUnico: string) => {
-    if (!isSupabaseConfigured()) {
-      onShowToast('error', 'Supabase não está configurada. O estado do lote não foi alterado.');
-      return;
-    }
     setUpdatingId(itemId);
     try {
       const token = sessionStorage.getItem('diamante_jwt_token');
@@ -92,9 +69,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
         throw new Error(payload?.message || 'Não foi possível registar a expedição.');
       }
 
-      setItems((prev) =>
-        prev.map((item) => (item.id === itemId ? { ...item, estado: 'enviado_sede' } : item))
-      );
+      await fetchInventory();
       onShowToast('success', `Lote ${codigoUnico} marcado como enviado para a Sede.`, 'Inventário Atualizado');
     } catch (err: unknown) {
       console.warn('[Inventário] Falha ao atualizar estado.');
