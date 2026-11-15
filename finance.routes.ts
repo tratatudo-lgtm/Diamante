@@ -18,16 +18,22 @@ function text(value: unknown, max = 500): string {
 
 router.get('/payments', async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('transacoes_financeiras')
-      .select('*, lojas(nome)')
-      .order('created_at', { ascending: false })
-      .limit(1000);
-    if (error) {
-      console.error('[FINANCE] Falha ao listar pagamentos.');
-      return res.status(503).json({ success: false, message: 'Não foi possível carregar os pagamentos.' });
+    const pageSize = 500;
+    const allPayments: Array<Record<string, unknown>> = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabaseAdmin
+        .from('transacoes_financeiras')
+        .select('*, lojas(nome)')
+        .order('created_at', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      if (error) {
+        console.error('[FINANCE] Falha ao listar pagamentos.');
+        return res.status(503).json({ success: false, message: 'Não foi possível carregar os pagamentos.' });
+      }
+      allPayments.push(...(data || []));
+      if (!data || data.length < pageSize) break;
     }
-    return res.json({ success: true, data: data || [] });
+    return res.json({ success: true, data: allPayments });
   } catch {
     return res.status(500).json({ success: false, message: 'Erro interno ao carregar pagamentos.' });
   }
