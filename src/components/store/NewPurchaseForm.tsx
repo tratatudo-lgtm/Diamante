@@ -443,6 +443,23 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
               </span>
             </div>
           </div>
+
+          {pesoNum > 0 && valorFinalEfetivo > 0 && (
+            <div className="grid grid-cols-2 gap-3 pt-1">
+              <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
+                <span className="text-[11px] text-gray-400">Custo efectivo por grama</span>
+                <p className="mt-1 font-mono text-sm font-bold text-white tabular-nums">
+                  {formatCurrency(valorFinalEfetivo / pesoNum)} <span className="text-[10px] font-normal text-gray-400">/ g</span>
+                </p>
+              </div>
+              <div className={`rounded-lg border p-3 ${valorFinalEfetivo <= valorSugerido ? 'border-emerald-900/60 bg-emerald-950/20' : 'border-amber-900/60 bg-amber-950/20'}`}>
+                <span className="text-[11px] text-gray-400">Diferença face à sugestão</span>
+                <p className={`mt-1 font-mono text-sm font-bold tabular-nums ${valorFinalEfetivo <= valorSugerido ? 'text-emerald-300' : 'text-amber-300'}`}>
+                  {valorFinalEfetivo - valorSugerido > 0 ? '+' : ''}{formatCurrency(valorFinalEfetivo - valorSugerido)}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* SECÇÃO 4: CHECKBOX OBRIGATÓRIO RGPD */}
