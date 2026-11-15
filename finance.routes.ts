@@ -123,11 +123,17 @@ router.get('/expenses', async (req: Request, res: Response) => {
   try {
     const storeId = text(req.query.loja_id, 64);
     if (storeId && !UUID_RE.test(storeId)) return res.status(400).json({ success:false, message:'Identificador de loja inválido.' });
-    let query = supabaseAdmin.from('despesas_operacionais').select('id,loja_id,categoria,descricao,fornecedor,referencia_documento,valor,data_despesa,estado,comprovativo_ref,criado_por,aprovado_por,pago_por,motivo_rejeicao,created_at,approved_at,paid_at,lojas(nome)').order('data_despesa',{ascending:false}).limit(1000);
-    if (storeId) query = query.eq('loja_id',storeId);
-    const {data,error}=await query;
-    if(error){console.error('[FINANCE] Falha ao consultar despesas.');return res.status(503).json({success:false,message:'Não foi possível carregar as despesas.'});}
-    return res.json({success:true,data:data||[]});
+    const pageSize = 500;
+    const allExpenses: Array<Record<string, unknown>> = [];
+    for (let offset = 0; ; offset += pageSize) {
+      let query = supabaseAdmin.from('despesas_operacionais').select('id,loja_id,categoria,descricao,fornecedor,referencia_documento,valor,data_despesa,estado,comprovativo_ref,criado_por,aprovado_por,pago_por,motivo_rejeicao,created_at,approved_at,paid_at,lojas(nome)').order('data_despesa',{ascending:false}).range(offset, offset + pageSize - 1);
+      if (storeId) query = query.eq('loja_id',storeId);
+      const {data,error}=await query;
+      if(error){console.error('[FINANCE] Falha ao consultar despesas.');return res.status(503).json({success:false,message:'Não foi possível carregar as despesas.'});}
+      allExpenses.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+    return res.json({success:true,data:allExpenses});
   } catch { return res.status(500).json({success:false,message:'Erro interno ao carregar despesas.'}); }
 });
 
@@ -169,7 +175,7 @@ router.patch('/expenses/:id/status', async (req: Request, res: Response) => {
 router.get('/expenses/summary', async (req: Request, res: Response) => {
   try {
     const month = text(req.query.month, 7) || new Date().toISOString().slice(0, 7);
-    if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
       return res.status(400).json({ success: false, message: 'Mês inválido. Use AAAA-MM.' });
     }
     const start = `${month}-01`;
