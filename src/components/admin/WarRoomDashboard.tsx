@@ -26,6 +26,7 @@ export const WarRoomDashboard = () => {
   const [authorizing, setAuthorizing] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [businessKpis, setBusinessKpis] = useState<{active:number;estimatedMonthly:number;initialInvestment:number;estimatedResult:number}>({active:0,estimatedMonthly:0,initialInvestment:0,estimatedResult:0});
+  const [financialKpis, setFinancialKpis] = useState<{month:string;totals:{paid:number;pending:number;rejected:number};stores:{loja_id:string;paid:number;pending:number;rejected:number}[]}|null>(null);
 
   const fetchKpis = useCallback(async () => {
     try {
@@ -53,6 +54,16 @@ export const WarRoomDashboard = () => {
       const data = await res.json();
       if (!res.ok || !data || typeof data !== 'object' || data.totalLojas === undefined) throw new Error(data?.error || 'Não foi possível carregar os indicadores.');
       setKpis(data);
+      try {
+        const financialRes = await fetch('/api/v1/admin/dashboard/financial-summary', {
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        const financialData = await financialRes.json().catch(() => null);
+        if (financialRes.ok && financialData?.success === true) setFinancialKpis(financialData);
+      } catch (financialError) {
+        console.warn('[WarRoom] Resumo financeiro indisponível.', financialError);
+      }
       try {
         const expansionRes = await fetch('/api/admin/expansion-sites', {
           headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
@@ -194,6 +205,22 @@ export const WarRoomDashboard = () => {
         <SafeKPICard title="PESO TOTAL DA REDE" value={`${(kpis.peso || 0).toFixed(1)} g`} icon={<Scale className="w-5 h-5" />} subtext="Ouro comprado hoje" />
         <SafeKPICard title="LOJAS ACTIVAS" value={`${kpis.lojasAtivas || 0} / ${kpis.totalLojas || 0}`} icon={<Building2 className="w-5 h-5" />} subtext="Lojas activas registadas" />
       </div>
+
+
+      {/* Despesas reais e compromissos financeiros do mês */}
+      {financialKpis && (
+        <section className="space-y-4 rounded-xl border border-[#D4AF37]/20 bg-[#151b2b] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><h2 className="text-lg font-bold text-[#D4AF37]">Despesas operacionais • {financialKpis.month}</h2><p className="text-xs text-slate-500">Valores registados no sistema; pagamentos liquidados separados de compromissos pendentes.</p></div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4"><p className="text-xs text-slate-400">Despesas pagas</p><p className="mt-1 text-xl font-bold text-emerald-300">{financialKpis.totals.paid.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</p></div>
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4"><p className="text-xs text-slate-400">Compromissos pendentes</p><p className="mt-1 text-xl font-bold text-amber-300">{financialKpis.totals.pending.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</p></div>
+            <div className="rounded-lg border border-slate-700 bg-black/10 p-4"><p className="text-xs text-slate-400">Despesas rejeitadas</p><p className="mt-1 text-xl font-bold text-slate-300">{financialKpis.totals.rejected.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</p></div>
+          </div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[520px] text-left text-sm"><thead className="text-[11px] uppercase text-slate-500"><tr><th className="p-3">Loja</th><th className="p-3">Pagas</th><th className="p-3">Pendentes</th><th className="p-3">Rejeitadas</th></tr></thead><tbody className="divide-y divide-slate-800">{financialKpis.stores.map(store=><tr key={store.loja_id}><td className="p-3 text-slate-300">{store.loja_id.slice(0,8)}</td><td className="p-3 text-emerald-300">{store.paid.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</td><td className="p-3 text-amber-300">{store.pending.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</td><td className="p-3 text-slate-400">{store.rejected.toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</td></tr>)}</tbody></table>{financialKpis.stores.length===0&&<p className="p-3 text-center text-xs text-slate-500">Sem despesas registadas neste mês.</p>}</div>
+        </section>
+      )}
 
       {/* Placeholders para Mapa e Feed */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
