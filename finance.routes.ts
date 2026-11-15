@@ -16,6 +16,15 @@ function text(value: unknown, max = 500): string {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
 
+function isValidDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+}
+
 router.get('/payments', async (_req: Request, res: Response) => {
   try {
     const pageSize = 500;
@@ -146,7 +155,7 @@ router.get('/expenses', async (req: Request, res: Response) => {
 router.post('/expenses', async (req: Request, res: Response) => {
   try {
     const b=req.body||{}, lojaId=text(b.loja_id,64), categoria=text(b.categoria,40), descricao=text(b.descricao,1000), valor=Number(b.valor), dataDespesa=text(b.data_despesa,10);
-    if(!UUID_RE.test(lojaId)||!EXPENSE_CATEGORIES.has(categoria)||descricao.length<3||!Number.isFinite(valor)||valor<=0||valor>999999999999.99||Math.round(valor*100)!==valor*100||!/^\d{4}-\d{2}-\d{2}$/.test(dataDespesa)||Number.isNaN(Date.parse(dataDespesa+'T00:00:00Z'))) return res.status(400).json({success:false,message:'Dados da despesa inválidos.'});
+    if(!UUID_RE.test(lojaId)||!EXPENSE_CATEGORIES.has(categoria)||descricao.length<3||!Number.isFinite(valor)||valor<=0||valor>999999999999.99||Math.round(valor*100)!==valor*100||!isValidDateOnly(dataDespesa)) return res.status(400).json({success:false,message:'Dados da despesa inválidos.'});
     const {data:store,error:storeError}=await supabaseAdmin.from('lojas').select('id').eq('id',lojaId).eq('ativo',true).maybeSingle();
     if(storeError)return res.status(503).json({success:false,message:'Não foi possível validar a loja.'});
     if(!store)return res.status(400).json({success:false,message:'A loja não existe ou está inactiva.'});
