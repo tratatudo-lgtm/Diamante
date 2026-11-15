@@ -23,6 +23,7 @@ import {
   PlusCircle,
   HelpCircle,
   Users,
+  Package,
   ReceiptText,
   Activity,
   ArrowUpRight,
@@ -49,6 +50,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     pesoOntem: 0,
     lojasAtivas: 0,
     totalLojas: 0,
+    funcionariosAtivos: 0,
+    pecasEmLoja: 0,
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -122,6 +125,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       const kpiYesterday: KpiLojaDiaria[] = Array.isArray(apiData.kpiYesterday) ? apiData.kpiYesterday : [];
       const recentTransactions: Transacao[] = Array.isArray(apiData.recentTxs) ? apiData.recentTxs : [];
       const transactionCount = Number(apiData.recentTxsCount) || 0;
+      const funcionariosAtivos = Number(apiData.activeEmployees) || 0;
+      const pecasEmLoja = Number(apiData.stockItemsInStores) || 0;
 
       const nonDraftTodayTxs = todayTxs.filter((tx) => tx.estado !== 'rascunho');
       const volumeHoje = nonDraftTodayTxs.reduce((sum, tx) => sum + (Number(tx.valor_final) || 0), 0);
@@ -152,6 +157,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         pesoOntem,
         lojasAtivas: activeStores,
         totalLojas: rawLojas.length,
+        funcionariosAtivos,
+        pecasEmLoja,
       });
 
       const kpiByLoja: Record<string, Partial<KpiLojaDiaria>> = {};
@@ -387,7 +394,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         {/* REQUISITO 2.B: KPIS GLOBAIS (Grid 4 cols) */}
         <section aria-label="KPIs Globais da Rede" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Inteligência operacional</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Indicadores da rede</h2></div><div className="flex items-center gap-2 text-[10px] font-medium text-slate-500"><Activity className="h-3.5 w-3.5 text-[#d8b85d]" /> Actualização automática · 30 segundos</div></div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-7">
             {/* 1. Volume Hoje */}
             <KPICard
               title="Volume Compras Hoje"
@@ -457,6 +464,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
               isLoading={isLoading}
               onClick={() => onNavigate('/stores')}
               subtitle="Lojas em operação · Abrir gestão"
+            />
+            <KPICard
+              title="Funcionários activos"
+              value={globalKpis.funcionariosAtivos}
+              icon={Users}
+              isLoading={isLoading}
+              onClick={() => onNavigate('/admin/funcionarios')}
+              subtitle="Contas activas na rede"
+            />
+            <KPICard
+              title="Peças em loja"
+              value={globalKpis.pecasEmLoja}
+              icon={Package}
+              isLoading={isLoading}
+              onClick={() => onNavigate('/admin/inventario')}
+              subtitle="Inventário físico em circulação"
             />
           </div>
         </section>
