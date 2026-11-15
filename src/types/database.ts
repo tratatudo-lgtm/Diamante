@@ -119,4 +119,6 @@ export interface GlobalKpiData {
   pesoOntem: number;
   lojasAtivas: number;
   totalLojas: number;
+  funcionariosAtivos: number;
+  pecasEmLoja: number;
 }
