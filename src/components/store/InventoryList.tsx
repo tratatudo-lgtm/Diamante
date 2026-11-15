@@ -22,7 +22,7 @@ interface InventoryListProps {
 export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => {
   const [items, setItems] = useState<InventarioFisico[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<'todos' | 'em_loja' | 'enviado_sede' | 'fundido'>('em_loja');
+  const [statusFilter, setStatusFilter] = useState<'todos' | 'pendente_aprovacao' | 'em_loja' | 'enviado_sede' | 'fundido'>('em_loja');
   const [searchQuery, setSearchQuery] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
@@ -97,6 +97,13 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
 
   const getStatusBadge = (estado: string) => {
     switch (estado) {
+      case 'pendente_aprovacao':
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 bg-amber-950/70 border border-amber-700/60 px-2 py-0.5 rounded">
+            <Clock className="w-3 h-3" />
+            Pendente de Aprovação
+          </span>
+        );
       case 'em_loja':
         return (
           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/70 border border-emerald-700/60 px-2 py-0.5 rounded">
@@ -171,6 +178,16 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
         <div className="mt-4 pt-4 border-t border-gray-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Segmented Filter Buttons */}
           <div className="flex items-center gap-1 p-1 bg-gray-900 rounded-xl border border-gray-800 overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setStatusFilter('pendente_aprovacao')}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
+                statusFilter === 'pendente_aprovacao'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              Pendentes ({items.filter((i) => i.estado === 'pendente_aprovacao').length})
+            </button>
             <button
               onClick={() => setStatusFilter('em_loja')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap cursor-pointer ${
