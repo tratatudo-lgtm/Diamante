@@ -93,6 +93,9 @@ router.post('/payments', async (req: Request, res: Response) => {
       .select('*, lojas(nome)')
       .single();
 
+    if (error?.code === '23505') {
+      return res.status(409).json({ success: false, message: 'Já existe um pagamento com esta referência.' });
+    }
     if (error || !data) {
       console.error('[FINANCE] Falha ao criar pagamento.');
       return res.status(503).json({ success: false, message: 'Não foi possível criar o pagamento.' });
