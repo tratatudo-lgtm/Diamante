@@ -47,11 +47,11 @@ router.get('/financial-summary', verifyAdmin, async (req, res) => {
     const [year, monthNumber] = month.split('-').map(Number);
     const start = `${month}-01`;
     const end = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
-    const rows: Array<{ loja_id: string; categoria: string; valor: number | string; estado: string }> = [];
+    const rows: Array<{ loja_id: string; categoria: string; valor: number | string; estado: string; lojas?: { nome?: string } | null }> = [];
     const pageSize = 500;
     for (let offset = 0; ; offset += pageSize) {
       const { data, error } = await supabase.from('despesas_operacionais')
-        .select('loja_id,categoria,valor,estado')
+        .select('loja_id,categoria,valor,estado,lojas(nome)')
         .gte('data_despesa', start).lt('data_despesa', end)
         .order('data_despesa', { ascending: true }).range(offset, offset + pageSize - 1);
       if (error) {
@@ -61,11 +61,11 @@ router.get('/financial-summary', verifyAdmin, async (req, res) => {
       rows.push(...(data || []));
       if (!data || data.length < pageSize) break;
     }
-    const stores = new Map<string, { loja_id: string; paid: number; pending: number; rejected: number; byCategory: Record<string, number> }>();
+    const stores = new Map<string, { loja_id: string; nome: string; paid: number; pending: number; rejected: number; byCategory: Record<string, number> }>();
     let paid = 0, pending = 0, rejected = 0;
     for (const row of rows) {
       const amount = Number(row.valor) || 0;
-      if (!stores.has(row.loja_id)) stores.set(row.loja_id, { loja_id: row.loja_id, paid: 0, pending: 0, rejected: 0, byCategory: {} });
+      if (!stores.has(row.loja_id)) stores.set(row.loja_id, { loja_id: row.loja_id, nome: row.lojas?.nome || 'Loja sem nome', paid: 0, pending: 0, rejected: 0, byCategory: {} });
       const store = stores.get(row.loja_id)!;
       if (row.estado === 'paga') {
         paid += amount; store.paid += amount;
