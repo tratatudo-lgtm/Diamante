@@ -12,6 +12,7 @@ import storeRouter from './store.routes';
 import financeRouter from './finance.routes';
 import settingsRouter from './settings.routes';
 import clientsRouter from './clients.routes';
+import collaborationRouter from './collaboration.routes';
 
 
 import { createServer } from 'http';
@@ -141,6 +142,7 @@ app.use('/api/admin/finance', financeRouter);
 app.use('/api/admin/settings', settingsRouter);
 app.use('/api/store', storeRouter);
 app.use('/api/clients', clientsRouter);
+app.use('/api/collaboration', collaborationRouter);
 
 // Perfil da loja associada à sessão: nunca aceitar loja_id enviado pelo cliente.
 app.get('/api/store/profile', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
