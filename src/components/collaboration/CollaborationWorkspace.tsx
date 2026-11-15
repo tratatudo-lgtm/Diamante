@@ -57,6 +57,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [socket, setSocket] = useState<Socket | null>(null);
+  const [onlineEmployees, setOnlineEmployees] = useState<Set<string>>(() => new Set());
 
   const api = useCallback(async (path: string, init: RequestInit = {}) => {
     const jwt = token();
@@ -142,6 +143,18 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
     connection.on('chat:conversation', () => void loadConversations());
     connection.on('report:created', () => void loadReports());
     connection.on('notification:new', () => void loadNotifications());
+    connection.on('collab:presence_snapshot', (snapshot: { online?: string[] }) => {
+      setOnlineEmployees(new Set(Array.isArray(snapshot.online) ? snapshot.online : []));
+    });
+    connection.on('collab:presence', (event: { employeeId?: string; online?: boolean }) => {
+      if (!event?.employeeId || event.employeeId === currentUserId) return;
+      setOnlineEmployees((previous) => {
+        const next = new Set(previous);
+        if (event.online) next.add(event.employeeId!);
+        else next.delete(event.employeeId!);
+        return next;
+      });
+    });
     connection.on('report:updated', (event: { id?: string }) => {
       void loadReports();
       if (event?.id && activeReport?.id === event.id) void loadReport(event.id);
@@ -312,7 +325,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
                   const title = item.tipo === 'grupo' ? item.titulo : item.members.find((member) => member.funcionario_id !== currentUserId)?.funcionarios?.nome_completo || 'Conversa privada';
                   return <button key={item.id} onClick={() => setActiveConversation(item.id)} className={'flex w-full items-center gap-3 border-b border-white/[0.05] p-4 text-left hover:bg-white/[0.04] ' + (activeConversation === item.id ? 'bg-[#D4AF37]/10' : '')}>
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D4AF37]/20 bg-[#D4AF37]/10 text-[#E6C66B]">{item.tipo === 'grupo' ? <Users className="h-5 w-5" /> : <UserRound className="h-5 w-5" />}</div>
-                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-100">{title}</p><p className="mt-1 text-[11px] text-slate-500">{item.tipo === 'grupo' ? item.members.length + ' participantes' : 'Conversa privada'}</p></div>
+                    <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-100">{title}</p><p className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-500">{item.tipo === 'grupo' ? <>{item.members.length} participantes · {item.members.filter((member) => onlineEmployees.has(member.funcionario_id)).length} online</> : <><span className={'h-1.5 w-1.5 rounded-full ' + (onlineEmployees.has(item.members.find((member) => member.funcionario_id !== currentUserId)?.funcionario_id || '') ? 'bg-emerald-400' : 'bg-slate-600')} />{onlineEmployees.has(item.members.find((member) => member.funcionario_id !== currentUserId)?.funcionario_id || '') ? 'Online' : 'Offline'}</>}</p></div>
                     {item.unread_count > 0 && <span className="rounded-full bg-[#D4AF37] px-2 py-0.5 text-[10px] font-bold text-black">{item.unread_count}</span>}
                   </button>;
                 })}
@@ -321,7 +334,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
             </aside>
             <section className={(activeConversation ? 'flex' : 'hidden lg:flex') + ' min-h-[620px] flex-col'}>
               {activeConversation ? <>
-                <div className="flex items-center gap-3 border-b border-white/10 p-4"><button onClick={() => setActiveConversation('')} className="rounded-lg p-1 text-slate-400 hover:bg-white/5 lg:hidden"><ArrowLeft className="h-5 w-5" /></button><div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#D4AF37]/10 text-[#E6C66B]"><MessageCircle className="h-4 w-4" /></div><div><h2 className="font-semibold text-white">{activeName}</h2><p className="text-[11px] text-slate-500">{active?.members.length || 0} participantes</p></div></div>
+                <div className="flex items-center gap-3 border-b border-white/10 p-4"><button onClick={() => setActiveConversation('')} className="rounded-lg p-1 text-slate-400 hover:bg-white/5 lg:hidden"><ArrowLeft className="h-5 w-5" /></button><div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#D4AF37]/10 text-[#E6C66B]"><MessageCircle className="h-4 w-4" /></div><div><h2 className="font-semibold text-white">{activeName}</h2><p className="flex items-center gap-1.5 text-[11px] text-slate-500">{active?.tipo === 'directa' ? <><span className={'h-1.5 w-1.5 rounded-full ' + (onlineEmployees.has(active?.members.find((member) => member.funcionario_id !== currentUserId)?.funcionario_id || '') ? 'bg-emerald-400' : 'bg-slate-600')} />{onlineEmployees.has(active?.members.find((member) => member.funcionario_id !== currentUserId)?.funcionario_id || '') ? 'Online' : 'Offline'}</> : <>{active?.members.length || 0} participantes · {active?.members.filter((member) => onlineEmployees.has(member.funcionario_id)).length || 0} online</>}</p></div></div>
                 <div className="flex-1 space-y-3 overflow-y-auto p-4">
                   {messages.map((item) => <div key={item.id} className={'flex ' + (item.sender_id === currentUserId ? 'justify-end' : 'justify-start')}><div className={'max-w-[85%] rounded-2xl px-4 py-2.5 sm:max-w-[70%] ' + (item.sender_id === currentUserId ? 'rounded-br-md bg-[#9b7b22] text-white' : 'rounded-bl-md border border-white/10 bg-[#182337] text-slate-100')}><p className="mb-1 text-[10px] font-semibold opacity-70">{item.sender_id === currentUserId ? 'Tu' : item.funcionarios?.nome_completo || 'Colega'}</p><p className="whitespace-pre-wrap break-words text-sm">{item.body}</p><p className="mt-1 text-right text-[10px] opacity-60">{dateLabel(item.created_at)}{item.sender_id === currentUserId && active?.members.some((member) => member.funcionario_id !== currentUserId && member.last_read_at && new Date(member.last_read_at).getTime() >= new Date(item.created_at).getTime()) ? ' · Visto' : ''}</p></div></div>)}
                   {messages.length === 0 && <p className="py-12 text-center text-sm text-slate-500">Esta conversa ainda não tem mensagens.</p>}
