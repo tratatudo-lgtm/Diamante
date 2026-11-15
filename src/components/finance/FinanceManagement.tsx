@@ -72,6 +72,7 @@ const expenseCategories = [
 function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[] }) {
   const [rows,setRows]=useState<OperationalExpense[]>([]);
   const [summary,setSummary]=useState<{month:string;totals:{paid:number;pending:number;rejected:number};stores:{loja_id:string;paid:number;pending:number;rejected:number;byCategory:Record<string,number>}[]}|null>(null);
+  const [selectedMonth,setSelectedMonth]=useState(new Date().toISOString().slice(0,7));
   const [loadingRows,setLoadingRows]=useState(true);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
@@ -86,11 +87,12 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
   };
   const load=async()=>{
     setLoadingRows(true);setError('');
-    try{const [result,monthly]=await Promise.all([request('/api/admin/finance/expenses'),request('/api/admin/finance/expenses/summary')]);setRows(Array.isArray(result.data)?result.data:[]);setSummary(monthly);}
+    try{const [result,monthly]=await Promise.all([request('/api/admin/finance/expenses'),request('/api/admin/finance/expenses/summary?month='+encodeURIComponent(selectedMonth))]);setRows(Array.isArray(result.data)?result.data:[]);setSummary(monthly);}
     catch(e:any){setError(e?.message||'Falha ao carregar despesas.');}
     finally{setLoadingRows(false);}
   };
   useEffect(()=>{void load();},[]);
+  useEffect(()=>{void request('/api/admin/finance/expenses/summary?month='+encodeURIComponent(selectedMonth)).then(setSummary).catch(e=>setError(e?.message||'Falha ao carregar resumo mensal.'));},[selectedMonth]);
   const submit=async(e:React.FormEvent)=>{
     e.preventDefault();setBusy(true);setError('');
     try{
@@ -127,7 +129,7 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
       <div className="sm:col-span-2 lg:col-span-3 flex justify-end"><button disabled={busy} className="rounded-xl bg-[#D4AF37] px-5 py-2.5 text-sm font-bold text-slate-950 disabled:opacity-50">{busy?'A guardar…':'Registar despesa'}</button></div>
     </form>
     {summary&&<div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-white">Resumo mensal por loja</h3><span className="text-xs text-slate-500">{summary.month}</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold text-white">Resumo mensal por loja</h3><input aria-label="Mês do resumo financeiro" type="month" value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)} className="rounded-lg border border-slate-700 bg-[#0b0f19] px-3 py-2 text-xs text-white"/></div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3"><p className="text-xs text-slate-400">Total liquidado</p><p className="mt-1 text-lg font-bold text-emerald-300">{money(summary.totals.paid)}</p></div>
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3"><p className="text-xs text-slate-400">Compromissos pendentes</p><p className="mt-1 text-lg font-bold text-amber-300">{money(summary.totals.pending)}</p></div>
