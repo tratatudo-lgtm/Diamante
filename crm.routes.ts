@@ -57,7 +57,7 @@ router.get('/clients/:id', async (req: Request, res: Response) => {
     const id = String(req.params.id || '');
     const { data: client, error: clientError } = await supabaseAdmin
       .from('clientes')
-      .select('id,nome,nif,bi_cc,tipo_documento,telemovel,email,morada,loja_registo_id,created_at,contacto,data_nascimento,data_emissao_documento,data_validade_documento')
+      .select('id,nome,nif,bi_cc,tipo_documento,telemovel,email,morada,loja_registo_id,created_at,contacto,data_nascimento,data_emissao_documento,data_validade_documento,consentimento_whatsapp_aniversario')
       .eq('id', id).maybeSingle();
     if (clientError || !client) return res.status(404).json({ success: false, error: 'Cliente não encontrado.' });
 
