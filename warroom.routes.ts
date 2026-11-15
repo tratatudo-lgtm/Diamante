@@ -76,7 +76,32 @@ router.get('/financial-summary', verifyAdmin, async (req, res) => {
         rejected += amount; store.rejected += amount;
       }
     }
-    return res.json({ success: true, month, totals: { paid, pending, rejected }, stores: Array.from(stores.values()).sort((a, b) => b.paid - a.paid) });
+    const previousDate = new Date(Date.UTC(year, monthNumber - 2, 1));
+    const previousMonth = `${previousDate.getUTCFullYear()}-${String(previousDate.getUTCMonth() + 1).padStart(2, '0')}`;
+    const previousStart = `${previousMonth}-01`;
+    const previousEnd = `${month}-01`;
+    let previousPaid = 0;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase.from('despesas_operacionais')
+        .select('valor,estado')
+        .gte('data_despesa', previousStart).lt('data_despesa', previousEnd)
+        .order('data_despesa', { ascending: true }).range(offset, offset + pageSize - 1);
+      if (error) {
+        console.error('[WarRoom Finance] Falha ao consultar comparação mensal.');
+        return res.status(503).json({ success: false, error: 'Comparação financeira temporariamente indisponível.' });
+      }
+      for (const row of data || []) if (row.estado === 'paga') previousPaid += Number(row.valor) || 0;
+      if (!data || data.length < pageSize) break;
+    }
+    const paidChangePercent = previousPaid > 0 ? ((paid - previousPaid) / previousPaid) * 100 : null;
+    return res.json({
+      success: true,
+      month,
+      previousMonth,
+      totals: { paid, pending, rejected },
+      comparison: { previousPaid, paidChangePercent },
+      stores: Array.from(stores.values()).sort((a, b) => b.paid - a.paid)
+    });
   } catch {
     console.error('[WarRoom Finance] Erro inesperado no resumo mensal.');
     return res.status(500).json({ success: false, error: 'Erro ao calcular resumo financeiro.' });
