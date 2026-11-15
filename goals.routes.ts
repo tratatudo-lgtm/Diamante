@@ -61,9 +61,9 @@ router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   if (!ids.length) return res.json({ success:true, goals:[] });
   const { data: progressRows, error: progressError } = await supabaseAdmin.rpc('get_operational_goal_progress', { p_goal_ids: ids });
   if (progressError || !progressRows) return fail(res,503,'Não foi possível calcular o desempenho dos objectivos.');
-  const progressById = new Map(progressRows.map((row: any) => [row.goal_id, Number(row.current_value || 0)]));
+  const progressById = new Map<string, number>(progressRows.map((row: any): [string, number] => [String(row.goal_id), Number(row.current_value || 0)]));
   const goals = (data || []).map((goal: any) => {
-    const current = progressById.get(goal.id) || 0;
+    const current = progressById.get(goal.id) ?? 0;
     return { ...goal, progress: { current:Number(current.toFixed(3)), target:Number(goal.target_value), percentage:Math.min(100,Number((current/Number(goal.target_value)*100).toFixed(1))), achieved:current>=Number(goal.target_value) } };
   });
   return res.json({ success:true, goals });
