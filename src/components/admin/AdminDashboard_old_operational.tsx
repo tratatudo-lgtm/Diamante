@@ -46,7 +46,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     pendentesHoje: 0,
     pendentesOntem: 0,
     pesoHoje: 0,
-    pesoOntem: 0,
+    pesoOntem,
     lojasAtivas: 0,
     totalLojas: 0,
   });
@@ -130,6 +130,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
       const volumeOntem = kpiYesterday.reduce(
         (sum, k) => sum + (Number(k.total_compras_valor) || 0),
+        0
+      );
+      const pesoOntem = kpiYesterday.reduce(
+        (sum, k) => sum + (Number(k.total_peso_ouro_g) || 0),
         0
       );
       const pendentesOntem = kpiYesterday.reduce(
