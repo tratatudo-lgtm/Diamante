@@ -1,4 +1,4 @@
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useEffect } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Sparkles,
@@ -42,6 +42,9 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [valorFinalManual, setValorFinalManual] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [purchaseSettings, setPurchaseSettings] = useState<Array<{ toque_millesimos: number; cotacao_referencia_g: number; margem_percentagem: number; preco_compra_grama: number }>>([]);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   // Unique IDs for accessibility
   const clienteNomeId = useId();
@@ -54,21 +57,58 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const rgpdCheckboxId = useId();
   const valorFinalId = useId();
 
-  // Handle metal change adjustment of spot baseline
+  // Carregar exclusivamente preços aprovados pela sede para esta loja.
+  useEffect(() => {
+    let active = true;
+    const loadPurchaseSettings = async () => {
+      try {
+        const token = sessionStorage.getItem('diamante_jwt_token');
+        if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
+        const response = await fetch('/api/store/purchase-settings', {
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(8000),
+        });
+        const data = await response.json().catch(() => null);
+        if (!response.ok || !data?.success || !Array.isArray(data.margens)) {
+          throw new Error(data?.message || 'Não foi possível carregar os preços aprovados pela sede.');
+        }
+        if (active) {
+          setPurchaseSettings(data.margens);
+          setSettingsError(null);
+        }
+      } catch (error: any) {
+        if (active) setSettingsError(error?.message || 'Parâmetros de compra indisponíveis.');
+      } finally {
+        if (active) setSettingsLoading(false);
+      }
+    };
+    loadPurchaseSettings();
+    return () => { active = false; };
+  }, []);
+
+  const getToque = (value: string) => Number(value.match(/(\\d{3})\\s*‰/)?.[1] || 0);
+  const selectedPricing = purchaseSettings.find((item) => item.toque_millesimos === getToque(metal));
   const handleMetalChange = (novoMetal: string) => {
     setMetal(novoMetal);
-    if (novoMetal.includes('24K')) {
-      setSpotPrice(74.50);
-    } else if (novoMetal.includes('19.2K')) {
-      setSpotPrice(59.50);
-    } else if (novoMetal.includes('18K')) {
-      setSpotPrice(55.80);
-    } else if (novoMetal.includes('14K')) {
-      setSpotPrice(43.40);
-    } else if (novoMetal.includes('Prata')) {
-      setSpotPrice(0.95);
+    const pricing = purchaseSettings.find((item) => item.toque_millesimos === getToque(novoMetal));
+    if (pricing) {
+      setSpotPrice(pricing.cotacao_referencia_g);
+      setMargemPercent(pricing.margem_percentagem);
+    } else {
+      setSpotPrice(0);
+      setMargemPercent(0);
     }
   };
+
+  useEffect(() => {
+    if (selectedPricing) {
+      setSpotPrice(selectedPricing.cotacao_referencia_g);
+      setMargemPercent(selectedPricing.margem_percentagem);
+    } else if (!settingsLoading) {
+      setSpotPrice(0);
+      setMargemPercent(0);
+    }
+  }, [selectedPricing, settingsLoading]);
 
   // Cálculo automático: Valor Sugerido = (peso * cotacao_spot * (1 - margem/100))
   const pesoNum = parseFloat(pesoGramas) || 0;
@@ -97,6 +137,11 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
 
     if (!clienteCc.trim()) {
       setErrorMessage('O Cartão de Cidadão / BI é obrigatório por lei para compra de metais.');
+      return;
+    }
+
+    if (!selectedPricing || settingsLoading || settingsError) {
+      setErrorMessage('Não existe uma cotação activa aprovada pela sede para este metal e loja. Contacte a administração.');
       return;
     }
 
@@ -400,11 +445,11 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
               Cálculo Automático de Avaliação
             </span>
             <span className="text-[11px] text-gray-400 font-mono">
-              Referência interna: {spotPrice.toFixed(2)} €/g · Margem: {margemPercent}%
+              {settingsLoading ? 'A carregar preços aprovados…' : selectedPricing ? `Cotação sede: ${spotPrice.toFixed(2)} €/g fino · Margem: ${margemPercent}%` : 'Sem preço aprovado para este metal'}
             </span>
           </div>
 
-          <p className="text-[11px] leading-relaxed text-amber-200/80 bg-amber-950/30 border border-amber-900/50 rounded-lg px-3 py-2">Valores de referência internos, não constituem cotação de mercado em tempo real. Confirme e actualize a cotação aplicável antes de apresentar uma proposta ao cliente.</p>
+          <p className={`text-[11px] leading-relaxed rounded-lg px-3 py-2 border ${selectedPricing ? 'text-emerald-200/80 bg-emerald-950/30 border-emerald-900/50' : 'text-amber-200/80 bg-amber-950/30 border-amber-900/50'}`}>{settingsLoading ? 'A consultar os parâmetros comerciais aprovados pela sede.' : selectedPricing ? 'Preço calculado com os parâmetros aprovados pela sede. A cotação de referência não é uma cotação de mercado em tempo real.' : settingsError || 'Este metal não tem configuração activa. Não é possível registar a compra.'}</p>
 
           <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
             <div className="p-3 rounded-lg bg-gray-950/60 border border-gray-800">
@@ -485,7 +530,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         {/* BOTÃO REGISTAR COMPRA (Hitbox 48px+, Dourado) */}
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || settingsLoading || !selectedPricing || Boolean(settingsError)}
           className="w-full min-h-[52px] bg-gradient-to-r from-[#D4AF37] to-[#C59B27] hover:from-[#e5be40] hover:to-[#d4af37] text-gray-950 font-bold text-sm tracking-wide rounded-xl shadow-lg shadow-[#D4AF37]/20 transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
         >
           {isSubmitting ? (
