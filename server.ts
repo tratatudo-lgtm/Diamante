@@ -460,8 +460,9 @@ app.get('/api/admin/inventory/receiving', verifyAdmin, async (_req, res) => {
 app.post('/api/admin/inventory/:id/receive', verifyAdmin, async (req, res) => {
   const itemId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
   const adminId = (req as any).adminUser?.id;
-  const receivedWeight = Number(req.body?.peso_recebido_gramas);
-  const note = typeof req.body?.observacoes_rececao === 'string' ? req.body.observacoes_rececao.trim() : '';
+  const rawReceivedWeight = Number(req.body?.peso_recebido_gramas);
+  const receivedWeight = Number.isFinite(rawReceivedWeight) ? Number(rawReceivedWeight.toFixed(3)) : Number.NaN;
+  const note = typeof req.body?.observacoes_rececao === 'string' ? req.body.observacoes_rececao.trim().slice(0, 1000) : '';
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(itemId)) {
     return res.status(400).json({ success: false, error: 'Identificador de peça inválido.' });
