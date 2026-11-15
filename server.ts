@@ -525,6 +525,98 @@ app.post('/api/admin/inventory/:id/receive', verifyAdmin, async (req, res) => {
   }
 });
 
+// LOTES DE FUNDICAO — API ADMINISTRATIVA
+app.get('/api/admin/refining/eligible', verifyAdmin, async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('inventario_fisico')
+      .select('id, codigo_unico, metal, tipo_peca, peso_gramas, peso_recebido_gramas, diferenca_peso_gramas, transacao_origem_id, data_rececao')
+      .eq('estado', 'recebido_sede')
+      .order('data_rececao', { ascending: true })
+      .limit(500);
+    if (error) {
+      console.error('[Refining] Falha ao carregar peças elegíveis.');
+      return res.status(503).json({ success: false, error: 'Não foi possível carregar as peças recebidas.' });
+    }
+    return res.json({ success: true, data: data || [] });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Erro interno ao carregar peças para fundição.' });
+  }
+});
+
+app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('ouro_fundicao_lotes')
+      .select('id, codigo_lote, estado, quantidade_pecas, peso_entrada_gramas, peso_recuperado_gramas, toque_milesimos, ouro_fino_recuperado_gramas, perda_processo_gramas, rendimento_percentagem, criado_em, concluido_em, observacoes')
+      .order('criado_em', { ascending: false })
+      .limit(200);
+    if (error) {
+      console.error('[Refining] Falha ao carregar lotes.');
+      return res.status(503).json({ success: false, error: 'Não foi possível carregar os lotes de fundição.' });
+    }
+    return res.json({ success: true, data: data || [] });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Erro interno ao carregar lotes.' });
+  }
+});
+
+app.post('/api/admin/refining/batches', verifyAdmin, async (req, res) => {
+  const adminId = (req as any).adminUser?.id;
+  const ids = req.body?.inventario_ids;
+  const note = typeof req.body?.observacoes === 'string' ? req.body.observacoes.trim().slice(0, 1000) : null;
+  if (!adminId || !Array.isArray(ids) || ids.length < 1 || ids.length > 500 ||
+      ids.some((id: unknown) => typeof id !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) ||
+      new Set(ids).size !== ids.length) {
+    return res.status(400).json({ success: false, error: 'Seleccione peças válidas e sem duplicados.' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.rpc('criar_lote_ouro_fundicao', {
+      p_inventario_ids: ids,
+      p_admin_id: adminId,
+      p_observacoes: note,
+    });
+    if (error) {
+      console.error('[Refining] Não foi possível criar o lote.');
+      return res.status(409).json({ success: false, error: error.message || 'As peças podem já não estar disponíveis para fundição.' });
+    }
+    return res.status(201).json({ success: true, lote: data });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Erro interno ao criar lote.' });
+  }
+});
+
+app.post('/api/admin/refining/batches/:id/complete', verifyAdmin, async (req, res) => {
+  const adminId = (req as any).adminUser?.id;
+  const batchId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  const rawWeight = Number(req.body?.peso_recuperado_gramas);
+  const rawTouch = Number(req.body?.toque_milesimos);
+  const recoveredWeight = Number.isFinite(rawWeight) ? Number(rawWeight.toFixed(3)) : Number.NaN;
+  const touch = Number.isFinite(rawTouch) ? Number(rawTouch.toFixed(3)) : Number.NaN;
+  const note = typeof req.body?.observacoes === 'string' ? req.body.observacoes.trim().slice(0, 1000) : null;
+  if (!adminId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(batchId) ||
+      !Number.isFinite(recoveredWeight) || recoveredWeight <= 0 ||
+      !Number.isFinite(touch) || touch < 0 || touch > 1000) {
+    return res.status(400).json({ success: false, error: 'Indique um lote, peso recuperado e toque válidos.' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.rpc('concluir_lote_ouro_fundicao', {
+      p_lote_id: batchId,
+      p_peso_recuperado_gramas: recoveredWeight,
+      p_toque_milesimos: touch,
+      p_admin_id: adminId,
+      p_observacoes: note,
+    });
+    if (error) {
+      console.error('[Refining] Não foi possível concluir o lote.');
+      return res.status(409).json({ success: false, error: error.message || 'O lote não pode ser concluído com os valores indicados.' });
+    }
+    return res.json({ success: true, lote: data });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Erro interno ao concluir lote.' });
+  }
+});
+
 // DETALHE DE LOJA — CONSULTA ADMINISTRATIVA PROTEGIDA
 app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
   const lojaId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
