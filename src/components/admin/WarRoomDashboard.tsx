@@ -65,7 +65,7 @@ export const WarRoomDashboard = () => {
             active: activeSites.length,
             estimatedMonthly: activeSites.reduce((sum: number, site: any) => sum + Math.max(0, Number(site.estimated_monthly_revenue) || 0), 0),
             initialInvestment: activeSites.reduce((sum: number, site: any) => sum + (Number(site.estimated_setup_cost) || 0) + (Number(site.estimated_initial_stock) || 0), 0),
-            estimatedResult: activeSites.reduce((sum: number, site: any) => sum + (Number(site.estimated_monthly_revenue) || 0) - (Number(site.monthly_rent) || 0) - (Number(site.estimated_monthly_other_costs) || 0) + (Number(site.estimated_monthly_staff_cost) || 0) + (Number(site.estimated_monthly_utilities_cost) || 0), 0),
+            estimatedResult: activeSites.reduce((sum: number, site: any) => sum + (Number(site.estimated_monthly_revenue) || 0) - (Number(site.monthly_rent) || 0) - (Number(site.estimated_monthly_other_costs) || 0) - (Number(site.estimated_monthly_staff_cost) || 0) - (Number(site.estimated_monthly_utilities_cost) || 0), 0),
           });
         }
       } catch (expansionError) {
