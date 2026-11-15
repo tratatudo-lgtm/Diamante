@@ -254,67 +254,107 @@ app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req, res) => {
 
 // ENDPOINT: AUTORIZAR TRANSAÇÃO PENDENTE
 app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
-  const transactionId = req.body?.transactionId;
-
-  if (typeof transactionId !== 'string' || !transactionId.trim()) {
-    return res.status(400).json({
-      success: false,
-      error: 'ID da transação obrigatório'
-    });
+  const transactionId = typeof req.body?.transactionId === 'string' ? req.body.transactionId.trim() : '';
+  if (!transactionId) {
+    return res.status(400).json({ success: false, error: 'ID da transação obrigatório' });
   }
 
   try {
     const adminId = (req as any).adminUser?.id;
-
     if (!adminId) {
-      return res.status(401).json({
-        success: false,
-        error: 'Sessão administrativa inválida'
+      return res.status(401).json({ success: false, error: 'Sessão administrativa inválida' });
+    }
+
+    const [{ data: transaction, error: transactionError }, { data: settings, error: settingsError }] = await Promise.all([
+      supabaseAdmin.from('transacoes')
+        .select('id, loja_id, estado, valor_final, primeira_aprovacao_por')
+        .eq('id', transactionId)
+        .maybeSingle(),
+      supabaseAdmin.from('configuracoes_sistema')
+        .select('valor')
+        .eq('chave', 'parametros_compra_ouro')
+        .maybeSingle(),
+    ]);
+
+    if (transactionError || settingsError) {
+      console.error('[Authorize] Falha ao consultar transação ou regras de aprovação.');
+      return res.status(503).json({ success: false, error: 'Não foi possível validar as regras de aprovação.' });
+    }
+    if (!transaction || transaction.estado !== 'pendente_aprovacao') {
+      return res.status(409).json({ success: false, error: 'A compra não está pendente ou já foi processada.' });
+    }
+
+    const thresholds = settings?.valor?.tetos;
+    const doubleSignatureAt = thresholds?.ativo === true
+      ? Number(thresholds.exigir_dupla_assinatura_acima) || 0
+      : 0;
+    const requiresDoubleSignature = doubleSignatureAt > 0 && Number(transaction.valor_final) >= doubleSignatureAt;
+
+    if (requiresDoubleSignature && !transaction.primeira_aprovacao_por) {
+      const now = new Date().toISOString();
+      const { data: firstApproval, error: firstError } = await supabaseAdmin
+        .from('transacoes')
+        .update({ primeira_aprovacao_por: adminId, data_primeira_aprovacao: now })
+        .eq('id', transactionId)
+        .eq('estado', 'pendente_aprovacao')
+        .is('primeira_aprovacao_por', null)
+        .select('id')
+        .maybeSingle();
+
+      if (firstError) throw firstError;
+      if (!firstApproval) {
+        return res.status(409).json({ success: false, error: 'A primeira assinatura foi registada por outro administrador. Actualize a lista.' });
+      }
+
+      return res.json({
+        success: true,
+        requiresSecondApproval: true,
+        message: 'Primeira assinatura registada. É necessária a aprovação de um segundo administrador.',
+        transactionId,
       });
     }
 
-    const { data, error } = await supabaseAdmin
+    if (requiresDoubleSignature && transaction.primeira_aprovacao_por === adminId) {
+      return res.status(409).json({
+        success: false,
+        error: 'A segunda assinatura tem de ser realizada por um administrador diferente.',
+      });
+    }
+
+    const now = new Date().toISOString();
+    const { data: approved, error: approvalError } = await supabaseAdmin
       .from('transacoes')
       .update({
         estado: 'aprovado',
         aprovado_por: adminId,
-        data_aprovacao: new Date().toISOString()
+        data_aprovacao: now,
       })
-      .eq('id', transactionId.trim())
+      .eq('id', transactionId)
       .eq('estado', 'pendente_aprovacao')
       .select('id, loja_id')
       .maybeSingle();
 
-    if (error) throw error;
-
-    if (!data) {
-      return res.status(409).json({
-        success: false,
-        error: 'A transação não está pendente ou já foi processada'
-      });
+    if (approvalError) throw approvalError;
+    if (!approved) {
+      return res.status(409).json({ success: false, error: 'A compra foi entretanto processada por outro administrador.' });
     }
 
     const io = (globalThis as any).io;
     if (io) {
-      const event = { id: data.id, loja_id: data.loja_id, estado: 'aprovado', approved_at: new Date().toISOString() };
+      const event = { id: approved.id, loja_id: approved.loja_id, estado: 'aprovado', approved_at: now };
       io.to('admin').emit('transaction:approved', event);
-      if (data.loja_id) io.to('store:' + data.loja_id).emit('transaction:approved', event);
+      if (approved.loja_id) io.to('store:' + approved.loja_id).emit('transaction:approved', event);
     }
-
-    console.log('[ADMIN] Transação autorizada com sucesso.');
 
     return res.json({
       success: true,
-      message: 'Transação autorizada com sucesso',
-      transactionId: data.id
+      requiresSecondApproval: false,
+      message: 'Compra aprovada com sucesso.',
+      transactionId: approved.id,
     });
   } catch {
-    console.error('[Authorize Error] Falha interna ao autorizar transação.');
-
-    return res.status(500).json({
-      success: false,
-      error: 'Não foi possível autorizar a transação'
-    });
+    console.error('[Authorize Error] Falha interna ao autorizar compra.');
+    return res.status(500).json({ success: false, error: 'Não foi possível autorizar a compra.' });
   }
 });
 
@@ -348,7 +388,7 @@ app.get('/api/admin/transactions', verifyAdmin, async (req, res) => {
     const [transactionsRes, storesRes] = await Promise.all([
       supabaseAdmin
         .from('transacoes')
-        .select('id, loja_id, estado, valor_final, peso_gramas, created_at', { count: 'exact' })
+        .select('id, loja_id, estado, valor_final, peso_gramas, created_at, primeira_aprovacao_por, data_primeira_aprovacao', { count: 'exact' })
         .order('created_at', { ascending: false })
         .limit(limit),
       supabaseAdmin.from('lojas').select('id, nome'),
