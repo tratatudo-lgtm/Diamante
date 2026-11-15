@@ -27,7 +27,7 @@ export const WarRoomDashboard = () => {
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [businessKpis, setBusinessKpis] = useState<{active:number;estimatedMonthly:number;initialInvestment:number;estimatedResult:number}>({active:0,estimatedMonthly:0,initialInvestment:0,estimatedResult:0});
   const [financialMonth, setFinancialMonth] = useState(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7));
-  const [financialKpis, setFinancialKpis] = useState<{month:string;totals:{paid:number;pending:number;rejected:number};stores:{loja_id:string;nome:string;paid:number;pending:number;rejected:number;byCategory:Record<string,number>}[]}|null>(null);
+  const [financialKpis, setFinancialKpis] = useState<{month:string;previousMonth?:string;totals:{paid:number;pending:number;rejected:number};comparison?:{previousPaid:number;paidChangePercent:number|null};stores:{loja_id:string;nome:string;paid:number;pending:number;rejected:number;byCategory:Record<string,number>}[]}|null>(null);
 
   const fetchKpis = useCallback(async () => {
     try {
