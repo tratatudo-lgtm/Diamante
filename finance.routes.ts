@@ -115,4 +115,54 @@ router.patch('/payments/:id/status', async (req: Request, res: Response) => {
   }
 });
 
+
+const EXPENSE_CATEGORIES = new Set(['renda','pessoal','energia_agua','comunicacoes','seguros','manutencao','material','marketing','servicos','impostos_taxas','transporte','outros']);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+router.get('/expenses', async (req: Request, res: Response) => {
+  try {
+    const storeId = text(req.query.loja_id, 64);
+    if (storeId && !UUID_RE.test(storeId)) return res.status(400).json({ success:false, message:'Identificador de loja inválido.' });
+    let query = supabaseAdmin.from('despesas_operacionais').select('id,loja_id,categoria,descricao,fornecedor,referencia_documento,valor,data_despesa,estado,comprovativo_ref,criado_por,aprovado_por,pago_por,motivo_rejeicao,created_at,approved_at,paid_at,lojas(nome)').order('data_despesa',{ascending:false}).limit(1000);
+    if (storeId) query = query.eq('loja_id',storeId);
+    const {data,error}=await query;
+    if(error){console.error('[FINANCE] Falha ao consultar despesas.');return res.status(503).json({success:false,message:'Não foi possível carregar as despesas.'});}
+    return res.json({success:true,data:data||[]});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao carregar despesas.'}); }
+});
+
+router.post('/expenses', async (req: Request, res: Response) => {
+  try {
+    const b=req.body||{}, lojaId=text(b.loja_id,64), categoria=text(b.categoria,40), descricao=text(b.descricao,1000), valor=Number(b.valor), dataDespesa=text(b.data_despesa,10);
+    if(!UUID_RE.test(lojaId)||!EXPENSE_CATEGORIES.has(categoria)||descricao.length<3||!Number.isFinite(valor)||valor<=0||valor>999999999999.99||Math.round(valor*100)!==valor*100||!/^\d{4}-\d{2}-\d{2}$/.test(dataDespesa)||Number.isNaN(Date.parse(dataDespesa+'T00:00:00Z'))) return res.status(400).json({success:false,message:'Dados da despesa inválidos.'});
+    const {data:store,error:storeError}=await supabaseAdmin.from('lojas').select('id').eq('id',lojaId).eq('ativo',true).maybeSingle();
+    if(storeError)return res.status(503).json({success:false,message:'Não foi possível validar a loja.'});
+    if(!store)return res.status(400).json({success:false,message:'A loja não existe ou está inactiva.'});
+    const {data,error}=await supabaseAdmin.from('despesas_operacionais').insert({loja_id:lojaId,categoria,descricao,valor,data_despesa:dataDespesa,fornecedor:text(b.fornecedor,180)||null,referencia_documento:text(b.referencia_documento,120)||null,comprovativo_ref:text(b.comprovativo_ref,500)||null,criado_por:(req as any).adminUser?.id||null,estado:'pendente'}).select('id,loja_id,categoria,descricao,fornecedor,referencia_documento,valor,data_despesa,estado,created_at').single();
+    if(error||!data){console.error('[FINANCE] Falha ao registar despesa.');return res.status(503).json({success:false,message:'Não foi possível registar a despesa.'});}
+    return res.status(201).json({success:true,data});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao registar despesa.'}); }
+});
+
+router.patch('/expenses/:id/status', async (req: Request, res: Response) => {
+  try {
+    const id=text(req.params.id,64), nextStatus=text(req.body?.estado,16), reason=text(req.body?.motivo,500);
+    if(!UUID_RE.test(id)||!['aprovada','rejeitada','paga'].includes(nextStatus))return res.status(400).json({success:false,message:'Transição de despesa inválida.'});
+    const {data:current,error:readError}=await supabaseAdmin.from('despesas_operacionais').select('id,estado').eq('id',id).maybeSingle();
+    if(readError)return res.status(503).json({success:false,message:'Não foi possível consultar a despesa.'});
+    if(!current)return res.status(404).json({success:false,message:'Despesa não encontrada.'});
+    const allowed=(current.estado==='pendente'&&['aprovada','rejeitada'].includes(nextStatus))||(current.estado==='aprovada'&&nextStatus==='paga');
+    if(!allowed)return res.status(409).json({success:false,message:'A despesa já foi processada ou a transição não é permitida.'});
+    if(nextStatus==='rejeitada'&&reason.length<3)return res.status(400).json({success:false,message:'Indique o motivo da rejeição.'});
+    const actor=(req as any).adminUser?.id||null, now=new Date().toISOString(), update:Record<string,unknown>={estado:nextStatus,updated_at:now};
+    if(nextStatus==='aprovada'){update.aprovado_por=actor;update.approved_at=now;}
+    if(nextStatus==='rejeitada')update.motivo_rejeicao=reason;
+    if(nextStatus==='paga'){update.pago_por=actor;update.paid_at=now;}
+    const {data,error}=await supabaseAdmin.from('despesas_operacionais').update(update).eq('id',id).eq('estado',current.estado).select('id,estado,approved_at,paid_at').maybeSingle();
+    if(error)return res.status(503).json({success:false,message:'Não foi possível actualizar a despesa.'});
+    if(!data)return res.status(409).json({success:false,message:'A despesa foi alterada por outro administrador. Actualize a lista.'});
+    return res.json({success:true,data});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao actualizar despesa.'}); }
+});
+
 export default router;
