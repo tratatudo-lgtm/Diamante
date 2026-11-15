@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { io } from 'socket.io-client';
 import { useAuth } from '../../context/AuthContext';
 import { CheckCircle2, Clock3, ListTodo, Plus, RefreshCw, Search, ShieldCheck, UserRound, X, AlertTriangle, History, CalendarClock } from 'lucide-react';
 
@@ -56,6 +57,28 @@ export const AdminTasksPage: React.FC<{ onNavigate?: (path: string) => void }> =
   }, [api, isAdmin]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const employeeId = userSession?.id;
+    const token = sessionStorage.getItem('diamante_jwt_token');
+    if (!employeeId || !token) return;
+    const socket = io(window.location.origin, {
+      transports: ['websocket', 'polling'],
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 10,
+    });
+    socket.on('connect', () => {
+      socket.emit('join_room', employeeId);
+      if (isAdmin) socket.emit('join_room', 'admin');
+    });
+    socket.on('task:created', () => void load());
+    socket.on('task:updated', () => void load());
+    socket.on('notification:new', (event: { kind?: string }) => {
+      if (event?.kind === 'task_assigned' || event?.kind === 'task_updated') void load();
+    });
+    return () => { socket.removeAllListeners(); socket.disconnect(); };
+  }, [userSession?.id, isAdmin, load]);
 
   const visible = useMemo(() => tasks.filter(task =>
     (statusFilter === 'all' || task.status === statusFilter) &&
