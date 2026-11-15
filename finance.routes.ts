@@ -116,8 +116,7 @@ router.patch('/payments/:id/status', async (req: Request, res: Response) => {
 
     const { data, error } = await supabaseAdmin
       .from('transacoes_financeiras')
-      .update({ estado, updated_at: new Date().toISOString() })
-      .eq('id', id)
+      .update({ estado, updated_at: new Date().toISOString() })      .eq('id', id)
       .eq('estado', 'pendente')
       .select('id, estado')
       .maybeSingle();
@@ -233,7 +232,7 @@ router.get('/expenses/summary', async (req: Request, res: Response) => {
 router.get('/closings', async (req: Request, res: Response) => {
   try {
     const month=text(req.query.month,7);
-    if(month&&!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month))return res.status(400).json({success:false,message:'Mês inválido. Use AAAA-MM.'});
+    if(month&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))return res.status(400).json({success:false,message:'Mês inválido. Use AAAA-MM.'});
     let query=supabaseAdmin.from('fechos_financeiros_loja')
       .select('id,loja_id,periodo,estado,total_pago,total_pendente,total_rejeitado,quantidade_despesas,snapshot_categorias,fechado_por,fechado_em,reaberto_por,reaberto_em,motivo_reabertura,lojas(nome)')
       .order('periodo',{ascending:false}).limit(500);
@@ -257,9 +256,8 @@ router.get('/closings/:id/events', async (req: Request, res: Response) => {
 });
 
 router.post('/closings', async (req: Request, res: Response) => {
-  try {
-    const lojaId=text(req.body?.loja_id,64), month=text(req.body?.month,7);
-    if(!UUID_RE.test(lojaId)||!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month))
+  try {    const lojaId=text(req.body?.loja_id,64), month=text(req.body?.month,7);
+    if(!UUID_RE.test(lojaId)||!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))
       return res.status(400).json({success:false,message:'Loja ou mês inválido.'});
     const actor=(req as any).adminUser?.id;
     if(!actor||!UUID_RE.test(actor))return res.status(401).json({success:false,message:'Sessão administrativa inválida.'});
