@@ -156,6 +156,10 @@ router.post('/conversations/:id/messages', async (req: AuthenticatedRequest, res
   for (const recipient of recipients || []) {
     io?.to(recipient.funcionario_id).emit('chat:message', data);
   }
+  await notifyEmployees((recipients || []).map((recipient: any) => recipient.funcionario_id), {
+    kind: 'chat_message', entityId: id, title: 'Nova mensagem',
+    body: body.slice(0, 500),
+  }, employee(req).id);
   return res.status(201).json({ success: true, message: data });
 });
 
