@@ -11,7 +11,8 @@ type Employee = { id: string; nome_completo: string; role: string; loja_id: stri
 type Conversation = { id: string; tipo: 'directa' | 'grupo'; titulo: string | null; last_message_at: string; members: Array<{ funcionario_id: string; funcionarios?: Employee }>; unread_count: number };
 type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; funcionarios?: { nome_completo?: string; role?: string } };
 type Report = { id: string; reference: string; titulo: string; descricao: string; categoria: string; prioridade: string; estado: string; reporter_id: string; assigned_to: string | null; created_at: string; funcionarios?: { nome_completo?: string } };
-type Comment = { id: string; funcionario_id: string; comentario: string; created_at: string; funcionarios?: { nome_completo?: string } };\ntype ReportEvent = { id: string; actor_id: string; action: string; old_values: Record<string, unknown>; new_values: Record<string, unknown>; created_at: string; funcionarios?: { nome_completo?: string } };
+type Comment = { id: string; funcionario_id: string; comentario: string; created_at: string; funcionarios?: { nome_completo?: string } };
+type ReportEvent = { id: string; actor_id: string; action: string; old_values: Record<string, unknown>; new_values: Record<string, unknown>; created_at: string; funcionarios?: { nome_completo?: string } };
 
 const categories = [
   ['sistema', 'Sistema / aplicação'], ['equipamento', 'Equipamento'], ['caixa', 'Caixa / financeiro'],
@@ -33,7 +34,8 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
   const [reports, setReports] = useState<Report[]>([]);
   const [activeConversation, setActiveConversation] = useState<string>('');
   const [activeReport, setActiveReport] = useState<Report | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);\n  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);
   const [messageText, setMessageText] = useState('');
   const [commentText, setCommentText] = useState('');
   const [search, setSearch] = useState('');
@@ -86,7 +88,8 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
   const loadReport = useCallback(async (id: string) => {
     const result = await api('/reports/' + encodeURIComponent(id));
     setActiveReport(result.report);
-    setComments(result.comments || []);\n    setReportEvents(result.events || []);
+    setComments(result.comments || []);
+    setReportEvents(result.events || []);
   }, [api]);
 
   useEffect(() => {
