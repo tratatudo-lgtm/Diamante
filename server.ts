@@ -648,6 +648,15 @@ io.on('connection', (socket) => {
 let birthdayWorkerRunning = false;
 async function processBirthdayWhatsAppQueue(): Promise<void> {
   if (birthdayWorkerRunning) return;
+  const lisbonParts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Lisbon',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const lisbonHour = Number(lisbonParts.find((part) => part.type === 'hour')?.value ?? '0');
+  const sendFromHour = Math.max(0, Math.min(23, Number(process.env.BIRTHDAY_WHATSAPP_SEND_FROM_HOUR || 10)));
+  const sendUntilHour = Math.max(sendFromHour + 1, Math.min(24, Number(process.env.BIRTHDAY_WHATSAPP_SEND_UNTIL_HOUR || 20)));
+  if (!Number.isFinite(lisbonHour) || lisbonHour < sendFromHour || lisbonHour >= sendUntilHour) return;
   birthdayWorkerRunning = true;
   try {
     const { data: birthdays, error } = await supabaseAdmin.rpc('claim_birthday_whatsapp_messages');
@@ -692,7 +701,7 @@ async function processBirthdayWhatsAppQueue(): Promise<void> {
 }
 
 function startBirthdayWhatsAppWorker(): void {
-  // Executa ao arrancar e depois periodicamente; a chave única impede duplicados anuais.
+  // Verifica a fila de 15 em 15 minutos, apenas dentro do horário local configurado (por defeito 10h–20h).
   void processBirthdayWhatsAppQueue();
   setInterval(() => void processBirthdayWhatsAppQueue(), 15 * 60 * 1000);
 }
