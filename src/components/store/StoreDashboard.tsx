@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTransactionRealtime } from '../../hooks/useTransactionRealtime';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import type { Transacao, KpiLojaDiaria, RegistoPonto, Loja } from '../../types/database';
 import {
@@ -71,175 +70,81 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
 
   const funcionarioNome = userSession?.nome_completo || funcionario?.nome_completo || 'Operador';
 
-  // Buscar dados reais da loja respeitando RLS
+  // // Todos os dados operacionais são servidos pela API autenticada; a loja é resolvida no servidor.
   const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
-    if (!isSupabaseConfigured()) {
-      onShowToast('error', 'Supabase não está configurada. Os dados da loja não estão disponíveis.');
-      setIsLoading(false);
-      return;
-    }
     try {
-      const todayStr = new Date().toISOString().split('T')[0];
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const yesterdayStr = yesterday.toISOString().split('T')[0];
-
-      // 1. Informações da Loja — API autenticada; o servidor resolve a loja pelo funcionário.
-      if (lojaId) {
-        const token = sessionStorage.getItem('diamante_jwt_token');
-        if (!token) throw new Error('Sessão de API não encontrada.');
-        const response = await fetch('/api/store/profile', {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: AbortSignal.timeout(8000),
-        });
-        const payload = await response.json().catch(() => null);
-        if (!response.ok || !payload?.success || !payload?.loja) {
-          throw new Error(payload?.message || 'Não foi possível carregar os dados da loja.');
-        }
-        setLojaInfo(payload.loja as Loja);
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão de API não encontrada.');
+      const now = new Date();
+      const todayStr = format(now, 'yyyy-MM-dd');
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
+      const response = await fetch('/api/store/dashboard?today=' + todayStr + '&yesterday=' + yesterdayStr, {
+        headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+        signal: AbortSignal.timeout(10000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true) {
+        throw new Error(payload?.message || 'Não foi possível carregar os dados operacionais da loja.');
       }
 
-      // 2. Registos de Ponto Hoje (para determinar status Online / Offline)
-      const { data: pontosData, error: pontosError } = await supabase
-        .from('registos_ponto')
-        .select('*')
-        .order('timestamp', { ascending: false })
-        .limit(10);
-      if (pontosError) throw pontosError;
+      setLojaInfo(payload.loja as Loja);
+      setKpiHoje(payload.kpiHoje || null);
+      setKpiOntem(payload.kpiOntem || null);
+      setStockEmLojaCount(Number(payload.stockEmLojaCount) || 0);
 
-      if (pontosData && pontosData.length > 0) {
-        // Encontrar o ponto mais recente de hoje deste funcionário se disponível
-        const funcPontos = funcionarioId 
-          ? pontosData.filter((p) => p.funcionario_id === funcionarioId)
-          : pontosData;
-        const last = funcPontos[0] || pontosData[0];
-        setUltimoPonto(last);
-        setIsClockedIn(last.tipo === 'entrada');
-      } else {
-        setUltimoPonto(null);
-        setIsClockedIn(false);
-      }
+      const points = Array.isArray(payload.pontos) ? payload.pontos as RegistoPonto[] : [];
+      const lastPoint = points[0] || null;
+      setUltimoPonto(lastPoint);
+      setIsClockedIn(lastPoint?.tipo === 'entrada');
 
-      // 3. KPIs do Dia e Ontem
-      // RLS filtra automaticamente por loja_id
-      const { data: kpiHojeData, error: kpiHojeError } = await supabase
-        .from('kpi_loja_diaria')
-        .select('*')
-        .eq('data', todayStr)
-        .maybeSingle();
-      if (kpiHojeError) throw kpiHojeError;
-
-      const { data: kpiOntemData, error: kpiOntemError } = await supabase
-        .from('kpi_loja_diaria')
-        .select('*')
-        .eq('data', yesterdayStr)
-        .maybeSingle();
-      if (kpiOntemError) throw kpiOntemError;
-
-      setKpiHoje(kpiHojeData || null);
-      setKpiOntem(kpiOntemData || null);
-
-      // 4. Stock em Loja (COUNT inventario_fisico WHERE estado='em_loja')
-      // RLS já filtra por loja_id
-      const { count: stockCount, error: stockErr } = await supabase
-        .from('inventario_fisico')
-        .select('*', { count: 'exact', head: true })
-        .eq('estado', 'em_loja');
-
-      if (stockErr) throw stockErr;
-      if (stockCount !== null) {
-        setStockEmLojaCount(stockCount);
-      }
-
-      // 5. Feed de Atividades: Últimas transações + Registos de Ponto
-      const { data: txsData, error: txsError } = await supabase
-        .from('transacoes')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(5);
-      if (txsError) throw txsError;
-
+      const transactions = Array.isArray(payload.transacoes) ? payload.transacoes as Transacao[] : [];
       const combined: FeedActivity[] = [];
-
-      if (txsData) {
-        txsData.forEach((tx: Transacao) => {
-          let type: FeedActivity['type'] = 'transacao_pendente';
-          let title = `Nova compra registada (${tx.peso_gramas}g)`;
-          if (tx.estado === 'aprovado') {
-            type = 'transacao_aprovada';
-            title = `Compra #${tx.id.slice(0, 6)} aprovada pela sede`;
-          } else if (tx.estado === 'pago') {
-            type = 'transacao_paga';
-            title = `Transferência liquidada para cliente`;
-          } else if (tx.estado === 'pendente_aprovacao') {
-            type = 'transacao_pendente';
-            title = `Compra aguarda aprovação da sede`;
-          }
-
-          combined.push({
-            id: `tx-${tx.id}`,
-            timestamp: tx.created_at,
-            type,
-            title,
-            valor: tx.valor_final,
-          });
+      transactions.forEach((tx) => {
+        let type: FeedActivity['type'] = 'transacao_pendente';
+        let title = 'Nova compra registada (' + tx.peso_gramas + 'g)';
+        if (tx.estado === 'aprovado') {
+          type = 'transacao_aprovada';
+          title = 'Compra #' + tx.id.slice(0, 6) + ' aprovada pela sede';
+        } else if (tx.estado === 'pago') {
+          type = 'transacao_paga';
+          title = 'Transferência liquidada para cliente';
+        } else if (tx.estado === 'pendente_aprovacao') {
+          type = 'transacao_pendente';
+          title = 'Compra aguarda aprovação da sede';
+        }
+        combined.push({ id: 'tx-' + tx.id, timestamp: tx.created_at, type, title, valor: tx.valor_final });
+      });
+      points.slice(0, 3).forEach((point) => {
+        combined.push({
+          id: 'pt-' + point.id,
+          timestamp: point.timestamp,
+          type: point.tipo === 'entrada' ? 'ponto_entrada' : 'ponto_saida',
+          title: point.tipo === 'entrada' ? 'Clock In efectuado' : 'Clock Out efectuado',
         });
-      }
-
-      if (pontosData) {
-        pontosData.slice(0, 3).forEach((p: RegistoPonto) => {
-          combined.push({
-            id: `pt-${p.id}`,
-            timestamp: p.timestamp,
-            type: p.tipo === 'entrada' ? 'ponto_entrada' : 'ponto_saida',
-            title: p.tipo === 'entrada' ? 'Clock In efetuado' : 'Clock Out efetuado',
-          });
-        });
-      }
-
-      // Ordenar decrescente por data/hora
+      });
       combined.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
       setFeedActivities(combined.slice(0, 5));
     } catch (err) {
       console.warn('[Loja] Falha ao carregar dados do painel.');
-      onShowToast('error', 'Não foi possível sincronizar todos os dados operacionais.');
+      onShowToast('error', err instanceof Error ? err.message : 'Não foi possível sincronizar os dados operacionais.');
     } finally {
       setIsLoading(false);
     }
-  }, [lojaId, funcionarioId, onShowToast]);
+  }, [onShowToast]);
 
   useEffect(() => {
-    loadDashboardData();
-    if (!isSupabaseConfigured()) return;
-
-    // Subscrição em tempo real para transações e registos de ponto
-    const channel = supabase
-      .channel('store-dashboard-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'registos_ponto' }, () => {
-        loadDashboardData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_fisico' }, () => {
-        loadDashboardData();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    void loadDashboardData();
   }, [loadDashboardData]);
 
   // A sala é atribuída pelo servidor com base no JWT e na loja do funcionário.
-  useTransactionRealtime(loadDashboardData, lojaId ? `store:${lojaId}` : null);
+  useTransactionRealtime(loadDashboardData, lojaId ? 'store:' + lojaId : null);
 
-  // REQUISITO TÉCNICO: Geolocalização ao fazer Clock In/Out
+  // Registo de ponto exclusivamente pela API autenticada.
   const handleToggleClock = async () => {
-    if (!isSupabaseConfigured()) {
-      onShowToast('error', 'Supabase não está configurada. O registo de ponto não foi efetuado.');
-      return;
-    }
     setIsClocking(true);
     const novoTipo: 'entrada' | 'saida' = isClockedIn ? 'saida' : 'entrada';
-
     let localizacaoCoords: { lat: number; lng: number } | null = null;
 
     if (navigator.geolocation) {
@@ -250,50 +155,38 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
             timeout: 5000,
           });
         });
-        localizacaoCoords = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
-      } catch (geoErr) {
+        localizacaoCoords = { lat: position.coords.latitude, lng: position.coords.longitude };
+      } catch {
         console.warn('[Loja] Geolocalização não disponível.');
       }
     }
 
     try {
-      // Inserir em registos_ponto
-      const { data, error } = await supabase
-        .from('registos_ponto')
-        .insert({
-          funcionario_id: funcionarioId || undefined,
-          loja_id: lojaId || undefined,
-          tipo: novoTipo,
-          timestamp: new Date().toISOString(),
-          localizacao: localizacaoCoords,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
+      const response = await fetch('/api/store/clock', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ tipo: novoTipo, localizacao: localizacaoCoords }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true || !payload?.ponto) {
+        throw new Error(payload?.message || 'Não foi possível registar o ponto.');
+      }
 
       setIsClockedIn(novoTipo === 'entrada');
-      setUltimoPonto(data);
-      onShowToast(
-        'success',
-        novoTipo === 'entrada'
-          ? 'Clock In registado com sucesso!'
-          : 'Clock Out registado com sucesso!',
-        'Registo de Ponto'
-      );
-      loadDashboardData();
-    } catch (err: unknown) {
-      console.warn('[Loja] Falha ao registar ponto.');
-      onShowToast('error', 'Não foi possível registar o ponto. Tente novamente.');
+      setUltimoPonto(payload.ponto as RegistoPonto);
+      onShowToast('success', novoTipo === 'entrada' ? 'Clock In registado com sucesso!' : 'Clock Out registado com sucesso!', 'Registo de Ponto');
+      void loadDashboardData();
+    } catch (err) {
+      onShowToast('error', err instanceof Error ? err.message : 'Não foi possível registar o ponto. Tente novamente.');
     } finally {
       setIsClocking(false);
     }
   };
 
-  // Submissão do Modal de Alerta à Sede
+  Submissão do Modal de Alerta à Sede
   const handleSendIncident = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!incidentDescription.trim()) return;
