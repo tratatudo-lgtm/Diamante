@@ -45,6 +45,7 @@ function AppRouter() {
         p === '/admin/transacoes-pendentes' ||
         p === '/admin/logs' ||
         p === '/collaboration' ||
+        p === '/reportar-situacao' ||
         p === '/logs' ||
         p === '/auditoria' ||
         p === '/loja-atual' ||
@@ -109,7 +110,7 @@ function AppRouter() {
         }
       } else {
         // Se não estiver autenticado e tentar aceder a rota protegida
-        if (isAdminRoute || currentPath === '/loja-atual' || currentPath === '/collaboration') {
+        if (isAdminRoute || currentPath === '/loja-atual' || currentPath === '/collaboration' || currentPath === '/reportar-situacao') {
           navigate('/login');
         }
       }
@@ -147,10 +148,11 @@ function AppRouter() {
     return <StoreOperatorView onNavigate={navigate} />;
   }
 
-  if (currentPath === '/collaboration') {
+  if (currentPath === '/collaboration' || currentPath === '/reportar-situacao') {
+    const initialSection = currentPath === '/reportar-situacao' ? 'reports' : 'chat';
     return isAdmin
-      ? <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><CollaborationWorkspace /></AdminPageLayout>
-      : <CollaborationWorkspace />;
+      ? <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><CollaborationWorkspace initialSection={initialSection} /></AdminPageLayout>
+      : <CollaborationWorkspace initialSection={initialSection} />;
   }
 
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
