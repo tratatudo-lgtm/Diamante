@@ -400,15 +400,17 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
               Cálculo Automático de Avaliação
             </span>
             <span className="text-[11px] text-gray-400 font-mono">
-              Spot: {spotPrice.toFixed(2)} €/g · Margem: {margemPercent}%
+              Referência interna: {spotPrice.toFixed(2)} €/g · Margem: {margemPercent}%
             </span>
           </div>
+
+          <p className="text-[11px] leading-relaxed text-amber-200/80 bg-amber-950/30 border border-amber-900/50 rounded-lg px-3 py-2">Valores de referência internos, não constituem cotação de mercado em tempo real. Confirme e actualize a cotação aplicável antes de apresentar uma proposta ao cliente.</p>
 
           <div className="grid grid-cols-2 gap-3 pt-2 text-xs">
             <div className="p-3 rounded-lg bg-gray-950/60 border border-gray-800">
               <span className="text-[11px] text-gray-400">Fórmula de Avaliação:</span>
               <p className="font-mono text-gray-300 text-[11px] mt-0.5">
-                {pesoNum > 0 ? `${pesoNum.toFixed(2)}g × ${spotPrice}€ × (1 - 0.12)` : 'Aguardando peso...'}
+                {pesoNum > 0 ? `${pesoNum.toFixed(2)}g × ${spotPrice.toFixed(2)}€ × (1 - ${margemPercent / 100})` : 'Aguardando peso...'}
               </p>
             </div>
 
