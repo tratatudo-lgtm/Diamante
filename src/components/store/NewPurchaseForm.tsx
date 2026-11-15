@@ -86,7 +86,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
     return () => { active = false; };
   }, []);
 
-  const getToque = (value: string) => Number(value.match(/(\\d{3})\\s*‰/)?.[1] || 0);
+  const getToque = (value: string) => Number(value.match(/(\d{3})\s*‰/)?.[1] || 0);
   const selectedPricing = purchaseSettings.find((item) => item.toque_millesimos === getToque(metal));
   const handleMetalChange = (novoMetal: string) => {
     setMetal(novoMetal);
@@ -112,8 +112,8 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
 
   // Cálculo automático: Valor Sugerido = (peso * cotacao_spot * (1 - margem/100))
   const pesoNum = parseFloat(pesoGramas) || 0;
-  const valorSugerido = pesoNum > 0
-    ? Math.max(0, pesoNum * spotPrice * (1 - margemPercent / 100))
+  const valorSugerido = pesoNum > 0 && selectedPricing
+    ? Math.max(0, pesoNum * selectedPricing.preco_compra_grama)
     : 0;
 
   // Valor a aplicar: ou o manual se fornecido, ou o sugerido
