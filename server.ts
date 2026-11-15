@@ -15,6 +15,7 @@ import clientsRouter from './clients.routes';
 import collaborationRouter from './collaboration.routes';
 import tasksRouter from './tasks.routes';
 import goalsRouter from './goals.routes';
+import opportunitiesRouter from './opportunities.routes';
 
 
 import { createServer } from 'http';
@@ -147,6 +148,7 @@ app.use('/api/clients', clientsRouter);
 app.use('/api/collaboration', collaborationRouter);
 app.use('/api/tasks', tasksRouter);
 app.use('/api/goals', goalsRouter);
+app.use('/api/admin/opportunities', opportunitiesRouter);
 
 // Perfil da loja associada à sessão: nunca aceitar loja_id enviado pelo cliente.
 app.get('/api/store/profile', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
