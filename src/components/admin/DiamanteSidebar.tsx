@@ -18,6 +18,8 @@ import {
   Terminal,
   ChevronRight,
   Command,
+  MessageCircle,
+  Flag,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -43,6 +45,7 @@ export const menuItems: MenuItem[] = [
   { id: 'clients', label: 'Clientes & Fornecedores', path: '/clients', icon: UserCheck, badge: null },
   { id: 'settings', label: 'Configurações', path: '/settings', icon: SlidersHorizontal, badge: null },
   { id: 'logs', label: 'Logs & Auditoria', path: '/admin/logs', icon: Terminal, badge: null },
+  { id: 'messenger', label: 'Messenger & Ocorrências', path: '/collaboration', icon: MessageCircle, badge: 'NOVO' },
 ];
 
 export const navItems = menuItems;
