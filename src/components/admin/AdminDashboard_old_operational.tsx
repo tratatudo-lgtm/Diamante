@@ -34,7 +34,9 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
-type OperationalIncident = { id: string; reference: string; titulo: string; categoria: string; prioridade: string; estado: string; created_at: string; loja_id: string | null };\n\ninterface AdminDashboardProps {
+type OperationalIncident = { id: string; reference: string; titulo: string; categoria: string; prioridade: string; estado: string; created_at: string; loja_id: string | null };
+
+interface AdminDashboardProps {
   onNavigate: (path: string) => void;
 }
 
@@ -64,7 +66,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [isOnline, setIsOnline] = useState(true);
   const [recentTxs, setRecentTxs] = useState<Transacao[]>([]);
   const [totalTransactions, setTotalTransactions] = useState(0);
-  const [dataError, setDataError] = useState<string | null>(null);\n  const [incidents, setIncidents] = useState<OperationalIncident[]>([]);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [incidents, setIncidents] = useState<OperationalIncident[]>([]);
 
   const addToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
     const newToast: ToastMessage = {
