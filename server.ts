@@ -657,6 +657,10 @@ async function processBirthdayWhatsAppQueue(): Promise<void> {
   const sendFromHour = Math.max(0, Math.min(23, Number(process.env.BIRTHDAY_WHATSAPP_SEND_FROM_HOUR || 10)));
   const sendUntilHour = Math.max(sendFromHour + 1, Math.min(24, Number(process.env.BIRTHDAY_WHATSAPP_SEND_UNTIL_HOUR || 20)));
   if (!Number.isFinite(lisbonHour) || lisbonHour < sendFromHour || lisbonHour >= sendUntilHour) return;
+  if (!process.env.EVOLUTION_API_URL || !process.env.EVOLUTION_API_KEY || !process.env.EVOLUTION_INSTANCE) {
+    console.warn('[Birthday WhatsApp] Integração Evolution API não configurada; fila não consumida.');
+    return;
+  }
   birthdayWorkerRunning = true;
   try {
     const { data: birthdays, error } = await supabaseAdmin.rpc('claim_birthday_whatsapp_messages');
