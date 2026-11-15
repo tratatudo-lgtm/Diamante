@@ -37,6 +37,52 @@ function getLisbonDayRange(now = new Date()): { start: string; end: string } {
   };
 }
 
+
+router.get('/financial-summary', verifyAdmin, async (req, res) => {
+  try {
+    const month = typeof req.query.month === 'string' ? req.query.month : new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit' }).format(new Date()).slice(0, 7);
+    if (!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      return res.status(400).json({ success: false, error: 'Mês inválido. Use AAAA-MM.' });
+    }
+    const [year, monthNumber] = month.split('-').map(Number);
+    const start = `${month}-01`;
+    const end = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 10);
+    const rows: Array<{ loja_id: string; categoria: string; valor: number | string; estado: string }> = [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabase.from('despesas_operacionais')
+        .select('loja_id,categoria,valor,estado')
+        .gte('data_despesa', start).lt('data_despesa', end)
+        .order('data_despesa', { ascending: true }).range(offset, offset + pageSize - 1);
+      if (error) {
+        console.error('[WarRoom Finance] Falha ao consultar despesas mensais.');
+        return res.status(503).json({ success: false, error: 'Resumo financeiro temporariamente indisponível.' });
+      }
+      rows.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+    const stores = new Map<string, { loja_id: string; paid: number; pending: number; rejected: number; byCategory: Record<string, number> }>();
+    let paid = 0, pending = 0, rejected = 0;
+    for (const row of rows) {
+      const amount = Number(row.valor) || 0;
+      if (!stores.has(row.loja_id)) stores.set(row.loja_id, { loja_id: row.loja_id, paid: 0, pending: 0, rejected: 0, byCategory: {} });
+      const store = stores.get(row.loja_id)!;
+      if (row.estado === 'paga') {
+        paid += amount; store.paid += amount;
+        store.byCategory[row.categoria] = (store.byCategory[row.categoria] || 0) + amount;
+      } else if (row.estado === 'pendente' || row.estado === 'aprovada') {
+        pending += amount; store.pending += amount;
+      } else if (row.estado === 'rejeitada') {
+        rejected += amount; store.rejected += amount;
+      }
+    }
+    return res.json({ success: true, month, totals: { paid, pending, rejected }, stores: Array.from(stores.values()).sort((a, b) => b.paid - a.paid) });
+  } catch {
+    console.error('[WarRoom Finance] Erro inesperado no resumo mensal.');
+    return res.status(500).json({ success: false, error: 'Erro ao calcular resumo financeiro.' });
+  }
+});
+
 router.get('/kpis', verifyAdmin, async (req, res) => {
   try {
     const dayRange = getLisbonDayRange();
