@@ -12,7 +12,8 @@ type Conversation = { id: string; tipo: 'directa' | 'grupo'; titulo: string | nu
 type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; funcionarios?: { nome_completo?: string; role?: string } };
 type Report = { id: string; reference: string; titulo: string; descricao: string; categoria: string; prioridade: string; estado: string; reporter_id: string; assigned_to: string | null; created_at: string; funcionarios?: { nome_completo?: string } };
 type Comment = { id: string; funcionario_id: string; comentario: string; created_at: string; funcionarios?: { nome_completo?: string } };
-type Attachment = { id: string; original_name: string; mime_type: string; size_bytes: number; created_at: string };\ntype Notification = { id: string; kind: string; entity_id: string; title: string; body: string; read_at: string | null; created_at: string };
+type Attachment = { id: string; original_name: string; mime_type: string; size_bytes: number; created_at: string };
+type Notification = { id: string; kind: string; entity_id: string; title: string; body: string; read_at: string | null; created_at: string };
 type ReportEvent = { id: string; actor_id: string; action: string; old_values: Record<string, unknown>; new_values: Record<string, unknown>; created_at: string; funcionarios?: { nome_completo?: string } };
 
 const categories = [
@@ -36,7 +37,9 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
   const [activeConversation, setActiveConversation] = useState<string>('');
   const [activeReport, setActiveReport] = useState<Report | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);\n  const [attachments, setAttachments] = useState<Attachment[]>([]);\n  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -98,7 +101,8 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
     const result = await api('/reports/' + encodeURIComponent(id));
     setActiveReport(result.report);
     setComments(result.comments || []);
-    setReportEvents(result.events || []);\n    setAttachments(result.attachments || []);
+    setReportEvents(result.events || []);
+    setAttachments(result.attachments || []);
   }, [api]);
 
   useEffect(() => {
