@@ -208,7 +208,14 @@ router.patch('/reports/:id', async (req: AuthenticatedRequest, res: Response) =>
   const update: Record<string, any> = {};
   if (typeof req.body?.estado === 'string' && statuses.includes(req.body.estado)) update.estado = req.body.estado;
   if (typeof req.body?.prioridade === 'string' && priorities.includes(req.body.prioridade)) update.prioridade = req.body.prioridade;
-  if (req.body?.assigned_to === null || typeof req.body?.assigned_to === 'string') update.assigned_to = req.body.assigned_to;
+  if (typeof req.body?.assigned_to === 'string') {
+    const { data: assignee, error: assigneeError } = await supabaseAdmin.from('funcionarios')
+      .select('id').eq('id', req.body.assigned_to).eq('ativo', true).maybeSingle();
+    if (assigneeError) return fail(res, 503, 'Não foi possível validar o responsável seleccionado.');
+    if (!assignee) return fail(res, 400, 'O responsável seleccionado não existe ou não está activo.');
+    update.assigned_to = assignee.id;
+  }
+  if (req.body?.assigned_to === null) update.assigned_to = null;
   if (!Object.keys(update).length) return fail(res, 400, 'Nenhuma alteração válida indicada.');
   update.updated_at = new Date().toISOString();
   if (update.estado === 'resolvido' || update.estado === 'fechado') update.resolved_at = new Date().toISOString();
