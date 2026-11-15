@@ -23,6 +23,7 @@ import { CRMWorkspace } from './components/clients/CRMWorkspace';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { LogAuditPage } from './components/admin/LogAuditPage';
 import { CollaborationWorkspace } from './components/collaboration/CollaborationWorkspace';
+import { AdminTasksPage } from './components/admin/AdminTasksPage';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
@@ -45,6 +46,8 @@ function AppRouter() {
         p === '/admin/transacoes-pendentes' ||
         p === '/admin/logs' ||
         p === '/collaboration' ||
+        p === '/tasks' ||
+        p === '/admin/tasks' ||
         p === '/reportar-situacao' ||
         p === '/logs' ||
         p === '/auditoria' ||
@@ -110,7 +113,7 @@ function AppRouter() {
         }
       } else {
         // Se não estiver autenticado e tentar aceder a rota protegida
-        if (isAdminRoute || currentPath === '/loja-atual' || currentPath === '/collaboration' || currentPath === '/reportar-situacao') {
+        if (isAdminRoute || currentPath === '/loja-atual' || currentPath === '/collaboration' || currentPath === '/reportar-situacao' || currentPath === '/tasks') {
           navigate('/login');
         }
       }
@@ -146,6 +149,12 @@ function AppRouter() {
   // 4. Sala de Operações de Loja
   if (currentPath === '/loja-atual') {
     return <StoreOperatorView onNavigate={navigate} />;
+  }
+
+  if (currentPath === '/tasks' || currentPath === '/admin/tasks') {
+    return isAdmin
+      ? <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><AdminTasksPage onNavigate={navigate} /></AdminPageLayout>
+      : <AdminTasksPage onNavigate={navigate} />;
   }
 
   if (currentPath === '/collaboration' || currentPath === '/reportar-situacao') {
