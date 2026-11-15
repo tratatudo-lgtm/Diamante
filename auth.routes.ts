@@ -94,6 +94,33 @@ authRouter.post('/send-otp', handleRequestOtp);
    2. ENDPOINT: VALIDAÇÃO DE OTP WHATSAPP (/auth/verify-otp)
    REGRA: Role e permissões extraídas diretamente da base de dados Supabase
    ========================================================================= */
+authRouter.post('/change-password', verifyAuth, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const employee = req.authenticatedUser;
+  const password = req.body?.password;
+  if (!employee?.ativo) {
+    res.status(403).json({ success: false, message: 'A conta não está autorizada a alterar credenciais.' });
+    return;
+  }
+  if (typeof password !== 'string' || password.length < 8 || password.length > 72 ||
+      password.trim().length < 8) {
+    res.status(400).json({ success: false, message: 'A palavra-passe deve ter entre 8 e 72 caracteres e não pode ser apenas espaços.' });
+    return;
+  }
+
+  try {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(employee.id, { password });
+    if (error) {
+      console.error('[AUTH PASSWORD] O fornecedor recusou a alteração da palavra-passe.');
+      res.status(400).json({ success: false, message: 'Não foi possível actualizar a palavra-passe. Verifique os requisitos de segurança.' });
+      return;
+    }
+    res.status(200).json({ success: true, message: 'Palavra-passe alterada com sucesso.' });
+  } catch {
+    console.error('[AUTH PASSWORD] Erro interno ao alterar credenciais.');
+    res.status(500).json({ success: false, message: 'Erro interno ao alterar a palavra-passe.' });
+  }
+});
+
 authRouter.get('/session', verifyAuth, (req: AuthenticatedRequest, res: Response) => {
   res.status(200).json({ success: true, user: req.authenticatedUser });
 });
