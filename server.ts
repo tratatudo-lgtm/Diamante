@@ -549,7 +549,7 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('ouro_fundicao_lotes')
-      .select('id, codigo_lote, estado, quantidade_pecas, peso_entrada_gramas, peso_recuperado_gramas, toque_milesimos, ouro_fino_recuperado_gramas, perda_processo_gramas, rendimento_percentagem, criado_em, concluido_em, observacoes')
+      .select('id, codigo_lote, estado, quantidade_pecas, peso_entrada_gramas, custo_aquisicao_total, peso_recuperado_gramas, toque_milesimos, ouro_fino_recuperado_gramas, perda_processo_gramas, rendimento_percentagem, criado_em, concluido_em, observacoes')
       .order('criado_em', { ascending: false })
       .limit(200);
     if (error) {
@@ -560,7 +560,7 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
     const { data: pieces, error: piecesError } = batchIds.length
       ? await supabaseAdmin
           .from('ouro_fundicao_lote_pecas')
-          .select('lote_id, inventario_id, transacao_origem_id, codigo_peca, peso_recebido_gramas')
+          .select('lote_id, inventario_id, transacao_origem_id, codigo_peca, peso_recebido_gramas, custo_aquisicao')
           .in('lote_id', batchIds)
       : { data: [], error: null };
     if (piecesError) {
