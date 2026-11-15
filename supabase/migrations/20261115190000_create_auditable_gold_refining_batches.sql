@@ -106,7 +106,8 @@ BEGIN
   WHERE id = ANY(p_inventario_ids)
     AND estado = 'recebido_sede'
     AND peso_recebido_gramas IS NOT NULL
-    AND peso_recebido_gramas > 0;
+    AND peso_recebido_gramas > 0
+    AND metal ILIKE 'Ouro%';
 
   IF v_count <> cardinality(p_inventario_ids) OR v_weight <= 0 THEN
     RAISE EXCEPTION 'Todas as peças têm de estar recebidas e pesadas na sede.' USING ERRCODE = '23514';
@@ -125,12 +126,14 @@ BEGIN
   SELECT v_lote.id, id, transacao_origem_id, codigo_unico, peso_recebido_gramas
   FROM public.inventario_fisico
   WHERE id = ANY(p_inventario_ids)
-    AND estado = 'recebido_sede';
+    AND estado = 'recebido_sede'
+    AND metal ILIKE 'Ouro%';
 
   UPDATE public.inventario_fisico
   SET estado = 'em_lote_fundicao'
   WHERE id = ANY(p_inventario_ids)
-    AND estado = 'recebido_sede';
+    AND estado = 'recebido_sede'
+    AND metal ILIKE 'Ouro%';
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Não foi possível reservar as peças para o lote.' USING ERRCODE = '40001';
@@ -178,7 +181,7 @@ BEGIN
      OR p_peso_recuperado_gramas <= 0
      OR p_peso_recuperado_gramas > v_lote.peso_entrada_gramas
      OR p_toque_milesimos IS NULL
-     OR p_toque_milesimos < 0
+     OR p_toque_milesimos <= 0
      OR p_toque_milesimos > 1000 THEN
     RAISE EXCEPTION 'Peso recuperado ou toque inválido.' USING ERRCODE = '22023';
   END IF;
