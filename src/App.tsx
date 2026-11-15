@@ -27,6 +27,7 @@ import { AdminTasksPage } from './components/admin/AdminTasksPage';
 import { AdminGoalsPage } from './components/admin/AdminGoalsPage';
 import { CommercialOpportunitiesPage } from './components/admin/CommercialOpportunitiesPage';
 import { ExpansionSitesPage } from './components/admin/ExpansionSitesPage';
+import { GoldReceivingPage } from './components/admin/GoldReceivingPage';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
@@ -46,6 +47,7 @@ function AppRouter() {
         p === '/admin/funcionarios' ||
         p === '/admin/config' ||
         p === '/admin/transacoes' ||
+        p === '/admin/recepcao-ouro' ||
         p === '/admin/transacoes-pendentes' ||
         p === '/admin/logs' ||
         p === '/collaboration' ||
@@ -189,6 +191,9 @@ function AppRouter() {
 
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
   if (isAdmin) {
+    if (currentPath === '/admin/recepcao-ouro') {
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><GoldReceivingPage /></AdminPageLayout>;
+    }
     if (currentPath === '/admin/transacoes') {
       return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><AdminTransactionsPage onNavigate={navigate} /></AdminPageLayout>;
     }
