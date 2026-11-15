@@ -65,7 +65,7 @@ router.get('/financial-summary', verifyAdmin, async (req, res) => {
     let paid = 0, pending = 0, rejected = 0;
     for (const row of rows) {
       const amount = Number(row.valor) || 0;
-      if (!stores.has(row.loja_id)) stores.set(row.loja_id, { loja_id: row.loja_id, nome: row.lojas?.nome || 'Loja sem nome', paid: 0, pending: 0, rejected: 0, byCategory: {} });
+      if (!stores.has(row.loja_id)) stores.set(row.loja_id, { loja_id: row.loja_id, nome: row.lojas?.[0]?.nome || 'Loja sem nome', paid: 0, pending: 0, rejected: 0, byCategory: {} });
       const store = stores.get(row.loja_id)!;
       if (row.estado === 'paga') {
         paid += amount; store.paid += amount;
