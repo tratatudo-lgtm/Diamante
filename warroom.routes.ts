@@ -86,6 +86,16 @@ router.get('/financial-summary', verifyAdmin, async (req, res) => {
 router.get('/kpis', verifyAdmin, async (req, res) => {
   try {
     const dayRange = getLisbonDayRange();
+    const [pendentesRes, lojasRes, totalLojasRes] = await Promise.all([
+      supabase.from('transacoes').select('id', { count: 'exact', head: true }).eq('estado', 'pendente_aprovacao'),
+      supabase.from('lojas').select('id', { count: 'exact', head: true }).eq('ativo', true),
+      supabase.from('lojas').select('id', { count: 'exact', head: true }),
+    ]);
+    if (pendentesRes.error || lojasRes.error || totalLojasRes.error ||
+        pendentesRes.count === null || lojasRes.count === null || totalLojasRes.count === null) {
+      console.error('[WarRoom KPIs] Falha ao consultar pendentes ou lojas.');
+      return res.status(503).json({ error: 'Indicadores temporariamente indisponíveis.' });
+    }
     
     // Paginação completa: não truncar o volume/peso quando há mais de 1.000 transacções.
     const pageSize = 500;
