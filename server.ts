@@ -546,8 +546,33 @@ io.use(async (socket, next) => {
   }
 });
 
+const onlineEmployeeConnections = new Map<string, number>();
+
 io.on('connection', (socket) => {
   console.log('[Realtime] Ligação autenticada estabelecida.');
+  const connectedEmployee = socket.data.employee as { id: string };
+  const connectedEmployeeId = connectedEmployee.id;
+  const nextConnectionCount = (onlineEmployeeConnections.get(connectedEmployeeId) || 0) + 1;
+  onlineEmployeeConnections.set(connectedEmployeeId, nextConnectionCount);
+  let presencePeers: string[] = [];
+  void (async () => {
+    const { data: memberships, error: membershipError } = await supabaseAdmin
+      .from('collab_conversation_members').select('conversation_id')
+      .eq('funcionario_id', connectedEmployeeId);
+    if (membershipError || !memberships?.length) return;
+    const conversationIds = [...new Set(memberships.map((item: any) => item.conversation_id))];
+    const { data: members, error: peersError } = await supabaseAdmin
+      .from('collab_conversation_members').select('funcionario_id')
+      .in('conversation_id', conversationIds);
+    if (peersError) return;
+    presencePeers = [...new Set((members || []).map((item: any) => item.funcionario_id)
+      .filter((id: string) => id && id !== connectedEmployeeId))];
+    const onlinePeers = presencePeers.filter((id) => (onlineEmployeeConnections.get(id) || 0) > 0);
+    socket.emit('collab:presence_snapshot', { online: onlinePeers });
+    for (const peerId of presencePeers) {
+      io.to(peerId).emit('collab:presence', { employeeId: connectedEmployeeId, online: true });
+    }
+  })().catch(() => console.warn('[Realtime] Não foi possível sincronizar presença da equipa.'));
 
   const refreshSocketEmployee = async (): Promise<boolean> => {
     const tokenExpiresAt = socket.data.tokenExpiresAt;
@@ -656,6 +681,15 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', (reason) => {
     clearInterval(permissionRefresh);
+    const remainingConnections = Math.max(0, (onlineEmployeeConnections.get(connectedEmployeeId) || 1) - 1);
+    if (remainingConnections === 0) {
+      onlineEmployeeConnections.delete(connectedEmployeeId);
+      for (const peerId of presencePeers) {
+        io.to(peerId).emit('collab:presence', { employeeId: connectedEmployeeId, online: false });
+      }
+    } else {
+      onlineEmployeeConnections.set(connectedEmployeeId, remainingConnections);
+    }
     console.log(`[Realtime] Ligação terminada. Motivo: ${reason}.`);
   });
 });
