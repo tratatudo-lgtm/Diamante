@@ -20,6 +20,7 @@ import {
   Command,
   MessageCircle,
   Flag,
+  ListTodo,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -46,6 +47,7 @@ export const menuItems: MenuItem[] = [
   { id: 'settings', label: 'Configurações', path: '/settings', icon: SlidersHorizontal, badge: null },
   { id: 'logs', label: 'Logs & Auditoria', path: '/admin/logs', icon: Terminal, badge: null },
   { id: 'messenger', label: 'Messenger & Ocorrências', path: '/collaboration', icon: MessageCircle, badge: 'NOVO' },
+  { id: 'tasks', label: 'Gestão de Tarefas', path: '/tasks', icon: ListTodo, badge: 'OPS' },
 ];
 
 export const navItems = menuItems;
@@ -81,7 +83,8 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
     (path === '/admin/transacoes' && ['/admin/transacoes-pendentes'].includes(currentPath)) ||
     (path === '/clients' && ['/clientes', '/fornecedores'].includes(currentPath)) ||
     (path === '/settings' && ['/admin/config', '/configuracoes'].includes(currentPath)) ||
-    (path === '/admin/logs' && ['/logs', '/auditoria'].includes(currentPath));
+    (path === '/admin/logs' && ['/logs', '/auditoria'].includes(currentPath)) ||
+    (path === '/tasks' && currentPath === '/admin/tasks');
 
   return (
     <>
