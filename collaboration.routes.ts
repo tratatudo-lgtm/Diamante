@@ -175,6 +175,14 @@ router.post('/reports', async (req: AuthenticatedRequest, res: Response) => {
     reporter_id: user.id, loja_id: user.loja_id,
   }).select('id, reference, titulo, descricao, categoria, prioridade, estado, reporter_id, loja_id, assigned_to, created_at, updated_at').single();
   if (error || !data) return fail(res, 503, 'Não foi possível registar a ocorrência.');
+  const { error: eventError } = await supabaseAdmin.from('collab_report_events').insert({
+    report_id: data.id, actor_id: user.id, action: 'created', old_values: {},
+    new_values: { titulo: data.titulo, categoria: data.categoria, prioridade: data.prioridade, estado: data.estado },
+  });
+  if (eventError) {
+    await supabaseAdmin.from('collab_reports').delete().eq('id', data.id);
+    return fail(res, 503, 'Não foi possível registar a auditoria da ocorrência.');
+  }
   const io = (globalThis as any).io;
   io?.to('admin').emit('report:created', { id: data.id, reference: data.reference, prioridade: data.prioridade });
   if (user.loja_id) io?.to('store:' + user.loja_id).emit('report:created', { id: data.id, reference: data.reference });
