@@ -266,10 +266,13 @@ export const EmployeeManagement: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  // Submeter Novo Funcionário (Supabase)
+  // Submeter novo funcionário através da API administrativa protegida.
   const handleSaveCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nome.trim() || !formData.nif.trim()) return;
+    if (!formData.nome.trim() || !formData.email.trim()) {
+      setActionError('Nome e email são obrigatórios para criar a conta e enviar o convite.');
+      return;
+    }
     const storeObj = storeOptions.find((store) => store.id === formData.lojaId);
     try {
       await createEmployee({ ...formData, lojaNome: storeObj?.nome || '', transacoesMes: 0 });
@@ -279,7 +282,7 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
-  // Submeter Edição (Supabase)
+  // Submeter edição através da API administrativa protegida.
   const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEmployee) return;
@@ -294,7 +297,7 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
-  // Eliminar Funcionário (Supabase)
+  // Desactivar funcionário através da API protegida, preservando o histórico.
   const handleDeleteEmployee = async (id: string) => {
     try {
       await deleteEmployee(id);
@@ -1111,9 +1114,9 @@ export const EmployeeManagement: React.FC = () => {
                 <Trash2 className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="text-base font-bold text-white">Eliminar Colaborador?</h4>
+                <h4 className="text-base font-bold text-white">Desactivar colaborador?</h4>
                 <p className="text-xs text-slate-400 mt-1">
-                  Tem a certeza que deseja remover este registo de funcionário da rede? Esta ação é irreversível.
+                  A conta ficará inactiva e perderá o acesso ao sistema. O registo e o histórico serão preservados.
                 </p>
               </div>
               <div className="flex justify-center gap-3 pt-2">
@@ -1127,7 +1130,7 @@ export const EmployeeManagement: React.FC = () => {
                   onClick={() => handleDeleteEmployee(isDeletingId)}
                   className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow-lg shadow-rose-900/30 cursor-pointer"
                 >
-                  Confirmar Eliminação
+                  Confirmar Desactivação
                 </button>
               </div>
             </div>
