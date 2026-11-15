@@ -61,16 +61,8 @@ export const StoreHeatMap: React.FC<StoreHeatMapProps> = ({
     );
 
     if (validLojas.length === 0) {
-      // Default Portuguese mainland viewport coords [lat: 37 to 42.2, lon: -9.5 to -6.2]
-      return {
-        hasCoords: false,
-        items: lojas.map((l, index) => ({
-          loja: l,
-          // Arranged evenly in a clean schematic layout
-          x: 20 + ((index * 35) % 70),
-          y: 20 + Math.floor(index / 2) * 28,
-        })),
-      };
+      // Não inventar posições geográficas quando a loja não tem coordenadas reais.
+      return { hasCoords: false, items: [] as Array<{ loja: LojaComKpi; x: number; y: number }> };
     }
 
     const lats = validLojas.map((l) => Number(l.latitude));
@@ -184,6 +176,13 @@ export const StoreHeatMap: React.FC<StoreHeatMapProps> = ({
             <p className="text-xs text-gray-500 mt-1 max-w-xs">
               A tabela de lojas está vazia na base de dados Supabase.
             </p>
+          </div>
+        ) : viewMode === 'map' && !mapCoordinates.hasCoords ? (
+          <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+            <MapPin className="w-10 h-10 text-amber-400 mb-3" />
+            <p className="text-sm font-semibold text-gray-200">Mapa geográfico indisponível</p>
+            <p className="text-xs text-gray-400 mt-2 max-w-sm">As lojas ainda não têm coordenadas GPS válidas. A localização não será simulada. Consulte a rede em grelha ou complete as coordenadas na ficha de cada loja.</p>
+            <button onClick={() => setViewMode('grid')} className="mt-4 rounded-lg border border-[#D4AF37]/40 px-4 py-2 text-xs font-semibold text-[#D4AF37] hover:bg-[#D4AF37]/10">Ver lojas em grelha</button>
           </div>
         ) : viewMode === 'map' ? (
           <div className="relative w-full h-full p-4 flex items-center justify-center">
