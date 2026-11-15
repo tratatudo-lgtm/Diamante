@@ -46,7 +46,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
     pendentesHoje: 0,
     pendentesOntem: 0,
     pesoHoje: 0,
-    pesoOntem,
+    pesoOntem: 0,
     lojasAtivas: 0,
     totalLojas: 0,
   });
@@ -149,7 +149,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         pendentesHoje,
         pendentesOntem,
         pesoHoje,
-        pesoOntem: 0,
+        pesoOntem,
         lojasAtivas: activeStores,
         totalLojas: rawLojas.length,
       });
