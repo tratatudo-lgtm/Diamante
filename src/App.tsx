@@ -22,6 +22,7 @@ import { ClientManagement } from './components/clients/ClientManagement';
 import { CRMWorkspace } from './components/clients/CRMWorkspace';
 import { SettingsPage } from './components/settings/SettingsPage';
 import { LogAuditPage } from './components/admin/LogAuditPage';
+import { CollaborationWorkspace } from './components/collaboration/CollaborationWorkspace';
 import { Loader2 } from 'lucide-react';
 
 function AppRouter() {
@@ -43,6 +44,7 @@ function AppRouter() {
         p === '/admin/transacoes' ||
         p === '/admin/transacoes-pendentes' ||
         p === '/admin/logs' ||
+        p === '/collaboration' ||
         p === '/logs' ||
         p === '/auditoria' ||
         p === '/loja-atual' ||
@@ -107,7 +109,7 @@ function AppRouter() {
         }
       } else {
         // Se não estiver autenticado e tentar aceder a rota protegida
-        if (isAdminRoute || currentPath === '/loja-atual') {
+        if (isAdminRoute || currentPath === '/loja-atual' || currentPath === '/collaboration') {
           navigate('/login');
         }
       }
@@ -143,6 +145,12 @@ function AppRouter() {
   // 4. Sala de Operações de Loja
   if (currentPath === '/loja-atual') {
     return <StoreOperatorView onNavigate={navigate} />;
+  }
+
+  if (currentPath === '/collaboration') {
+    return isAdmin
+      ? <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><CollaborationWorkspace /></AdminPageLayout>
+      : <CollaborationWorkspace />;
   }
 
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
