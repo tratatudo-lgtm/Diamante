@@ -1,4 +1,6 @@
 import { Router, Response } from 'express';
+import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { supabaseAdmin } from './auth.service';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 
@@ -242,6 +244,62 @@ router.post('/reports/:id/comments', async (req: AuthenticatedRequest, res: Resp
     }, employee(req).id);
   }
   return res.status(201).json({ success: true, comment: data });
+});
+
+router.post('/reports/:id/attachments', async (req: AuthenticatedRequest, res: Response) => {
+  const reportId = req.params.id;
+  if (!(await canAccessReport(reportId, req))) return fail(res, 404, 'Ocorrência não encontrada.');
+  const name = typeof req.body?.name === 'string' ? path.basename(req.body.name).slice(0, 180) : '';
+  const mime = typeof req.body?.mime_type === 'string' ? req.body.mime_type : '';
+  const encoded = typeof req.body?.data === 'string' ? req.body.data : '';
+  const allowed = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
+  if (!name || !allowed.has(mime) || !encoded || encoded.length > 8500000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+    return fail(res, 400, 'Ficheiro inválido. São permitidos PDF, JPEG, PNG ou WebP até 6 MB.');
+  }
+  const buffer = Buffer.from(encoded, 'base64');
+  if (!buffer.length || buffer.length > 6291456) return fail(res, 400, 'O ficheiro excede o limite de 6 MB.');
+  const validSignature =
+    (mime === 'application/pdf' && buffer.subarray(0, 5).toString() === '%PDF-') ||
+    (mime === 'image/jpeg' && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) ||
+    (mime === 'image/png' && buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) ||
+    (mime === 'image/webp' && buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP');
+  if (!validSignature) return fail(res, 400, 'O conteúdo do ficheiro não corresponde ao formato indicado.');
+  const storagePath = reportId + '/' + randomUUID();
+  const { error: uploadError } = await supabaseAdmin.storage.from('collab-attachments').upload(storagePath, buffer, {
+    contentType: mime, upsert: false,
+  });
+  if (uploadError) return fail(res, 503, 'Não foi possível guardar o anexo.');
+  const { data, error } = await supabaseAdmin.from('collab_report_attachments').insert({
+    report_id: reportId, uploaded_by: employee(req).id, storage_path: storagePath,
+    original_name: name, mime_type: mime, size_bytes: buffer.length,
+  }).select('id, original_name, mime_type, size_bytes, created_at').single();
+  if (error || !data) {
+    await supabaseAdmin.storage.from('collab-attachments').remove([storagePath]);
+    return fail(res, 503, 'Não foi possível registar o anexo.');
+  }
+  return res.status(201).json({ success: true, attachment: data });
+});
+
+router.get('/reports/:id/attachments', async (req: AuthenticatedRequest, res: Response) => {
+  const reportId = req.params.id;
+  if (!(await canAccessReport(reportId, req))) return fail(res, 404, 'Ocorrência não encontrada.');
+  const { data, error } = await supabaseAdmin.from('collab_report_attachments')
+    .select('id, original_name, mime_type, size_bytes, created_at')
+    .eq('report_id', reportId).order('created_at', { ascending: false });
+  if (error) return fail(res, 503, 'Não foi possível carregar os anexos.');
+  return res.json({ success: true, attachments: data || [] });
+});
+
+router.get('/reports/:id/attachments/:attachmentId', async (req: AuthenticatedRequest, res: Response) => {
+  const reportId = req.params.id;
+  if (!(await canAccessReport(reportId, req))) return fail(res, 404, 'Ocorrência não encontrada.');
+  const { data: attachment, error } = await supabaseAdmin.from('collab_report_attachments')
+    .select('storage_path, original_name').eq('id', req.params.attachmentId).eq('report_id', reportId).maybeSingle();
+  if (error || !attachment) return fail(res, 404, 'Anexo não encontrado.');
+  const { data, error: signedError } = await supabaseAdmin.storage.from('collab-attachments')
+    .createSignedUrl(attachment.storage_path, 60, { download: attachment.original_name });
+  if (signedError || !data?.signedUrl) return fail(res, 503, 'Não foi possível disponibilizar o anexo.');
+  return res.json({ success: true, url: data.signedUrl, expires_in: 60 });
 });
 
 router.patch('/reports/:id', async (req: AuthenticatedRequest, res: Response) => {
