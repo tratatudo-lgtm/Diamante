@@ -12,7 +12,7 @@ type Conversation = { id: string; tipo: 'directa' | 'grupo'; titulo: string | nu
 type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; funcionarios?: { nome_completo?: string; role?: string } };
 type Report = { id: string; reference: string; titulo: string; descricao: string; categoria: string; prioridade: string; estado: string; reporter_id: string; assigned_to: string | null; created_at: string; funcionarios?: { nome_completo?: string } };
 type Comment = { id: string; funcionario_id: string; comentario: string; created_at: string; funcionarios?: { nome_completo?: string } };
-type Notification = { id: string; kind: string; entity_id: string; title: string; body: string; read_at: string | null; created_at: string };
+type Attachment = { id: string; original_name: string; mime_type: string; size_bytes: number; created_at: string };\ntype Notification = { id: string; kind: string; entity_id: string; title: string; body: string; read_at: string | null; created_at: string };
 type ReportEvent = { id: string; actor_id: string; action: string; old_values: Record<string, unknown>; new_values: Record<string, unknown>; created_at: string; funcionarios?: { nome_completo?: string } };
 
 const categories = [
@@ -36,7 +36,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
   const [activeConversation, setActiveConversation] = useState<string>('');
   const [activeReport, setActiveReport] = useState<Report | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);
+  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);\n  const [attachments, setAttachments] = useState<Attachment[]>([]);\n  const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -98,7 +98,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
     const result = await api('/reports/' + encodeURIComponent(id));
     setActiveReport(result.report);
     setComments(result.comments || []);
-    setReportEvents(result.events || []);
+    setReportEvents(result.events || []);\n    setAttachments(result.attachments || []);
   }, [api]);
 
   useEffect(() => {
@@ -201,6 +201,34 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
       setReportTitle(''); setReportDescription('');
       await loadReports();
     } catch (err: any) { setError(err.message); }
+  };
+
+  const uploadAttachment = async (file?: File) => {
+    if (!file || !activeReport) return;
+    if (file.size > 6 * 1024 * 1024) { setError('O anexo não pode exceder 6 MB.'); return; }
+    setUploadingAttachment(true);
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('Não foi possível ler o ficheiro.'));
+        reader.onerror = () => reject(new Error('Não foi possível ler o ficheiro.'));
+        reader.readAsDataURL(file);
+      });
+      const base64 = dataUrl.split(',')[1] || '';
+      await api('/reports/' + encodeURIComponent(activeReport.id) + '/attachments', {
+        method: 'POST', body: JSON.stringify({ name: file.name, mime_type: file.type, data: base64 }),
+      });
+      await loadReport(activeReport.id);
+    } catch (err: any) { setError(err.message || 'Não foi possível carregar o anexo.'); }
+    finally { setUploadingAttachment(false); }
+  };
+
+  const openAttachment = async (attachment: Attachment) => {
+    if (!activeReport) return;
+    try {
+      const result = await api('/reports/' + encodeURIComponent(activeReport.id) + '/attachments/' + encodeURIComponent(attachment.id));
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (err: any) { setError(err.message || 'Não foi possível abrir o anexo.'); }
   };
 
   const addComment = async (event: React.FormEvent) => {
@@ -310,6 +338,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
             <section className="rounded-2xl border border-white/10 bg-[#101827] p-4">
               {activeReport ? <><div className="flex items-start justify-between gap-2"><div><p className="text-[10px] font-bold text-[#D4AF37]">{activeReport.reference}</p><h2 className="mt-1 text-lg font-semibold text-white">{activeReport.titulo}</h2></div><button onClick={() => setActiveReport(null)} className="rounded-lg p-1 text-slate-500 hover:bg-white/5" aria-label="Fechar ocorrência"><X className="h-4 w-4" /></button></div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{activeReport.descricao}</p><div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-400"><span className="rounded-lg bg-white/5 px-2 py-1">{activeReport.categoria}</span><span className="rounded-lg bg-white/5 px-2 py-1">{priorityLabel(activeReport.prioridade)}</span></div>
                 {isAdmin && <div className="mt-4 grid grid-cols-1 gap-2"><label className="text-xs text-slate-400">Estado da ocorrência<select value={activeReport.estado} onChange={(e) => void updateReport({ estado: e.target.value })} className="mt-1 w-full rounded-lg border border-white/10 bg-[#080d17] p-2.5 text-sm text-white">{statuses.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-xs text-slate-400">Prioridade<select value={activeReport.prioridade} onChange={(e) => void updateReport({ prioridade: e.target.value })} className="mt-1 w-full rounded-lg border border-white/10 bg-[#080d17] p-2.5 text-sm text-white">{priorities.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="text-xs text-slate-400">Responsável<select value={activeReport.assigned_to || ''} onChange={(e) => void updateReport({ assigned_to: e.target.value || null })} className="mt-1 w-full rounded-lg border border-white/10 bg-[#080d17] p-2.5 text-sm text-white"><option value="">Sem responsável</option>{directory.map((person) => <option key={person.id} value={person.id}>{person.nome_completo}</option>)}</select></label></div>}
+                <div className="mt-5 border-t border-white/10 pt-4"><div className="mb-3 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-white">Anexos e evidências</h3><label className={'inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[11px] text-[#E6C66B] hover:bg-white/5 ' + (uploadingAttachment ? 'pointer-events-none opacity-50' : '')}><Paperclip className="h-3.5 w-3.5" />{uploadingAttachment ? 'A carregar…' : 'Adicionar ficheiro'}<input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingAttachment} onChange={(event) => { const file = event.target.files?.[0]; void uploadAttachment(file); event.currentTarget.value = ''; }} /></label></div><div className="space-y-2">{attachments.map((attachment) => <button key={attachment.id} onClick={() => void openAttachment(attachment)} className="flex w-full items-center gap-3 rounded-xl bg-[#080d17] p-3 text-left hover:bg-white/5"><Paperclip className="h-4 w-4 shrink-0 text-[#D4AF37]" /><span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-slate-200">{attachment.original_name}</span><span className="text-[10px] text-slate-500">{(attachment.size_bytes / 1024).toFixed(0)} KB · {dateLabel(attachment.created_at)}</span></span></button>)}{attachments.length === 0 && <p className="text-xs text-slate-500">Ainda não existem anexos.</p>}</div><p className="mt-2 text-[10px] text-slate-600">PDF, JPEG, PNG ou WebP · máximo 6 MB. Acesso reservado aos participantes autorizados na ocorrência.</p></div>
                 <div className="mt-5 border-t border-white/10 pt-4"><h3 className="mb-3 text-sm font-semibold text-white">Histórico de alterações</h3><div className="max-h-52 space-y-3 overflow-y-auto">{reportEvents.map((event) => <div key={event.id} className="flex gap-3"><div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-[#D4AF37]" /><div className="min-w-0 flex-1"><p className="text-xs font-semibold text-slate-200">{event.funcionarios?.nome_completo || 'Administrador'} <span className="font-normal text-slate-500">· {dateLabel(event.created_at)}</span></p><p className="mt-1 text-xs text-slate-400">{Object.entries(event.new_values || {}).map(([key, value]) => key === 'estado' ? 'Estado: ' + statusLabel(String(value)) : key === 'prioridade' ? 'Prioridade: ' + priorityLabel(String(value)) : key === 'assigned_to' ? 'Responsável actualizado' : key + ': ' + String(value)).join(' · ') || 'Ocorrência actualizada'}</p></div></div>)}{reportEvents.length === 0 && <p className="text-xs text-slate-500">Ainda não existem alterações registadas.</p>}</div></div>
                 <div className="mt-5 border-t border-white/10 pt-4"><h3 className="mb-3 text-sm font-semibold text-white">Acompanhamento</h3><div className="max-h-64 space-y-3 overflow-y-auto">{comments.map((comment) => <div key={comment.id} className="rounded-xl bg-[#080d17] p-3"><p className="text-[11px] font-semibold text-[#D4AF37]">{comment.funcionarios?.nome_completo || 'Funcionário'} · {dateLabel(comment.created_at)}</p><p className="mt-1 whitespace-pre-wrap text-sm text-slate-300">{comment.comentario}</p></div>)}{comments.length === 0 && <p className="text-xs text-slate-500">Ainda sem comentários.</p>}</div><form onSubmit={addComment} className="mt-3 flex gap-2"><input value={commentText} onChange={(e) => setCommentText(e.target.value)} maxLength={4000} placeholder="Adicionar informação…" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-[#080d17] px-3 py-2.5 text-sm outline-none" /><button disabled={!commentText.trim()} className="rounded-xl bg-[#D4AF37] px-3 text-black disabled:opacity-40"><Send className="h-4 w-4" /></button></form></div>
               </> : <div className="flex min-h-72 flex-col items-center justify-center text-center"><ShieldAlert className="h-10 w-10 text-amber-300/60" /><p className="mt-3 text-sm font-semibold text-white">Gestão de ocorrências</p><p className="mt-1 max-w-xs text-xs text-slate-500">Selecciona uma ocorrência para consultar o histórico e acompanhar a resolução.</p></div>}
