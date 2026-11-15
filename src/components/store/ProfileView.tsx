@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import {
   User,
@@ -36,8 +35,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout, onShowToast 
     e.preventDefault();
     setPasswordError(null);
 
-    if (newPassword.length < 6) {
-      setPasswordError('A nova palavra-passe deve ter pelo menos 6 caracteres.');
+    if (newPassword.length < 8 || newPassword.length > 72 || newPassword.trim().length < 8) {
+      setPasswordError('A nova palavra-passe deve ter entre 8 e 72 caracteres e não pode ser apenas espaços.');
       return;
     }
 
@@ -46,18 +45,20 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout, onShowToast 
       return;
     }
 
-    if (!isSupabaseConfigured()) {
-      setPasswordError('Supabase não está configurada. A palavra-passe não foi alterada.');
-      return;
-    }
-
     setIsUpdatingPassword(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
+      const response = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ password: newPassword }),
+        signal: AbortSignal.timeout(10000),
       });
-
-      if (error) throw error;
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true) {
+        throw new Error(payload?.message || 'Não foi possível actualizar a palavra-passe.');
+      }
 
       setPasswordSuccess(true);
       setNewPassword('');
@@ -69,9 +70,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({ onLogout, onShowToast 
       }, 1500);
     } catch (err: unknown) {
       console.warn('[Perfil] Falha ao atualizar palavra-passe.');
-      const msg = 'Não foi possível atualizar a palavra-passe. Tente novamente.';
+      const msg = err instanceof Error ? err.message : 'Não foi possível actualizar a palavra-passe. Tente novamente.';
       setPasswordError(msg);
-      onShowToast('error', 'Falha ao atualizar palavra-passe.');
+      onShowToast('error', msg);
     } finally {
       setIsUpdatingPassword(false);
     }
