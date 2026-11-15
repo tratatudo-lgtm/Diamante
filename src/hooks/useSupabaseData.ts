@@ -143,52 +143,35 @@ export function useEmployees() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  const mapEmployee = (row: any): Employee => ({
+    id: String(row.id),
+    codigo: '',
+    nome: row.nome_completo || '',
+    nif: '',
+    telemovel: row.telemovel || '',
+    email: row.email || '',
+    lojaId: row.loja_id || '',
+    lojaNome: row.loja_nome || '',
+    cargo: row.role === 'admin' ? 'Gerente' : 'Operador',
+    salarioBase: 0,
+    dataAdmissao: '',
+    status: row.ativo === false ? 'ausente' : 'em_servico',
+    avatarColor: 'from-amber-600 to-yellow-600',
+    especialidade: '',
+    transacoesMes: 0,
+  });
+
   const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. Configure a ligação antes de carregar dados.');
-
-      if (isSupabaseConfigured()) {
-        const { data: dbFuncs, error: dbError } = await supabase
-          .from('funcionarios')
-          .select('*, lojas(nome)')
-          .order('nome_completo', { ascending: true });
-
-        if (dbError) throw dbError;
-        {
-          const mapped: Employee[] = (dbFuncs || []).map((row: any) => {
-            const roleStr = String(row.role || '').toLowerCase();
-            const cargo: EmployeeRole = roleStr.includes('gerente') ? 'Gerente' : roleStr.includes('estag') ? 'Estagiário' : roleStr.includes('operador') ? 'Operador' : '';
-            const status: EmployeeStatus = row.status === 'ausente' ? 'ausente' : row.status === 'ferias' ? 'ferias' : row.status === 'em_servico' ? 'em_servico' : '';
-
-            return {
-              id: String(row.id),
-              codigo: row.codigo || '',
-              nome: row.nome_completo || '',
-              nif: row.nif || '',
-              telemovel: row.telemovel || '',
-              email: row.email || '',
-              lojaId: row.loja_id || '',
-              lojaNome: row.lojas?.nome || '',
-              cargo,
-              salarioBase: Number(row.salario_base) || 0,
-              dataAdmissao: row.data_admissao || '',
-              status,
-              avatarColor: 'from-amber-600 to-yellow-600',
-              especialidade: row.especialidade || '',
-              transacoesMes: Number(row.transacoes_mes) || 0,
-            };
-          });
-
-          setData(mapped);
-          return;
-        }
+      const result = await adminApiRequest('/api/admin/funcionarios');
+      if (!Array.isArray(result?.funcionarios)) {
+        throw new Error('A API devolveu uma lista de funcionários inválida.');
       }
-
-      setData([]);
+      setData(result.funcionarios.map(mapEmployee));
     } catch (err: any) {
-      setError(err?.message || 'Falha ao sincronizar funcionários');
+      setError(err?.message || 'Falha ao sincronizar funcionários.');
       setData([]);
     } finally {
       setLoading(false);
@@ -200,42 +183,54 @@ export function useEmployees() {
   }, [fetchEmployees]);
 
   const createEmployee = async (newEmp: Omit<Employee, 'id' | 'codigo' | 'avatarColor'>) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi criado.');
-    const { data: inserted, error } = await supabase.from('funcionarios').insert({
-      nome_completo: newEmp.nome, nif: newEmp.nif, telemovel: newEmp.telemovel,
-      email: newEmp.email, loja_id: newEmp.lojaId, role: newEmp.cargo.toLowerCase(),
-      salario_base: newEmp.salarioBase, data_admissao: newEmp.dataAdmissao,
-      especialidade: newEmp.especialidade, status: newEmp.status, ativo: true,
-    }).select('id').single();
-    if (error) throw error;
-    if (!inserted?.id) throw new Error('A base de dados não devolveu o identificador do funcionário criado.');
-    const created: Employee = {
-      ...newEmp, id: String(inserted.id), codigo: '', avatarColor: 'from-[#D4AF37] to-amber-700',
-    };
-    setData((prev) => [created, ...prev]);
+    const email = newEmp.email?.trim().toLowerCase();
+    if (!email) throw new Error('O email é obrigatório para enviar o convite de acesso.');
+    const result = await adminApiRequest('/api/admin/funcionarios', {
+      method: 'POST',
+      body: JSON.stringify({
+        nome_completo: newEmp.nome.trim(),
+        email,
+        telemovel: newEmp.telemovel || null,
+        loja_id: newEmp.lojaId || null,
+        // Este ecrã legado nunca pode atribuir privilégios administrativos.
+        role: 'funcionario',
+      }),
+    });
+    if (!result?.funcionario?.id) throw new Error('A API não devolveu o funcionário criado.');
+    const created = mapEmployee(result.funcionario);
+    setData((prev) => [created, ...prev.filter((employee) => employee.id !== created.id)]);
     return created;
   };
 
   const updateEmployee = async (id: string, updates: Partial<Employee>) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi atualizado.');
-    const { data: updatedRows, error } = await supabase.from('funcionarios').update({
-      nome_completo: updates.nome, nif: updates.nif, telemovel: updates.telemovel,
-      email: updates.email, loja_id: updates.lojaId,
-      role: updates.cargo ? updates.cargo.toLowerCase() : undefined,
-      salario_base: updates.salarioBase, data_admissao: updates.dataAdmissao,
-      especialidade: updates.especialidade, status: updates.status || undefined,
-    }).eq('id', id).select('id');
-    if (error) throw error;
-    if (!updatedRows?.length) throw new Error('O funcionário não foi encontrado ou não foi atualizado.');
-    setData((prev) => prev.map((employee) => employee.id === id ? { ...employee, ...updates } : employee));
+    const payload: Record<string, unknown> = {};
+    if (updates.nome !== undefined) payload.nome_completo = updates.nome.trim();
+    if (updates.telemovel !== undefined) payload.telemovel = updates.telemovel || null;
+    if (updates.lojaId !== undefined) payload.loja_id = updates.lojaId || null;
+    // O ecrã legado não pode alterar email nem atribuir/remover privilégios.
+    if (Object.keys(payload).length === 0) {
+      throw new Error('Não existem campos suportados para actualizar através deste ecrã.');
+    }
+    const result = await adminApiRequest('/api/admin/funcionarios/' + encodeURIComponent(id), {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+    if (!result?.funcionario?.id) throw new Error('A API não confirmou a actualização do funcionário.');
+    const updated = mapEmployee(result.funcionario);
+    setData((prev) => prev.map((employee) => employee.id === id ? { ...employee, ...updated } : employee));
   };
 
   const deleteEmployee = async (id: string) => {
-    if (!isSupabaseConfigured()) throw new Error('Supabase não está configurada. O funcionário não foi eliminado.');
-    const { data: deletedRows, error } = await supabase.from('funcionarios').delete().eq('id', id).select('id');
-    if (error) throw error;
-    if (!deletedRows?.length) throw new Error('O funcionário não foi encontrado ou não foi eliminado.');
-    setData((prev) => prev.filter((employee) => employee.id !== id));
+    // A eliminação física de identidades Auth não é permitida por este fluxo.
+    // A conta é desactivada pela API protegida, preservando histórico e auditoria.
+    const result = await adminApiRequest('/api/admin/funcionarios/' + encodeURIComponent(id), {
+      method: 'PUT',
+      body: JSON.stringify({ ativo: false }),
+    });
+    if (!result?.funcionario?.id) throw new Error('A API não confirmou a desactivação do funcionário.');
+    setData((prev) => prev.map((employee) => employee.id === id
+      ? { ...employee, status: 'ausente' as EmployeeStatus }
+      : employee));
   };
 
   return { data, loading, error, refetch: fetchEmployees, createEmployee, updateEmployee, deleteEmployee };
