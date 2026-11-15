@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, RefreshCw, Search, ReceiptText } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, RefreshCw, Search, ReceiptText, CheckCircle2, Loader2 } from 'lucide-react';
 
 type TransactionStatus = 'rascunho' | 'pendente_aprovacao' | 'aprovado' | 'pago' | string;
 
@@ -37,6 +37,7 @@ export const AdminTransactionsPage: React.FC<AdminTransactionsPageProps> = ({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const loadTransactions = async () => {
     setRefreshing(true);
@@ -59,6 +60,35 @@ export const AdminTransactionsPage: React.FC<AdminTransactionsPageProps> = ({
     } finally {
       setLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const approveTransaction = async (transactionId: string) => {
+    if (approvingId) return;
+    setApprovingId(transactionId);
+    setError(null);
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão administrativa não encontrada. Inicia sessão novamente.');
+      const response = await fetch('/api/v1/admin/dashboard/authorize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ transactionId }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || 'Não foi possível aprovar esta compra.');
+      }
+      await loadTransactions();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao aprovar a compra.');
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -102,7 +132,7 @@ export const AdminTransactionsPage: React.FC<AdminTransactionsPageProps> = ({
               </div>
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Centro de Transações</h1>
-                <p className="mt-1 text-xs text-slate-400">Consulta administrativa · Apenas leitura</p>
+                <p className="mt-1 text-xs text-slate-400">Consulta e aprovação de compras pendentes</p>
               </div>
             </div>
           </div>
@@ -156,6 +186,7 @@ export const AdminTransactionsPage: React.FC<AdminTransactionsPageProps> = ({
                     <th className="px-3 py-3 text-right font-semibold">Peso</th>
                     <th className="px-3 py-3 text-right font-semibold">Valor</th>
                     <th className="px-3 py-3 font-semibold">Estado</th>
+                    <th className="px-3 py-3 text-right font-semibold">Acção</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80">
@@ -167,6 +198,12 @@ export const AdminTransactionsPage: React.FC<AdminTransactionsPageProps> = ({
                       <td className="px-3 py-4 text-right font-mono text-slate-300">{tx.peso_gramas == null ? '—' : `${Number(tx.peso_gramas).toFixed(2)} g`}</td>
                       <td className="px-3 py-4 text-right font-mono font-semibold text-[#E6C56A]">{money(tx.valor_final)}</td>
                       <td className="px-3 py-4"><span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold ${statusClass(tx.estado)}`}>{statusLabels[tx.estado] || tx.estado}</span></td>
+                      <td className="px-3 py-4 text-right">{tx.estado === 'pendente_aprovacao' ? (
+                        <button type="button" onClick={() => void approveTransaction(tx.id)} disabled={Boolean(approvingId)} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Aprovar compra ${tx.id}`}>
+                          {approvingId === tx.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          Aprovar compra
+                        </button>
+                      ) : <span className="text-xs text-slate-600">—</span>}</td>
                     </tr>
                   ))}
                 </tbody>
