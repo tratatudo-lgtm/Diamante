@@ -173,7 +173,7 @@ clientsRouter.get('/document-alerts', verifyAuth, async (req: AuthenticatedReque
 clientsRouter.get('/:id/documents', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   const clientId = String(req.params.id || '');
-  if (!employee || !canReadClients(employee.role)) return res.status(403).json({ success: false, message: 'Acesso não autorizado.' });
+  if (!employee || !canReadClients(employee.role) || (employee.role !== 'admin' && !employee.loja_id)) return res.status(403).json({ success: false, message: 'Acesso não autorizado.' });
   try {
     let clientQuery = supabaseAdmin.from('clientes').select('id,loja_registo_id').eq('id', clientId);
     if (employee.role !== 'admin') clientQuery = clientQuery.eq('loja_registo_id', employee.loja_id as string);
@@ -199,7 +199,7 @@ clientsRouter.get('/:id/documents', verifyAuth, async (req: AuthenticatedRequest
 clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   const clientId = String(req.params.id || '');
-  if (!employee || !canReadClients(employee.role)) return res.status(403).json({ success: false, message: 'Acesso não autorizado.' });
+  if (!employee || !canReadClients(employee.role) || (employee.role !== 'admin' && !employee.loja_id)) return res.status(403).json({ success: false, message: 'Acesso não autorizado.' });
 
   const body = req.body || {};
   const tipoDocumento = typeof body.tipoDocumento === 'string' ? body.tipoDocumento : '';
