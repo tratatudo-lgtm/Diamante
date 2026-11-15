@@ -4,6 +4,127 @@ import { supabaseAdmin } from './auth.service';
 
 const storeRouter = Router();
 
+storeRouter.get('/dashboard', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
+    return res.status(403).json({ success: false, message: 'A sua conta não tem acesso ao painel desta loja.' });
+  }
+
+  const today = typeof req.query.today === 'string' ? req.query.today : '';
+  const yesterday = typeof req.query.yesterday === 'string' ? req.query.yesterday : '';
+  const validDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(value + 'T00:00:00Z');
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  };
+  if (!validDate(today) || !validDate(yesterday)) {
+    return res.status(400).json({ success: false, message: 'Datas do painel inválidas.' });
+  }
+
+  try {
+    const [storeRes, pointsRes, todayKpiRes, yesterdayKpiRes, stockRes, transactionsRes] = await Promise.all([
+      supabaseAdmin.from('lojas')
+        .select('id, nome, codigo_loja, morada, telefone, latitude, longitude, ativo')
+        .eq('id', employee.loja_id).eq('ativo', true).maybeSingle(),
+      supabaseAdmin.from('registos_ponto')
+        .select('id, funcionario_id, loja_id, tipo, timestamp, localizacao')
+        .eq('funcionario_id', employee.id)
+        .order('timestamp', { ascending: false }).limit(10),
+      supabaseAdmin.from('kpi_loja_diaria').select('*')
+        .eq('loja_id', employee.loja_id).eq('data', today).maybeSingle(),
+      supabaseAdmin.from('kpi_loja_diaria').select('*')
+        .eq('loja_id', employee.loja_id).eq('data', yesterday).maybeSingle(),
+      supabaseAdmin.from('inventario_fisico').select('id', { count: 'exact', head: true })
+        .eq('loja_atual_id', employee.loja_id).eq('estado', 'em_loja'),
+      supabaseAdmin.from('transacoes')
+        .select('id, loja_id, estado, valor_final, peso_gramas, created_at')
+        .eq('loja_id', employee.loja_id)
+        .order('created_at', { ascending: false }).limit(5),
+    ]);
+
+    if (storeRes.error || pointsRes.error || todayKpiRes.error || yesterdayKpiRes.error || stockRes.error || transactionsRes.error) {
+      console.error('[STORE DASHBOARD] Falha numa ou mais consultas do painel.');
+      return res.status(503).json({ success: false, message: 'Não foi possível carregar os dados operacionais da loja.' });
+    }
+    if (!storeRes.data) return res.status(404).json({ success: false, message: 'Loja não encontrada ou inativa.' });
+
+    return res.json({
+      success: true,
+      loja: storeRes.data,
+      pontos: pointsRes.data || [],
+      kpiHoje: todayKpiRes.data || null,
+      kpiOntem: yesterdayKpiRes.data || null,
+      stockEmLojaCount: stockRes.count || 0,
+      transacoes: transactionsRes.data || [],
+    });
+  } catch {
+    console.error('[STORE DASHBOARD] Erro interno ao carregar o painel.');
+    return res.status(500).json({ success: false, message: 'Erro interno ao carregar o painel da loja.' });
+  }
+});
+
+storeRouter.post('/clock', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
+    return res.status(403).json({ success: false, message: 'A sua conta não pode registar ponto nesta loja.' });
+  }
+
+  const tipo = req.body?.tipo;
+  if (tipo !== 'entrada' && tipo !== 'saida') {
+    return res.status(400).json({ success: false, message: 'Tipo de registo de ponto inválido.' });
+  }
+
+  let localizacao: { lat: number; lng: number } | null = null;
+  const coordinates = req.body?.localizacao;
+  if (coordinates !== null && coordinates !== undefined) {
+    const lat = Number(coordinates.lat);
+    const lng = Number(coordinates.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      return res.status(400).json({ success: false, message: 'Coordenadas de localização inválidas.' });
+    }
+    localizacao = { lat, lng };
+  }
+
+  try {
+    const { data: lastPoint, error: lastPointError } = await supabaseAdmin
+      .from('registos_ponto')
+      .select('tipo')
+      .eq('funcionario_id', employee.id)
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lastPointError) {
+      console.error('[STORE CLOCK] Falha ao verificar o último registo.');
+      return res.status(503).json({ success: false, message: 'Não foi possível validar o último registo de ponto.' });
+    }
+    if (lastPoint?.tipo === tipo) {
+      return res.status(409).json({ success: false, message: tipo === 'entrada' ? 'Já existe um turno activo.' : 'Não existe um turno activo para terminar.' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('registos_ponto')
+      .insert({
+        funcionario_id: employee.id,
+        loja_id: employee.loja_id,
+        tipo,
+        timestamp: new Date().toISOString(),
+        localizacao,
+      })
+      .select('id, funcionario_id, loja_id, tipo, timestamp, localizacao')
+      .single();
+
+    if (error || !data) {
+      console.error('[STORE CLOCK] Falha ao guardar o registo de ponto.');
+      return res.status(503).json({ success: false, message: 'Não foi possível guardar o registo de ponto.' });
+    }
+    return res.status(201).json({ success: true, ponto: data });
+  } catch {
+    console.error('[STORE CLOCK] Erro interno.');
+    return res.status(500).json({ success: false, message: 'Erro interno ao registar o ponto.' });
+  }
+});
+
 storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (!employee || !employee.ativo || !employee.loja_id ||
