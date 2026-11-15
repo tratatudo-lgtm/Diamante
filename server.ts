@@ -448,7 +448,7 @@ app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin
       supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, total_peso_ouro_g, pendentes_aprovacao_qtd').eq('data', todayStr),
       supabaseAdmin.from('kpi_loja_diaria').select('loja_id, total_compras_valor, total_compras_qtd, total_peso_ouro_g, pendentes_aprovacao_qtd').eq('data', yesterdayStr),
       supabaseAdmin.from('transacoes').select('id, loja_id, estado, valor_final, peso_gramas, created_at', { count: 'exact' }).order('created_at', { ascending: false }).limit(20),
-      supabaseAdmin.from('funcionarios').select('id', { count: 'exact', head: true }).eq('ativo', true),
+      supabaseAdmin.from('funcionarios').select('id', { count: 'exact', head: true }).eq('ativo', true).eq('role', 'funcionario'),
       supabaseAdmin.from('inventario_fisico').select('id', { count: 'exact', head: true }).eq('estado', 'em_loja'),
     ]);
 
