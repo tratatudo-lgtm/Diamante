@@ -251,7 +251,7 @@ router.post('/reports/:id/comments', async (req: AuthenticatedRequest, res: Resp
 router.post('/reports/:id/attachments', async (req: AuthenticatedRequest, res: Response) => {
   const reportId = req.params.id;
   if (!(await canAccessReport(reportId, req))) return fail(res, 404, 'Ocorrência não encontrada.');
-  const name = typeof req.body?.name === 'string' ? path.basename(req.body.name).slice(0, 180) : '';
+  const name = typeof req.body?.name === 'string' ? path.basename(req.body.name.replace(/[\\\\/]/g, '_')).replace(/[\\u0000-\\u001f\\u007f]/g, '').trim().slice(0, 180) : '';
   const mime = typeof req.body?.mime_type === 'string' ? req.body.mime_type : '';
   const encoded = typeof req.body?.data === 'string' ? req.body.data : '';
   const allowed = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
@@ -345,11 +345,14 @@ router.patch('/reports/:id', async (req: AuthenticatedRequest, res: Response) =>
 
 router.get('/notifications', async (req: AuthenticatedRequest, res: Response) => {
   const userId = employee(req).id;
-  const { data, error, count } = await supabaseAdmin.from('collab_notifications')
-    .select('id, kind, entity_id, title, body, read_at, created_at', { count: 'exact' })
-    .eq('funcionario_id', userId).order('created_at', { ascending: false }).limit(50);
-  if (error) return fail(res, 503, 'Não foi possível carregar as notificações.');
-  return res.json({ success: true, notifications: data || [], unread_count: (data || []).filter((item: any) => !item.read_at).length, total: count || 0 });
+  const [{ data, error, count }, { count: unreadCount, error: unreadError }] = await Promise.all([
+    supabaseAdmin.from('collab_notifications').select('id, kind, entity_id, title, body, read_at, created_at', { count: 'exact' })
+      .eq('funcionario_id', userId).order('created_at', { ascending: false }).limit(50),
+    supabaseAdmin.from('collab_notifications').select('id', { count: 'exact', head: true })
+      .eq('funcionario_id', userId).is('read_at', null),
+  ]);
+  if (error || unreadError) return fail(res, 503, 'Não foi possível carregar as notificações.');
+  return res.json({ success: true, notifications: data || [], unread_count: unreadCount || 0, total: count || 0 });
 });
 
 router.patch('/notifications/read-all', async (req: AuthenticatedRequest, res: Response) => {
