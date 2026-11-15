@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Users, Building2, ArrowLeft, RefreshCw, FileText, Image as ImageIcon, Clock3, Coins, Scale, ShieldCheck, AlertCircle, UserRound, Paperclip } from 'lucide-react';
 
 type Client = {
-  id: string; nome: string; nif?: string | null; tipo_documento?: string | null; data_nascimento?: string | null; data_emissao_documento?: string | null; data_validade_documento?: string | null; bi_cc?: string | null; telemovel?: string | null; email?: string | null;
+  id: string; nome: string; nif?: string | null; tipo_documento?: string | null; data_nascimento?: string | null; data_emissao_documento?: string | null; data_validade_documento?: string | null; consentimento_whatsapp_aniversario?: boolean; bi_cc?: string | null; telemovel?: string | null; email?: string | null;
   morada?: string | null; contacto?: string | null; total_transacoes?: number; total_volume?: number;
   ultima_transacao?: string | null; loja_nome?: string | null; created_at?: string | null;
 };
@@ -36,6 +36,7 @@ export const CRMWorkspace: React.FC = () => {
   const [documentIssueDate, setDocumentIssueDate] = useState('');
   const [documentExpiryDate, setDocumentExpiryDate] = useState('');
   const [documentSaving, setDocumentSaving] = useState(false);
+  const [birthdayConsentSaving, setBirthdayConsentSaving] = useState(false);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -71,6 +72,25 @@ export const CRMWorkspace: React.FC = () => {
     } catch (e: any) { setError(e?.message || 'Falha ao abrir a ficha.'); }
     finally { setDetailLoading(false); }
   }, []);
+
+  const updateBirthdayConsent = useCallback(async (consentimento: boolean) => {
+    if (!detail || birthdayConsentSaving) return;
+    setBirthdayConsentSaving(true); setError('');
+    try {
+      const response = await fetch('/api/clients/' + encodeURIComponent(detail.client.id) + '/birthday-consent', {
+        method: 'PATCH',
+        headers: { ...headers(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ consentimento }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || result?.success !== true) throw new Error(result?.message || 'Não foi possível guardar o consentimento de aniversário.');
+      setDetail(previous => previous ? { ...previous, client: { ...previous.client, consentimento_whatsapp_aniversario: consentimento } } : previous);
+    } catch (e: any) {
+      setError(e?.message || 'Falha ao actualizar o consentimento.');
+    } finally {
+      setBirthdayConsentSaving(false);
+    }
+  }, [detail, birthdayConsentSaving]);
 
   const uploadIdentityDocument = useCallback(async () => {
     if (!detail || !documentFile || !documentNumber.trim() || !documentExpiryDate) {
@@ -194,6 +214,17 @@ export const CRMWorkspace: React.FC = () => {
                 <button type="button" disabled={documentSaving || !documentFile} onClick={()=>void uploadIdentityDocument()} className="mt-4 rounded-xl bg-amber-300 px-4 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-40">{documentSaving?'A guardar…':'Guardar novo documento'}</button>
                 <p className="mt-2 text-[11px] text-slate-500">A versão anterior fica arquivada no histórico. Os ficheiros permanecem privados e os links temporários expiram.</p>
               </div>
+            </div>
+            <div className="rounded-2xl border border-emerald-300/15 bg-[#0d1523] p-5">
+              <div className="mb-3 flex items-center gap-2"><ShieldCheck size={17} className="text-emerald-200"/><h3 className="font-semibold text-white">Consentimento de aniversário por WhatsApp</h3></div>
+              <label className="flex items-start gap-3 rounded-xl border border-white/[.08] bg-black/20 p-4">
+                <input type="checkbox" className="mt-1 h-4 w-4 accent-amber-300" checked={detail.client.consentimento_whatsapp_aniversario === true} disabled={birthdayConsentSaving} onChange={event => void updateBirthdayConsent(event.target.checked)} />
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-white">O cliente autorizou receber uma mensagem de aniversário por WhatsApp</span>
+                  <span className="mt-1 block text-xs leading-5 text-slate-400">Só activar depois de obter autorização explícita do cliente. A alteração fica registada com o funcionário, a loja, a data e o valor anterior.</span>
+                </span>
+              </label>
+              <p className="mt-2 text-[11px] text-slate-500">{birthdayConsentSaving ? "A guardar consentimento…" : detail.client.consentimento_whatsapp_aniversario ? "Consentimento activo — máximo de uma mensagem por ano." : "Sem consentimento — não serão enviadas mensagens de aniversário."}</p>
             </div>
             <div className="rounded-2xl border border-white/[.08] bg-[#0d1523] p-5">
               <div className="mb-4 flex items-center gap-2"><Paperclip size={17} className="text-amber-200"/><h3 className="font-semibold text-white">Documentos e anexos</h3><span className="ml-auto text-xs text-slate-500">{detail.attachments.length}</span></div>
