@@ -205,4 +205,62 @@ router.get('/expenses/summary', async (req: Request, res: Response) => {
   }
 });
 
+
+router.get('/closings', async (req: Request, res: Response) => {
+  try {
+    const month=text(req.query.month,7);
+    if(month&&!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month))return res.status(400).json({success:false,message:'Mês inválido. Use AAAA-MM.'});
+    let query=supabaseAdmin.from('fechos_financeiros_loja')
+      .select('id,loja_id,periodo,estado,total_pago,total_pendente,total_rejeitado,quantidade_despesas,snapshot_categorias,fechado_por,fechado_em,reaberto_por,reaberto_em,motivo_reabertura,lojas(nome)')
+      .order('periodo',{ascending:false}).limit(500);
+    if(month)query=query.eq('periodo',month+'-01');
+    const {data,error}=await query;
+    if(error)return res.status(503).json({success:false,message:'Não foi possível consultar os fechos.'});
+    return res.json({success:true,data:data||[]});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao consultar fechos.'}); }
+});
+
+router.get('/closings/:id/events', async (req: Request, res: Response) => {
+  try {
+    const id=text(req.params.id,64);
+    if(!UUID_RE.test(id))return res.status(400).json({success:false,message:'Identificador de fecho inválido.'});
+    const {data,error}=await supabaseAdmin.from('fechos_financeiros_eventos')
+      .select('id,fecho_id,loja_id,periodo,acao,actor_id,motivo,snapshot,created_at')
+      .eq('fecho_id',id).order('created_at',{ascending:true}).limit(200);
+    if(error)return res.status(503).json({success:false,message:'Não foi possível consultar o histórico.'});
+    return res.json({success:true,data:data||[]});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao consultar histórico.'}); }
+});
+
+router.post('/closings', async (req: Request, res: Response) => {
+  try {
+    const lojaId=text(req.body?.loja_id,64), month=text(req.body?.month,7);
+    if(!UUID_RE.test(lojaId)||!/^\\d{4}-(0[1-9]|1[0-2])$/.test(month))
+      return res.status(400).json({success:false,message:'Loja ou mês inválido.'});
+    const actor=(req as any).adminUser?.id;
+    if(!actor||!UUID_RE.test(actor))return res.status(401).json({success:false,message:'Sessão administrativa inválida.'});
+    const {data,error}=await supabaseAdmin.rpc('fn_fechar_mes_financeiro',{p_loja_id:lojaId,p_periodo:month+'-01',p_actor_id:actor});
+    if(error){
+      const msg=error.code==='23505'?'Este mês já está fechado.':error.code==='42501'?'Apenas administradores activos podem fechar o mês.':'Não foi possível fechar o mês. Verifique os dados e tente novamente.';
+      const status=error.code==='23505'?409:error.code==='42501'?403:400;
+      return res.status(status).json({success:false,message:msg});
+    }
+    return res.status(201).json({success:true,data});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao fechar mês.'}); }
+});
+
+router.post('/closings/:id/reopen', async (req: Request, res: Response) => {
+  try {
+    const id=text(req.params.id,64), motivo=text(req.body?.motivo,1000), actor=(req as any).adminUser?.id;
+    if(!UUID_RE.test(id)||motivo.length<5)return res.status(400).json({success:false,message:'Fecho inválido ou motivo de reabertura insuficiente.'});
+    if(!actor||!UUID_RE.test(actor))return res.status(401).json({success:false,message:'Sessão administrativa inválida.'});
+    const {data,error}=await supabaseAdmin.rpc('fn_reabrir_mes_financeiro',{p_fecho_id:id,p_actor_id:actor,p_motivo:motivo});
+    if(error){
+      const status=error.code==='42501'?403:error.code==='55000'?409:400;
+      return res.status(status).json({success:false,message:error.code==='42501'?'Apenas administradores activos podem reabrir.':error.code==='55000'?'O fecho não existe ou já foi reaberto.':'Não foi possível reabrir o mês.'});
+    }
+    return res.json({success:true,data});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao reabrir mês.'}); }
+});
+
 export default router;
