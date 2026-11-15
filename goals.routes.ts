@@ -22,17 +22,37 @@ function validDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z'));
 }
 
+function lisbonMidnightUtc(dateValue: string): string {
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const approximate = new Date(Date.UTC(year, month - 1, day, 12));
+  const zone = new Intl.DateTimeFormat('en', { timeZone: 'Europe/Lisbon', timeZoneName: 'shortOffset' })
+    .formatToParts(approximate).find((part) => part.type === 'timeZoneName')?.value || 'GMT';
+  const match = zone.match(/^GMT([+-])(\\d{1,2})(?::(\\d{2}))?$/);
+  const offset = match ? (match[1] === '-' ? -1 : 1) * (Number(match[2]) * 60 + Number(match[3] || 0)) : 0;
+  return new Date(Date.UTC(year, month - 1, day) - offset * 60_000).toISOString();
+}
+
 async function goalProgress(goal: any) {
+  const [year, month, day] = String(goal.ends_on).split('-').map(Number);
+  const nextDay = new Date(Date.UTC(year, month - 1, day + 1));
+  const endDate = [nextDay.getUTCFullYear(), String(nextDay.getUTCMonth() + 1).padStart(2,'0'), String(nextDay.getUTCDate()).padStart(2,'0')].join('-');
   let query = supabaseAdmin.from('transacoes').select('id,valor_final,peso_gramas', { count: 'exact' })
-    .eq('estado','aprovado').gte('created_at', goal.starts_on + 'T00:00:00Z')
-    .lt('created_at', new Date(Date.parse(goal.ends_on + 'T00:00:00Z') + 86400000).toISOString());
+    .eq('estado','aprovado').gte('created_at', lisbonMidnightUtc(goal.starts_on))
+    .lt('created_at', lisbonMidnightUtc(endDate));
   if (goal.scope === 'loja') query = query.eq('loja_id', goal.loja_id);
   else query = query.eq('funcionario_id', goal.funcionario_id);
-  const { data, count, error } = await query.limit(10000);
-  if (error || !data) throw new Error('Não foi possível calcular o progresso da meta.');
-  const current = goal.metric === 'transacoes_aprovadas'
-    ? Number(count || 0)
-    : data.reduce((sum: number, row: any) => sum + Number(goal.metric === 'volume_aprovado' ? row.valor_final : row.peso_gramas || 0), 0);
+  const first = await query.range(0, 999);
+  if (first.error || !first.data) throw new Error('Não foi possível calcular o progresso da meta.');
+  if (goal.metric === 'transacoes_aprovadas') {
+    const current = Number(first.count || 0);
+    return { current, target: Number(goal.target_value), percentage: Math.min(100, Number((current / Number(goal.target_value) * 100).toFixed(1))), achieved: current >= Number(goal.target_value) };
+  }
+  let current = first.data.reduce((sum: number, row: any) => sum + Number(goal.metric === 'volume_aprovado' ? row.valor_final || 0 : row.peso_gramas || 0), 0);
+  for (let offset = 1000; offset < (first.count || 0); offset += 1000) {
+    const page = await query.range(offset, offset + 999);
+    if (page.error || !page.data) throw new Error('Não foi possível calcular o progresso da meta.');
+    current += page.data.reduce((sum: number, row: any) => sum + Number(goal.metric === 'volume_aprovado' ? row.valor_final || 0 : row.peso_gramas || 0), 0);
+  }
   const safeCurrent = Number.isFinite(current) ? current : 0;
   return { current: Number(safeCurrent.toFixed(3)), target: Number(goal.target_value), percentage: Math.min(100, Number((safeCurrent / Number(goal.target_value) * 100).toFixed(1))), achieved: safeCurrent >= Number(goal.target_value) };
 }
