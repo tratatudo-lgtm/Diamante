@@ -15,6 +15,25 @@ async function isConversationMember(conversationId: string, employeeId: string):
   return !error && Boolean(data);
 }
 
+async function notifyEmployees(
+  employeeIds: Array<string | null | undefined>,
+  input: { kind: 'report_created' | 'report_updated' | 'report_comment' | 'chat_message'; entityId: string; title: string; body: string },
+  actorId?: string,
+): Promise<void> {
+  const recipients = [...new Set(employeeIds.filter((id): id is string => Boolean(id) && id !== actorId))];
+  if (!recipients.length) return;
+  const rows = recipients.map((funcionario_id) => ({
+    funcionario_id, kind: input.kind, entity_id: input.entityId, title: input.title, body: input.body,
+  }));
+  const { error } = await supabaseAdmin.from('collab_notifications').insert(rows);
+  if (error) {
+    console.error('[Collaboration] Falha ao persistir notificações.');
+    return;
+  }
+  const io = (globalThis as any).io;
+  for (const id of recipients) io?.to(id).emit('notification:new', { kind: input.kind, entity_id: input.entityId, title: input.title, body: input.body });
+}
+
 async function canAccessReport(reportId: string, req: AuthenticatedRequest): Promise<boolean> {
   const user = employee(req);
   let query = supabaseAdmin.from('collab_reports').select('id, reporter_id, assigned_to');
@@ -159,6 +178,11 @@ router.post('/reports', async (req: AuthenticatedRequest, res: Response) => {
   const io = (globalThis as any).io;
   io?.to('admin').emit('report:created', { id: data.id, reference: data.reference, prioridade: data.prioridade });
   if (user.loja_id) io?.to('store:' + user.loja_id).emit('report:created', { id: data.id, reference: data.reference });
+  const { data: admins } = await supabaseAdmin.from('funcionarios').select('id').eq('ativo', true).eq('role', 'admin');
+  await notifyEmployees((admins || []).map((item: any) => item.id), {
+    kind: 'report_created', entityId: data.id, title: 'Nova ocorrência ' + data.reference,
+    body: title + ' · Prioridade ' + priority,
+  }, user.id);
   return res.status(201).json({ success: true, report: data });
 });
 
@@ -199,6 +223,11 @@ router.post('/reports/:id/comments', async (req: AuthenticatedRequest, res: Resp
     io?.to(report.reporter_id).emit('report:updated', { id: req.params.id });
     if (report.assigned_to) io?.to(report.assigned_to).emit('report:updated', { id: req.params.id });
     io?.to('admin').emit('report:updated', { id: req.params.id });
+    const { data: admins } = await supabaseAdmin.from('funcionarios').select('id').eq('ativo', true).eq('role', 'admin');
+    await notifyEmployees([report.reporter_id, report.assigned_to, ...(admins || []).map((item: any) => item.id)], {
+      kind: 'report_comment', entityId: req.params.id, title: 'Nova actualização na ocorrência',
+      body: comment.slice(0, 500),
+    }, employee(req).id);
   }
   return res.status(201).json({ success: true, comment: data });
 });
@@ -235,7 +264,36 @@ router.patch('/reports/:id', async (req: AuthenticatedRequest, res: Response) =>
   io?.to(data.reporter_id).emit('report:updated', { id: data.id, estado: data.estado });
   if (data.assigned_to) io?.to(data.assigned_to).emit('report:updated', { id: data.id, estado: data.estado });
   io?.to('admin').emit('report:updated', { id: data.id, estado: data.estado });
+  await notifyEmployees([data.reporter_id, data.assigned_to], {
+    kind: 'report_updated', entityId: data.id, title: 'Ocorrência actualizada',
+    body: 'Estado: ' + data.estado + ' · Prioridade: ' + data.prioridade,
+  }, employee(req).id);
   return res.json({ success: true, report: data });
+});
+
+router.get('/notifications', async (req: AuthenticatedRequest, res: Response) => {
+  const userId = employee(req).id;
+  const { data, error, count } = await supabaseAdmin.from('collab_notifications')
+    .select('id, kind, entity_id, title, body, read_at, created_at', { count: 'exact' })
+    .eq('funcionario_id', userId).order('created_at', { ascending: false }).limit(50);
+  if (error) return fail(res, 503, 'Não foi possível carregar as notificações.');
+  return res.json({ success: true, notifications: data || [], unread_count: (data || []).filter((item: any) => !item.read_at).length, total: count || 0 });
+});
+
+router.patch('/notifications/read-all', async (req: AuthenticatedRequest, res: Response) => {
+  const { error } = await supabaseAdmin.from('collab_notifications')
+    .update({ read_at: new Date().toISOString() }).eq('funcionario_id', employee(req).id).is('read_at', null);
+  if (error) return fail(res, 503, 'Não foi possível actualizar as notificações.');
+  return res.json({ success: true });
+});
+
+router.patch('/notifications/:id/read', async (req: AuthenticatedRequest, res: Response) => {
+  const { data, error } = await supabaseAdmin.from('collab_notifications')
+    .update({ read_at: new Date().toISOString() }).eq('id', req.params.id)
+    .eq('funcionario_id', employee(req).id).select('id').maybeSingle();
+  if (error) return fail(res, 503, 'Não foi possível actualizar a notificação.');
+  if (!data) return fail(res, 404, 'Notificação não encontrada.');
+  return res.json({ success: true });
 });
 
 export default router;
