@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import {
   MessageCircle, Users, Send, Plus, Search, Flag, AlertTriangle, Clock3,
   CheckCircle2, CircleDot, Paperclip, RefreshCw, X, ArrowLeft, UserRound,
-  ShieldAlert, MessagesSquare, Bell, Check
+  ShieldAlert, MessagesSquare, Bell
 } from 'lucide-react';
 
 type Employee = { id: string; nome_completo: string; role: string; loja_id: string | null; lojas?: { nome?: string } | null };
@@ -12,7 +12,8 @@ type Conversation = { id: string; tipo: 'directa' | 'grupo'; titulo: string | nu
 type Message = { id: string; conversation_id: string; sender_id: string; body: string; created_at: string; funcionarios?: { nome_completo?: string; role?: string } };
 type Report = { id: string; reference: string; titulo: string; descricao: string; categoria: string; prioridade: string; estado: string; reporter_id: string; assigned_to: string | null; created_at: string; funcionarios?: { nome_completo?: string } };
 type Comment = { id: string; funcionario_id: string; comentario: string; created_at: string; funcionarios?: { nome_completo?: string } };
-type Notification = { id: string; kind: string; entity_id: string; title: string; body: string; read_at: string | null; created_at: string };\ntype ReportEvent = { id: string; actor_id: string; action: string; old_values: Record<string, unknown>; new_values: Record<string, unknown>; created_at: string; funcionarios?: { nome_completo?: string } };
+type Notification = { id: string; kind: string; entity_id: string; title: string; body: string; read_at: string | null; created_at: string };
+type ReportEvent = { id: string; actor_id: string; action: string; old_values: Record<string, unknown>; new_values: Record<string, unknown>; created_at: string; funcionarios?: { nome_completo?: string } };
 
 const categories = [
   ['sistema', 'Sistema / aplicação'], ['equipamento', 'Equipamento'], ['caixa', 'Caixa / financeiro'],
@@ -35,7 +36,9 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
   const [activeConversation, setActiveConversation] = useState<string>('');
   const [activeReport, setActiveReport] = useState<Report | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
-  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);\n  const [notifications, setNotifications] = useState<Notification[]>([]);\n  const [showNotifications, setShowNotifications] = useState(false);
+  const [reportEvents, setReportEvents] = useState<ReportEvent[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [commentText, setCommentText] = useState('');
   const [search, setSearch] = useState('');
@@ -126,7 +129,8 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
       }
     });
     connection.on('chat:conversation', () => void loadConversations());
-    connection.on('report:created', () => void loadReports());\n    connection.on('notification:new', () => void loadNotifications());
+    connection.on('report:created', () => void loadReports());
+    connection.on('notification:new', () => void loadNotifications());
     connection.on('report:updated', (event: { id?: string }) => {
       void loadReports();
       if (event?.id && activeReport?.id === event.id) void loadReport(event.id);
