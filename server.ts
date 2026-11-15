@@ -420,6 +420,110 @@ app.get('/api/admin/transactions', verifyAdmin, async (req, res) => {
   }
 });
 
+// RECEPÇÃO DE OURO NA SEDE — LISTAGEM DE PEÇAS EXPEDIDAS
+app.get('/api/admin/inventory/receiving', verifyAdmin, async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('inventario_fisico')
+      .select('id, codigo_unico, loja_atual_id, transacao_origem_id, tipo_peca, metal, peso_gramas, estado, data_saida')
+      .eq('estado', 'enviado_sede')
+      .order('data_saida', { ascending: true })
+      .limit(500);
+
+    if (error) {
+      console.error('[Admin Receiving] Falha ao consultar peças expedidas.');
+      return res.status(503).json({ success: false, error: 'Não foi possível carregar as peças por receber.' });
+    }
+
+    const storeIds = [...new Set((data || []).map((item: any) => item.loja_atual_id).filter(Boolean))];
+    const { data: stores, error: storesError } = storeIds.length
+      ? await supabaseAdmin.from('lojas').select('id, nome').in('id', storeIds)
+      : { data: [], error: null };
+
+    if (storesError) {
+      console.error('[Admin Receiving] Falha ao consultar lojas de origem.');
+      return res.status(503).json({ success: false, error: 'Não foi possível identificar as lojas de origem.' });
+    }
+
+    const storeNames = new Map((stores || []).map((store: any) => [store.id, store.nome]));
+    return res.json({
+      success: true,
+      data: (data || []).map((item: any) => ({ ...item, loja_origem_nome: storeNames.get(item.loja_atual_id) || 'Loja não identificada' })),
+    });
+  } catch {
+    console.error('[Admin Receiving] Erro interno.');
+    return res.status(500).json({ success: false, error: 'Erro interno ao carregar a recepção.' });
+  }
+});
+
+// RECEPÇÃO DE OURO NA SEDE — CONFIRMAÇÃO ATÓMICA POR ADMINISTRADOR
+app.post('/api/admin/inventory/:id/receive', verifyAdmin, async (req, res) => {
+  const itemId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  const adminId = (req as any).adminUser?.id;
+  const receivedWeight = Number(req.body?.peso_recebido_gramas);
+  const note = typeof req.body?.observacoes_rececao === 'string' ? req.body.observacoes_rececao.trim() : '';
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(itemId)) {
+    return res.status(400).json({ success: false, error: 'Identificador de peça inválido.' });
+  }
+  if (!adminId || !Number.isFinite(receivedWeight) || receivedWeight <= 0 || receivedWeight > 100000) {
+    return res.status(400).json({ success: false, error: 'Indique um peso recebido válido em gramas.' });
+  }
+
+  try {
+    const { data: current, error: readError } = await supabaseAdmin
+      .from('inventario_fisico')
+      .select('id, codigo_unico, peso_gramas, estado')
+      .eq('id', itemId)
+      .eq('estado', 'enviado_sede')
+      .maybeSingle();
+
+    if (readError) {
+      console.error('[Admin Receiving] Falha ao consultar peça para recepção.');
+      return res.status(503).json({ success: false, error: 'Não foi possível validar a peça.' });
+    }
+    if (!current) {
+      return res.status(409).json({ success: false, error: 'A peça já foi recebida ou não está marcada como enviada.' });
+    }
+
+    const declaredWeight = Number(current.peso_gramas);
+    const difference = Number((receivedWeight - declaredWeight).toFixed(3));
+    if (Math.abs(difference) > 0.05 && note.length < 8) {
+      return res.status(422).json({ success: false, error: 'A diferença de peso excede 0,05 g. Registe uma observação com pelo menos 8 caracteres.' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('inventario_fisico')
+      .update({
+        estado: 'recebido_sede',
+        peso_recebido_gramas: receivedWeight,
+        diferenca_peso_gramas: difference,
+        recebido_por: adminId,
+        data_rececao: new Date().toISOString(),
+        observacoes_rececao: note || null,
+      })
+      .eq('id', itemId)
+      .eq('estado', 'enviado_sede')
+      .select('id, codigo_unico, estado, peso_gramas, peso_recebido_gramas, diferenca_peso_gramas, recebido_por, data_rececao, observacoes_rececao')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[Admin Receiving] Falha ao registar recepção.');
+      return res.status(503).json({ success: false, error: 'Não foi possível guardar a recepção.' });
+    }
+    if (!data) {
+      return res.status(409).json({ success: false, error: 'A peça foi alterada por outro operador. Actualize a lista.' });
+    }
+
+    const io = (globalThis as any).io;
+    if (io) io.to('admin').emit('inventory:received', data);
+    return res.json({ success: true, item: data });
+  } catch {
+    console.error('[Admin Receiving] Erro interno ao registar recepção.');
+    return res.status(500).json({ success: false, error: 'Erro interno ao registar a recepção.' });
+  }
+});
+
 // DETALHE DE LOJA — CONSULTA ADMINISTRATIVA PROTEGIDA
 app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
   const lojaId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
