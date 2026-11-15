@@ -174,13 +174,15 @@ router.get('/reports', async (req: AuthenticatedRequest, res: Response) => {
 
 router.get('/reports/:id', async (req: AuthenticatedRequest, res: Response) => {
   if (!(await canAccessReport(req.params.id, req))) return fail(res, 404, 'Ocorrência não encontrada.');
-  const [{ data: report, error }, { data: comments, error: commentsError }] = await Promise.all([
+  const [{ data: report, error }, { data: comments, error: commentsError }, { data: events, error: eventsError }] = await Promise.all([
     supabaseAdmin.from('collab_reports').select('*, funcionarios!collab_reports_reporter_id_fkey(nome_completo, role)').eq('id', req.params.id).single(),
     supabaseAdmin.from('collab_report_comments').select('id, funcionario_id, comentario, interno, created_at, funcionarios(nome_completo, role)')
       .eq('report_id', req.params.id).eq('interno', false).order('created_at'),
+    supabaseAdmin.from('collab_report_events').select('id, actor_id, action, old_values, new_values, created_at, funcionarios:actor_id(nome_completo, role)')
+      .eq('report_id', req.params.id).order('created_at', { ascending: false }).limit(100),
   ]);
-  if (error || commentsError) return fail(res, 503, 'Não foi possível carregar os detalhes da ocorrência.');
-  return res.json({ success: true, report, comments: comments || [] });
+  if (error || commentsError || eventsError) return fail(res, 503, 'Não foi possível carregar os detalhes da ocorrência.');
+  return res.json({ success: true, report, comments: comments || [], events: events || [] });
 });
 
 router.post('/reports/:id/comments', async (req: AuthenticatedRequest, res: Response) => {
@@ -205,25 +207,30 @@ router.patch('/reports/:id', async (req: AuthenticatedRequest, res: Response) =>
   if (!isAdmin(req)) return fail(res, 403, 'Apenas administradores podem alterar o estado ou atribuir ocorrências.');
   const statuses = ['novo', 'em_analise', 'em_resolucao', 'aguarda_informacao', 'resolvido', 'fechado'];
   const priorities = ['baixa', 'normal', 'alta', 'urgente'];
-  const update: Record<string, any> = {};
-  if (typeof req.body?.estado === 'string' && statuses.includes(req.body.estado)) update.estado = req.body.estado;
-  if (typeof req.body?.prioridade === 'string' && priorities.includes(req.body.prioridade)) update.prioridade = req.body.prioridade;
-  if (typeof req.body?.assigned_to === 'string') {
-    const { data: assignee, error: assigneeError } = await supabaseAdmin.from('funcionarios')
-      .select('id').eq('id', req.body.assigned_to).eq('ativo', true).maybeSingle();
-    if (assigneeError) return fail(res, 503, 'Não foi possível validar o responsável seleccionado.');
-    if (!assignee) return fail(res, 400, 'O responsável seleccionado não existe ou não está activo.');
-    update.assigned_to = assignee.id;
+  const update: Record<string, unknown> = {};
+  if (typeof req.body?.estado === 'string') {
+    if (!statuses.includes(req.body.estado)) return fail(res, 400, 'Estado inválido.');
+    update.estado = req.body.estado;
   }
+  if (typeof req.body?.prioridade === 'string') {
+    if (!priorities.includes(req.body.prioridade)) return fail(res, 400, 'Prioridade inválida.');
+    update.prioridade = req.body.prioridade;
+  }
+  if (typeof req.body?.assigned_to === 'string') update.assigned_to = req.body.assigned_to;
   if (req.body?.assigned_to === null) update.assigned_to = null;
   if (!Object.keys(update).length) return fail(res, 400, 'Nenhuma alteração válida indicada.');
-  update.updated_at = new Date().toISOString();
-  if (update.estado === 'resolvido' || update.estado === 'fechado') update.resolved_at = new Date().toISOString();
-  else if (update.estado) update.resolved_at = null;
-  const { data, error } = await supabaseAdmin.from('collab_reports').update(update).eq('id', req.params.id)
-    .select('id, reference, estado, prioridade, assigned_to, reporter_id').maybeSingle();
-  if (error) return fail(res, 503, 'Não foi possível actualizar a ocorrência.');
-  if (!data) return fail(res, 404, 'Ocorrência não encontrada.');
+
+  const { data, error } = await supabaseAdmin.rpc('admin_update_collab_report', {
+    p_report_id: req.params.id,
+    p_actor_id: employee(req).id,
+    p_changes: update,
+  });
+  if (error) {
+    if (error.code === 'P0002') return fail(res, 404, 'Ocorrência não encontrada.');
+    if (error.code === '42501') return fail(res, 403, 'Apenas administradores activos podem alterar ocorrências.');
+    if (error.code === '22023') return fail(res, 400, 'Os dados da alteração são inválidos.');
+    return fail(res, 503, 'Não foi possível actualizar e auditar a ocorrência.');
+  }
   const io = (globalThis as any).io;
   io?.to(data.reporter_id).emit('report:updated', { id: data.id, estado: data.estado });
   if (data.assigned_to) io?.to(data.assigned_to).emit('report:updated', { id: data.id, estado: data.estado });
