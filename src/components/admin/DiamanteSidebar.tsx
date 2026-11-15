@@ -24,6 +24,7 @@ import {
   Target,
   BriefcaseBusiness,
   MapPinned,
+  PackageCheck,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -46,6 +47,7 @@ export const menuItems: MenuItem[] = [
   { id: 'employees', label: 'Equipa & Funcionários', path: '/employees', icon: Users, badge: null },
   { id: 'finance', label: 'Financeiro & Tesouraria', path: '/finance', icon: Wallet, badge: null },
   { id: 'transactions', label: 'Transações', path: '/admin/transacoes', icon: ReceiptText, badge: null },
+  { id: 'gold-receiving', label: 'Recepção de Ouro', path: '/admin/recepcao-ouro', icon: PackageCheck, badge: 'SEDE' },
   { id: 'clients', label: 'Clientes & Fornecedores', path: '/clients', icon: UserCheck, badge: null },
   { id: 'settings', label: 'Configurações', path: '/settings', icon: SlidersHorizontal, badge: null },
   { id: 'logs', label: 'Logs & Auditoria', path: '/admin/logs', icon: Terminal, badge: null },
