@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 
 type OperationalIncident = { id: string; reference: string; titulo: string; categoria: string; prioridade: string; estado: string; created_at: string; loja_id: string | null };
-type OperationalTaskSummary = { id: string; title: string; status: string; priority: string; due_at: string | null; assignee?: { nome_completo?: string } };
+type OperationalTaskSummary = { id: string; title: string; status: string; priority: string; due_at: string | null; assignee?: { nome_completo?: string } };\ntype OperationalGoalSummary = { id: string; title: string; status: string; ends_on: string; progress?: { percentage: number; achieved: boolean } | null; lojas?: { nome?: string } | null; funcionarios?: { nome_completo?: string } | null };
 
 interface AdminDashboardProps {
   onNavigate: (path: string) => void;
@@ -69,7 +69,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [dataError, setDataError] = useState<string | null>(null);
   const [incidents, setIncidents] = useState<OperationalIncident[]>([]);
-  const [operationalTasks, setOperationalTasks] = useState<OperationalTaskSummary[]>([]);
+  const [operationalTasks, setOperationalTasks] = useState<OperationalTaskSummary[]>([]);\n  const [operationalGoals, setOperationalGoals] = useState<OperationalGoalSummary[]>([]);
 
   const addToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
     const newToast: ToastMessage = {
@@ -131,6 +131,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       const tasksPayload = await tasksResponse.json().catch(() => null);
       if (tasksResponse.ok && tasksPayload?.success === true && Array.isArray(tasksPayload.tasks)) {
         setOperationalTasks(tasksPayload.tasks);
+      }
+      const goalsResponse = await fetch('/api/goals', {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      const goalsPayload = await goalsResponse.json().catch(() => null);
+      if (goalsResponse.ok && goalsPayload?.success === true && Array.isArray(goalsPayload.goals)) {
+        setOperationalGoals(goalsPayload.goals);
       }
       if (!res.ok || !apiData?.success) {
         throw new Error(
@@ -556,6 +564,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Execução da rede</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Tarefas e responsabilidades</h2><p className="mt-1 text-xs text-slate-500">Acompanhamento do trabalho atribuído às equipas.</p></div><button onClick={() => onNavigate('/tasks')} className="inline-flex items-center gap-2 rounded-xl border border-[#d8b85d]/25 bg-[#d8b85d]/[0.07] px-3 py-2 text-xs font-semibold text-[#e7ca78] hover:bg-[#d8b85d]/[0.12]">Abrir tarefas <ArrowUpRight className="h-3.5 w-3.5"/></button></div>
           <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-white/[0.08] bg-[#101c2c]/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Por concluir</p><p className="mt-2 text-2xl font-semibold text-white tabular-nums">{operationalTasks.filter(t => t.status !== 'concluida').length}</p></div><div className="rounded-2xl border border-rose-400/20 bg-rose-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-rose-200/70">Prazos ultrapassados</p><p className="mt-2 text-2xl font-semibold text-rose-200 tabular-nums">{operationalTasks.filter(t => t.due_at && new Date(t.due_at) < new Date() && t.status !== 'concluida').length}</p></div><div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-emerald-200/70">Concluídas</p><p className="mt-2 text-2xl font-semibold text-emerald-200 tabular-nums">{operationalTasks.filter(t => t.status === 'concluida').length}</p></div></div>
           <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101c2c]/80">{operationalTasks.filter(t => t.status !== 'concluida').slice(0,5).map(task => <div key={task.id} className="flex items-center gap-3 border-b border-white/[0.05] p-4 last:border-0"><span className={'h-2 w-2 shrink-0 rounded-full '+(task.priority==='urgente'?'bg-rose-400':task.priority==='alta'?'bg-amber-300':'bg-slate-500')}/><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-100">{task.title}</span><span className="mt-1 block text-[10px] text-slate-500">{task.assignee?.nome_completo || 'Sem responsável'}</span></span><span className="shrink-0 text-right"><span className="block text-[10px] font-semibold text-slate-400">{task.priority.toUpperCase()}</span><span className="mt-1 block text-[10px] text-slate-500">{task.due_at ? new Date(task.due_at).toLocaleDateString('pt-PT') : 'Sem prazo'}</span></span></div>)}{operationalTasks.filter(t => t.status !== 'concluida').length === 0 && <p className="p-5 text-sm text-slate-500">Não existem tarefas activas.</p>}</div>
+        </section>
+
+        <section aria-label="Objectivos e desempenho" className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Resultados mensuráveis</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Objectivos & desempenho</h2><p className="mt-1 text-xs text-slate-500">Evolução real das metas por loja e funcionário.</p></div><button onClick={() => onNavigate('/goals')} className="inline-flex items-center gap-2 rounded-xl border border-[#d8b85d]/25 bg-[#d8b85d]/[0.07] px-3 py-2 text-xs font-semibold text-[#e7ca78] hover:bg-[#d8b85d]/[0.12]">Abrir objectivos <ArrowUpRight className="h-3.5 w-3.5"/></button></div>
+          <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-white/[0.08] bg-[#101c2c]/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Metas activas</p><p className="mt-2 text-2xl font-semibold text-white tabular-nums">{operationalGoals.filter(g => g.status === 'activa').length}</p></div><div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-emerald-200/70">Metas atingidas</p><p className="mt-2 text-2xl font-semibold text-emerald-200 tabular-nums">{operationalGoals.filter(g => g.status === 'activa' && g.progress?.achieved).length}</p></div><div className="rounded-2xl border border-rose-400/20 bg-rose-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-rose-200/70">Fora do prazo</p><p className="mt-2 text-2xl font-semibold text-rose-200 tabular-nums">{operationalGoals.filter(g => g.status === 'activa' && g.ends_on < new Date().toLocaleDateString('en-CA',{timeZone:'Europe/Lisbon'}) && !g.progress?.achieved).length}</p></div></div>
+          <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101c2c]/80">{operationalGoals.filter(g => g.status === 'activa').slice(0,5).map(goal => <div key={goal.id} className="border-b border-white/[0.05] p-4 last:border-0"><div className="flex items-center justify-between gap-3"><span className="min-w-0 truncate text-sm font-medium text-slate-100">{goal.title}</span><span className="shrink-0 text-xs font-semibold text-[#e7ca78]">{goal.progress ? goal.progress.percentage.toFixed(1)+'%' : '—'}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[.07]"><div className="h-full rounded-full bg-[#d4af37]" style={{width:Math.min(100,goal.progress?.percentage||0)+'%'}}/></div><p className="mt-1 text-[10px] text-slate-500">{goal.lojas?.nome || goal.funcionarios?.nome_completo || 'Destinatário'} · termina {new Date(goal.ends_on+'T12:00:00').toLocaleDateString('pt-PT')}</p></div>)}{operationalGoals.filter(g => g.status === 'activa').length === 0 && <p className="p-5 text-sm text-slate-500">Ainda não existem metas activas.</p>}</div>
         </section>
 
         {/* REQUISITO 2.E: TABELA GESTÃO LOJAS */}
