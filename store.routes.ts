@@ -189,6 +189,59 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
   }
 });
 
+storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
+    return res.status(403).json({ success: false, message: 'A sua conta não tem acesso aos parâmetros de compra desta loja.' });
+  }
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('configuracoes_sistema')
+      .select('valor')
+      .eq('chave', 'parametros_compra_ouro')
+      .maybeSingle();
+
+    if (error) {
+      console.error('[STORE PURCHASE SETTINGS] Falha ao consultar parâmetros.');
+      return res.status(503).json({ success: false, message: 'Não foi possível carregar os parâmetros de compra.' });
+    }
+
+    const all = Array.isArray(data?.valor?.margens) ? data.valor.margens : [];
+    const active = all.filter((item: any) =>
+      item && item.ativo === true &&
+      (item.loja_id == null || item.loja_id === employee.loja_id) &&
+      Number.isInteger(item.toque_millesimos) && item.toque_millesimos > 0 && item.toque_millesimos <= 1000 &&
+      Number.isFinite(item.cotacao_referencia_g) && item.cotacao_referencia_g > 0 &&
+      Number.isFinite(item.margem_percentagem) && item.margem_percentagem >= 0 && item.margem_percentagem <= 100
+    );
+    const byMetal = new Map<string, any>();
+    for (const item of active) {
+      const key = String(item.metal_tipo).toLowerCase().match(/(\\d+(?:\\.\\d+)?)\\s*k/)?.[1]
+        ? 'ouro-' + String(item.metal_tipo).toLowerCase().match(/(\\d+(?:\\.\\d+)?)\\s*k/)![1]
+        : (/prata.*925|925.*prata/i.test(String(item.metal_tipo)) ? 'prata-925' : String(item.metal_tipo).trim().toLowerCase());
+      const existing = byMetal.get(key);
+      if (!existing || (item.loja_id === employee.loja_id && existing.loja_id == null)) byMetal.set(key, item);
+    }
+
+    return res.json({
+      success: true,
+      lojaId: employee.loja_id,
+      margens: Array.from(byMetal.values()).map((item: any) => ({
+        metal_tipo: item.metal_tipo,
+        toque_millesimos: item.toque_millesimos,
+        cotacao_referencia_g: item.cotacao_referencia_g,
+        margem_percentagem: item.margem_percentagem,
+        preco_compra_grama: Number((item.cotacao_referencia_g * item.toque_millesimos / 1000 * (1 - item.margem_percentagem / 100)).toFixed(2)),
+        desconto_maximo_loja_perc: Number(item.desconto_maximo_loja_perc) || 0,
+      })),
+    });
+  } catch {
+    console.error('[STORE PURCHASE SETTINGS] Erro interno.');
+    return res.status(500).json({ success: false, message: 'Erro interno ao carregar os parâmetros de compra.' });
+  }
+});
+
 storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (!employee || !employee.ativo || !employee.loja_id ||
