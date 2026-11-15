@@ -73,6 +73,7 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
   const [rows,setRows]=useState<OperationalExpense[]>([]);
   const [summary,setSummary]=useState<{month:string;totals:{paid:number;pending:number;rejected:number};stores:{loja_id:string;paid:number;pending:number;rejected:number;byCategory:Record<string,number>}[]}|null>(null);
   const [selectedMonth,setSelectedMonth]=useState(new Date().toISOString().slice(0,7));
+  const [closings,setClosings]=useState<any[]>([]);
   const [loadingRows,setLoadingRows]=useState(true);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
@@ -93,6 +94,7 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
   };
   useEffect(()=>{void load();},[]);
   useEffect(()=>{void request('/api/admin/finance/expenses/summary?month='+encodeURIComponent(selectedMonth)).then(setSummary).catch(e=>setError(e?.message||'Falha ao carregar resumo mensal.'));},[selectedMonth]);
+  useEffect(()=>{void request('/api/admin/finance/closings?month='+encodeURIComponent(selectedMonth)).then(r=>setClosings(Array.isArray(r.data)?r.data:[])).catch(e=>setError(e?.message||'Falha ao carregar fechos.'));},[selectedMonth]);
   const submit=async(e:React.FormEvent)=>{
     e.preventDefault();setBusy(true);setError('');
     try{
@@ -107,6 +109,21 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
     setBusy(true);setError('');
     try{await request(`/api/admin/finance/expenses/${encodeURIComponent(id)}/status`,{method:'PATCH',body:JSON.stringify({estado,motivo})});await load();}
     catch(e:any){setError(e?.message||'Falha ao actualizar despesa.');}
+    finally{setBusy(false);}
+  };
+  const closeMonth=async(lojaId:string)=>{
+    if(!window.confirm('Fechar definitivamente o mês '+selectedMonth+' para esta loja? As despesas deste período ficam bloqueadas.'))return;
+    setBusy(true);setError('');
+    try{await request('/api/admin/finance/closings',{method:'POST',body:JSON.stringify({loja_id:lojaId,month:selectedMonth})});const result=await request('/api/admin/finance/closings?month='+encodeURIComponent(selectedMonth));setClosings(result.data||[]);}
+    catch(e:any){setError(e?.message||'Não foi possível fechar o mês.');}
+    finally{setBusy(false);}
+  };
+  const reopenMonth=async(id:string)=>{
+    const motivo=window.prompt('Motivo obrigatório para reabrir este mês:')||'';
+    if(motivo.trim().length<5)return;
+    setBusy(true);setError('');
+    try{await request('/api/admin/finance/closings/'+encodeURIComponent(id)+'/reopen',{method:'POST',body:JSON.stringify({motivo})});const result=await request('/api/admin/finance/closings?month='+encodeURIComponent(selectedMonth));setClosings(result.data||[]);}
+    catch(e:any){setError(e?.message||'Não foi possível reabrir o mês.');}
     finally{setBusy(false);}
   };
   const money=(n:number)=>new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(Number(n)||0);
@@ -137,6 +154,10 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
       </div>
       <div className="overflow-x-auto rounded-xl border border-slate-800"><table className="w-full min-w-[520px] text-left text-sm"><thead className="text-[11px] uppercase text-slate-500"><tr><th className="p-3">Loja</th><th className="p-3">Liquidado</th><th className="p-3">Pendente</th><th className="p-3">Rejeitado</th></tr></thead><tbody className="divide-y divide-slate-800">{summary.stores.map(s=><tr key={s.loja_id}><td className="p-3 text-slate-300">{stores.find(x=>x.id===s.loja_id)?.nome||s.loja_id.slice(0,8)}</td><td className="p-3 font-semibold text-emerald-300">{money(s.paid)}</td><td className="p-3 text-amber-300">{money(s.pending)}</td><td className="p-3 text-slate-400">{money(s.rejected)}</td></tr>)}</tbody></table>{summary.stores.length===0&&<p className="p-4 text-center text-xs text-slate-500">Sem despesas neste mês.</p>}</div>
     </div>}
+    <div className="space-y-3 rounded-xl border border-slate-800 p-4">
+      <div><h3 className="text-sm font-semibold text-white">Fecho mensal por loja</h3><p className="text-xs text-slate-500">O fecho congela os valores do período e bloqueia alterações às despesas dessa loja.</p></div>
+      <div className="space-y-2">{stores.map(store=>{const closing=closings.find(x=>x.loja_id===store.id);return <div key={store.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-900/60 p-3"><div><p className="text-sm font-medium text-slate-200">{store.nome}</p><p className="text-xs text-slate-500">{closing?closing.estado==='fechado'?'Fechado em '+new Date(closing.fechado_em).toLocaleString('pt-PT'):'Reaberto':'Ainda sem fecho para '+selectedMonth}</p></div><div>{closing?.estado==='fechado'?<button type="button" disabled={busy} onClick={()=>void reopenMonth(closing.id)} className="rounded-lg border border-amber-500/30 px-3 py-2 text-xs text-amber-300 disabled:opacity-50">Reabrir com motivo</button>:<button type="button" disabled={busy} onClick={()=>void closeMonth(store.id)} className="rounded-lg bg-[#D4AF37] px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">Fechar mês</button>}</div></div>;})}</div>
+    </div>
     <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="text-[11px] uppercase text-slate-500"><tr><th className="p-3">Data / Loja</th><th className="p-3">Categoria / Descrição</th><th className="p-3">Valor</th><th className="p-3">Estado</th><th className="p-3">Acções</th></tr></thead><tbody className="divide-y divide-slate-800">{rows.map(row=><tr key={row.id}><td className="p-3 text-slate-300">{new Date(row.data_despesa+'T12:00:00').toLocaleDateString('pt-PT')}<span className="block text-xs text-slate-500">{stores.find(s=>s.id===row.loja_id)?.nome||'Loja'}</span></td><td className="p-3 text-slate-300">{expenseCategories.find(([v])=>v===row.categoria)?.[1]||row.categoria}<span className="block max-w-xs truncate text-xs text-slate-500">{row.descricao}{row.fornecedor?' · '+row.fornecedor:''}</span></td><td className="p-3 font-semibold text-white">{money(row.valor)}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${row.estado==='paga'?'bg-emerald-500/10 text-emerald-300':row.estado==='rejeitada'?'bg-rose-500/10 text-rose-300':row.estado==='aprovada'?'bg-sky-500/10 text-sky-300':'bg-amber-500/10 text-amber-300'}`}>{row.estado}</span></td><td className="p-3"><div className="flex flex-wrap gap-1">{row.estado==='pendente'&&<><button disabled={busy} onClick={()=>void changeStatus(row.id,'aprovada')} className="rounded bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">Aprovar</button><button disabled={busy} onClick={()=>void changeStatus(row.id,'rejeitada')} className="rounded bg-rose-500/10 px-2 py-1 text-xs text-rose-300">Rejeitar</button></>}{row.estado==='aprovada'&&<button disabled={busy} onClick={()=>void changeStatus(row.id,'paga')} className="rounded bg-sky-500/10 px-2 py-1 text-xs text-sky-300">Marcar paga</button>}</div></td></tr>)}</tbody></table>{!loadingRows&&rows.length===0&&<p className="p-6 text-center text-sm text-slate-500">Ainda não existem despesas registadas.</p>}{loadingRows&&<p className="p-6 text-center text-sm text-slate-500">A carregar despesas…</p>}</div>
   </section>;
 }
