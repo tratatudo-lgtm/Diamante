@@ -70,7 +70,9 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
       }
 
       await fetchInventory();
-      onShowToast('success', `Lote ${codigoUnico} marcado como enviado para a Sede.`, 'Inventário Atualizado');
+      const dispatchedWeight = Number(payload.item?.peso_gramas);
+      const weightLabel = Number.isFinite(dispatchedWeight) && dispatchedWeight > 0 ? ` · ${dispatchedWeight.toFixed(2)} g` : '';
+      onShowToast('success', `Peça ${codigoUnico}${weightLabel} marcada como enviada para a Sede.`, 'Expedição Registada');
     } catch (err: unknown) {
       console.warn('[Inventário] Falha ao atualizar estado.');
       onShowToast('error', err instanceof Error ? err.message : 'Não foi possível actualizar o estado do inventário.');
