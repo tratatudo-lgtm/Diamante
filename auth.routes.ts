@@ -696,6 +696,27 @@ authRouter.put('/funcionarios/:id', verifyAdmin, handleUpdateFuncionario);
 authRouter.get('/admin/funcionarios', verifyAdmin, handleGetFuncionarios);
 authRouter.get('/funcionarios', verifyAdmin, handleGetFuncionarios);
 
+authRouter.get('/admin/audit-logs', verifyAdmin, async (req: AdminRequest, res: Response): Promise<void> => {
+  const requestedLimit = Number(req.query.limit ?? 100);
+  const limit = Number.isInteger(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 200) : 100;
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('auditoria_logs')
+      .select('id, funcionario_id, acao, tabela_afetada, registo_id, detalhes_antigos, detalhes_novos, ip_origem, created_at, funcionarios(nome_completo, role, telemovel, loja_id)')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.error('[Admin Audit] Falha ao consultar auditoria.');
+      res.status(503).json({ success: false, message: 'Não foi possível consultar o histórico de auditoria.' });
+      return;
+    }
+    res.status(200).json({ success: true, logs: data || [], total: data?.length || 0 });
+  } catch {
+    console.error('[Admin Audit] Erro interno ao consultar auditoria.');
+    res.status(500).json({ success: false, message: 'Erro interno ao consultar o histórico de auditoria.' });
+  }
+});
+
 authRouter.get('/admin/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.get('/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.put('/admin/config/margens', verifyAdmin, handleUpdateMargensConfig);
