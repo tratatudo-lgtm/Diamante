@@ -121,7 +121,7 @@ BEGIN
     tipo_peca, metal, peso_gramas, estado
   ) VALUES (
     p_loja_id, v_transaction.id, v_inventory_code,
-    btrim(p_tipo_peca), btrim(p_metal), p_peso_gramas, 'em_loja'
+    btrim(p_tipo_peca), btrim(p_metal), p_peso_gramas, 'pendente_aprovacao'
   );
 
   RETURN to_jsonb(v_transaction);
