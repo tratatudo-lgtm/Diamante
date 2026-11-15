@@ -106,7 +106,7 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
             <button onClick={() => onNavigate('/collaboration')} className="inline-flex items-center gap-1.5 rounded-lg border border-[#D4AF37]/30 bg-gray-900 px-3 py-2 text-xs font-semibold text-[#E6C66B] hover:bg-[#D4AF37]/10">
               <Users className="h-4 w-4" /><span className="hidden sm:inline">Messenger</span>
             </button>
-            <button onClick={() => onNavigate('/collaboration')} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-gray-900 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/10">
+            <button onClick={() => onNavigate('/reportar-situacao')} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-gray-900 px-3 py-2 text-xs font-semibold text-amber-300 hover:bg-amber-500/10">
               <Sparkles className="h-4 w-4" /><span className="hidden sm:inline">Reportar problema</span>
             </button>
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-900 border border-gray-800 text-xs text-gray-300">
