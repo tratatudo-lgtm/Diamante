@@ -83,6 +83,11 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
     setReports(result.reports || []);
   }, [api]);
 
+  const loadNotifications = useCallback(async () => {
+    const result = await api('/notifications');
+    setNotifications(result.notifications || []);
+  }, [api]);
+
   const loadMessages = useCallback(async (id: string) => {
     const result = await api('/conversations/' + encodeURIComponent(id) + '/messages');
     setMessages(result.messages || []);
@@ -102,6 +107,7 @@ export const CollaborationWorkspace: React.FC<{ initialSection?: 'chat' | 'repor
       api('/directory').then((r) => { if (!cancelled) setDirectory(r.employees || []); }),
       loadConversations(),
       loadReports(),
+      loadNotifications(),
     ]).catch((err) => { if (!cancelled) setError(err.message || 'Falha ao carregar colaboração.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
