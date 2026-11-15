@@ -272,11 +272,11 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
                     <span className="font-mono font-semibold text-[#D4AF37] tabular-nums">
                       {Number(item.peso_gramas).toFixed(2)} g
                     </span>
-                    {item.created_at && (
+                    {item.data_entrada && (
                       <>
                         <span className="text-gray-600">·</span>
                         <span className="text-[11px] text-gray-500 font-mono">
-                          {format(new Date(item.created_at), 'dd/MM/yyyy HH:mm')}
+                          {format(new Date(item.data_entrada), 'dd/MM/yyyy HH:mm')}
                         </span>
                       </>
                     )}
