@@ -34,8 +34,9 @@ storeRouter.get('/dashboard', verifyAuth, async (req: AuthenticatedRequest, res:
         .eq('loja_id', employee.loja_id).eq('data', today).maybeSingle(),
       supabaseAdmin.from('kpi_loja_diaria').select('*')
         .eq('loja_id', employee.loja_id).eq('data', yesterday).maybeSingle(),
-      supabaseAdmin.from('inventario_fisico').select('id', { count: 'exact', head: true })
-        .eq('loja_atual_id', employee.loja_id).eq('estado', 'em_loja'),
+      supabaseAdmin.from('inventario_fisico').select('id, peso_gramas, estado')
+        .eq('loja_atual_id', employee.loja_id)
+        .in('estado', ['em_loja', 'pendente_aprovacao']),
       supabaseAdmin.from('transacoes')
         .select('id, loja_id, estado, valor_final, peso_gramas, created_at')
         .eq('loja_id', employee.loja_id)
@@ -54,7 +55,10 @@ storeRouter.get('/dashboard', verifyAuth, async (req: AuthenticatedRequest, res:
       pontos: pointsRes.data || [],
       kpiHoje: todayKpiRes.data || null,
       kpiOntem: yesterdayKpiRes.data || null,
-      stockEmLojaCount: stockRes.count || 0,
+      stockEmLojaCount: (stockRes.data || []).filter((item: any) => item.estado === 'em_loja').length,
+      stockEmLojaPesoGramas: (stockRes.data || []).filter((item: any) => item.estado === 'em_loja').reduce((sum: number, item: any) => sum + (Number(item.peso_gramas) || 0), 0),
+      comprasPendentesCount: (stockRes.data || []).filter((item: any) => item.estado === 'pendente_aprovacao').length,
+      comprasPendentesPesoGramas: (stockRes.data || []).filter((item: any) => item.estado === 'pendente_aprovacao').reduce((sum: number, item: any) => sum + (Number(item.peso_gramas) || 0), 0),
       transacoes: transactionsRes.data || [],
     });
   } catch {
