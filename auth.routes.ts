@@ -906,7 +906,7 @@ async function handleImportGoldMarketQuote(_req: AdminRequest, res: Response): P
       cotacao_observada_em: quote.price_as_of,
       cotacao_recebida_em: quote.updated_at,
     }));
-    const payload = { ...currentConfig.valor, margens };
+    const payload = { ...currentConfig.valor, margens: margins };
     const { data: historyId, error: importError } = await supabaseAdmin.rpc('importar_cotacao_ouro', {
       p_configuracao: payload,
       p_fonte: 'xaus.com',
