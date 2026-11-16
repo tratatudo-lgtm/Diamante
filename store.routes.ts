@@ -217,7 +217,8 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
       (item.loja_id == null || item.loja_id === employee.loja_id) &&
       Number.isInteger(item.toque_millesimos) && item.toque_millesimos > 0 && item.toque_millesimos <= 1000 &&
       Number.isFinite(item.cotacao_referencia_g) && item.cotacao_referencia_g > 0 &&
-      Number.isFinite(item.margem_percentagem) && item.margem_percentagem >= 0 && item.margem_percentagem <= 100
+      Number.isFinite(item.margem_percentagem) && item.margem_percentagem >= 0 && item.margem_percentagem <= 100 &&
+      Number.isFinite(item.desconto_maximo_loja_perc) && item.desconto_maximo_loja_perc >= 0 && item.desconto_maximo_loja_perc <= 100
     );
     const byMetal = new Map<string, any>();
     for (const item of active) {
@@ -274,6 +275,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   // A cotação e a margem são sempre lidas da configuração aprovada pela administração.
   let cotacaoSpot = 0;
   let margem = 0;
+  let flexibilidadeLoja = 0;
   let valorSugerido = 0;
   try {
     const { data: configRow, error: configError } = await supabaseAdmin
@@ -297,14 +299,23 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     if (!metalConfig || !Number.isInteger(metalConfig.toque_millesimos) ||
         metalConfig.toque_millesimos <= 0 || metalConfig.toque_millesimos > 1000 ||
         !Number.isFinite(metalConfig.cotacao_referencia_g) || metalConfig.cotacao_referencia_g <= 0 ||
-        !Number.isFinite(metalConfig.margem_percentagem) || metalConfig.margem_percentagem < 0 || metalConfig.margem_percentagem > 100) {
+        !Number.isFinite(metalConfig.margem_percentagem) || metalConfig.margem_percentagem < 0 || metalConfig.margem_percentagem > 100 ||
+        !Number.isFinite(metalConfig.desconto_maximo_loja_perc) || metalConfig.desconto_maximo_loja_perc < 0 || metalConfig.desconto_maximo_loja_perc > 100) {
       return res.status(409).json({ success: false, message: 'Este metal não tem uma cotação e margem activas configuradas pela sede para a sua loja. Contacte a administração.' });
     }
 
     cotacaoSpot = Number(metalConfig.cotacao_referencia_g);
     margem = Number(metalConfig.margem_percentagem);
+    flexibilidadeLoja = Number(metalConfig.desconto_maximo_loja_perc);
     const precoCompraGrama = cotacaoSpot * (metalConfig.toque_millesimos / 1000) * (1 - margem / 100);
     valorSugerido = Number((peso * precoCompraGrama).toFixed(2));
+    const valorMaximoAutorizado = Number((valorSugerido * (1 + flexibilidadeLoja / 100)).toFixed(2));
+    if (Number(valorFinal.toFixed(2)) > valorMaximoAutorizado) {
+      return res.status(409).json({
+        success: false,
+        message: `O valor acordado excede o limite autorizado pela sede de ${valorMaximoAutorizado.toFixed(2)} €. Flexibilidade máxima da loja: ${flexibilidadeLoja.toFixed(2)}%.`,
+      });
+    }
   } catch {
     console.error('[Store Purchase] Erro ao validar parâmetros de compra.');
     return res.status(503).json({ success: false, message: 'Não foi possível validar os parâmetros de compra.' });
