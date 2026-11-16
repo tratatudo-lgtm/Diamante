@@ -16,7 +16,7 @@ type Report = {
   period: { from: string | null; to: string | null };
   totals: { revenue: number; allocated_cost: number; additional_costs: number; result: number; fine_gold_sold_grams: number };
   stores: StoreResult[];
-  unmatched: { revenue: number; result: number };
+  unmatched: { revenue: number; allocated_cost?: number; additional_costs?: number; result: number; fine_gold_sold_grams?: number };
 };
 
 const euro = (value: number) => Number(value || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' });
@@ -131,8 +131,8 @@ export const RefiningProfitabilityPage: React.FC = () => {
             </div> : <div className="px-5 py-12 text-center text-sm text-slate-500">Não existem liquidações neste período.</div>}
           </section>
 
-          {(report.unmatched.revenue > 0.009 || Math.abs(report.unmatched.result) > 0.009) && <div className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-sm text-amber-100">
-            <p className="font-semibold">Valores por reconciliar</p><p className="mt-1 text-xs text-amber-100/70">Parte da receita e do resultado não pôde ser atribuída com segurança a uma loja de origem. Receita: {euro(report.unmatched.revenue)} · Resultado: {euro(report.unmatched.result)}.</p>
+          {(report.unmatched.revenue > 0.009 || Math.abs(report.unmatched.result) > 0.009 || Number(report.unmatched.allocated_cost || 0) > 0.009 || Number(report.unmatched.additional_costs || 0) > 0.009 || Number(report.unmatched.fine_gold_sold_grams || 0) > 0.0009) && <div className="mt-5 rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-4 text-sm text-amber-100">
+            <p className="font-semibold">Valores por reconciliar</p><p className="mt-1 text-xs text-amber-100/70">Parte da receita e do resultado não pôde ser atribuída com segurança a uma loja de origem. Receita: {euro(report.unmatched.revenue)} · Custo imputado: {euro(report.unmatched.allocated_cost || 0)} · Custos adicionais: {euro(report.unmatched.additional_costs || 0)} · Resultado: {euro(report.unmatched.result)} · Ouro fino: {grams(report.unmatched.fine_gold_sold_grams || 0)}.</p>
           </div>}
           <p className="mt-4 text-[11px] text-slate-600">Este relatório apresenta resultados realizados. Não inclui valorização estimada do ouro fino ainda disponível para venda.</p>
         </>}
