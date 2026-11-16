@@ -221,21 +221,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error('Credenciais inválidas ou conta inativa');
       }
 
-      // If user is marked inactive in metadata or funcionarios
-      if (sessionData && sessionData.ativo === false) {
+      // Falhar fechado: só aceitar um perfil ativo, ligado à identidade autenticada.
+      if (
+        !sessionData ||
+        sessionData.id !== authData.user.id ||
+        sessionData.ativo !== true ||
+        typeof sessionData.role !== 'string' || !sessionData.role.trim() ||
+        typeof sessionData.nome_completo !== 'string' || !sessionData.nome_completo.trim()
+      ) {
         await supabase.auth.signOut();
         throw new Error('Credenciais inválidas ou conta inativa');
       }
 
-      // 3. Guardar resultado no Context
-      const assignedRole = sessionData?.role || authData.user.user_metadata?.role || 'admin';
-      const assignedLojaId = sessionData?.loja_id || null;
+      // 3. Guardar apenas os dados confirmados na tabela funcionarios.
+      const assignedRole = sessionData.role;
+      const assignedLojaId = sessionData.loja_id || null;
 
       const fullSession: UserSessionData = {
-        id: sessionData?.id || authData.user.id,
+        id: sessionData.id,
         user_id: authData.user.id,
-        email: authData.user.email || email,
-        nome_completo: sessionData?.nome_completo || authData.user.user_metadata?.nome_completo || email.split('@')[0],
+        email: authData.user.email || sessionData.email || email,
+        nome_completo: sessionData.nome_completo,
         role: assignedRole,
         loja_id: assignedLojaId,
         ativo: true,
