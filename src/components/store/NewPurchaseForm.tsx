@@ -281,7 +281,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
           <div>
             <h2 className="text-base font-bold text-white">Nova Compra de Ouro</h2>
             <p className="text-xs text-gray-400">
-              Pagamento via transferência bancária autorizada pela Sede
+              Compra calculada sobre a cotação diária do ouro fino aprovada pela sede
             </p>
           </div>
         </div>
@@ -291,6 +291,16 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         <div className="p-4 rounded-xl bg-red-950/70 border border-red-700/60 text-red-200 text-xs flex items-start gap-2.5">
           <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
           <span>{errorMessage}</span>
+        </div>
+      )}
+
+      {selectedPricing && (
+        <div className="max-w-2xl mx-auto rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-gray-300">
+          <div className="flex flex-wrap justify-between gap-2">
+            <span>Cotação de ouro fino: <strong className="text-white">{formatCurrency(selectedPricing.cotacao_referencia_g)}/g</strong></span>
+            <span>Margem sede: <strong className="text-[#D4AF37]">{selectedPricing.margem_percentagem}%</strong></span>
+          </div>
+          <p className="mt-1 text-[11px] text-gray-400">Referência manual da sede · Última actualização: {cotacaoObservadaLabel}. Só são aceites cotações registadas hoje.</p>
         </div>
       )}
 
