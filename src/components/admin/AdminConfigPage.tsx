@@ -256,6 +256,9 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                     <p className="text-[11px] text-slate-400 font-mono">
                       Preço Compra (€/g) = Cotação diária do ouro fino &times; (Toque &divide; 1000) &times; (100% - Margem de Compra %)
                     </p>
+                    <p className="mt-1 text-[11px] text-amber-200/90">
+                      Referência inserida pela sede. Margem de compra sugerida: 15%–20%, ajustável por estratégia e custos. Guardar os parâmetros regista a data e hora da actualização.
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs font-mono text-[#D4AF37]">
