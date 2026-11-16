@@ -557,6 +557,22 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
       return res.status(503).json({ success: false, error: 'Não foi possível carregar os lotes de fundição.' });
     }
     const batchIds = (data || []).map((batch: any) => batch.id);
+    const { data: settlements, error: settlementsError } = batchIds.length
+      ? await supabaseAdmin.from('ouro_fundicao_liquidacoes')
+          .select('id, lote_id, ouro_fino_vendido_gramas, preco_por_grama, receita_bruta, custo_lote_alocado, custos_adicionais, resultado_liquido, comprador, referencia_documento, liquidado_em')
+          .in('lote_id', batchIds)
+          .order('liquidado_em', { ascending: false })
+      : { data: [], error: null };
+    if (settlementsError) {
+      console.error('[Refining] Falha ao carregar liquidações.');
+      return res.status(503).json({ success: false, error: 'Não foi possível carregar as liquidações dos lotes.' });
+    }
+    const settlementsByBatch = new Map<string, any[]>();
+    for (const settlement of settlements || []) {
+      const current = settlementsByBatch.get(settlement.lote_id) || [];
+      current.push(settlement);
+      settlementsByBatch.set(settlement.lote_id, current);
+    }
     const { data: pieces, error: piecesError } = batchIds.length
       ? await supabaseAdmin
           .from('ouro_fundicao_lote_pecas')
@@ -604,6 +620,10 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
             ? Number((totalCost / fineGold).toFixed(4))
             : null,
           custos_operacionais: costs,
+          liquidacoes: settlementsByBatch.get(batch.id) || [],
+          ouro_fino_vendido_gramas: Number((settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.ouro_fino_vendido_gramas || 0), 0).toFixed(3)),
+          receita_realizada: Number((settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.receita_bruta || 0), 0).toFixed(2)),
+          resultado_realizado: Number((settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.resultado_liquido || 0), 0).toFixed(2)),
           pecas: piecesByBatch.get(batch.id) || [],
         };
       }),
