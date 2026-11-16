@@ -309,7 +309,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     const matching = configs.filter((item: any) =>
       item && item.ativo === true && Number(item.toque_millesimos) === toqueSolicitado &&
       (item.loja_id == null || item.loja_id === employee.loja_id) &&
-      item.cotacao_origem === 'referencia_manual_sede' &&
+      ['referencia_manual_sede', 'xaus.com'].includes(item.cotacao_origem) &&
       item.cotacao_moeda === 'EUR' &&
       item.cotacao_unidade === 'EUR/g_ouro_fino' &&
       typeof item.cotacao_observada_em === 'string' &&
