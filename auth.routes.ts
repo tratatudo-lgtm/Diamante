@@ -769,6 +769,7 @@ async function handleUpdateMargensConfig(req: AdminRequest, res: Response): Prom
 
     const previousMargins = Array.isArray(currentConfig?.valor?.margens) ? currentConfig.valor.margens : [];
     const savedAt = new Date().toISOString();
+    const confirmQuotesToday = req.body?.confirmarCotacoesHoje === true;
     const payload = {
       margens: settings.margens.map((item: any) => {
         const previous = previousMargins.find((candidate: any) =>
@@ -788,7 +789,7 @@ async function handleUpdateMargensConfig(req: AdminRequest, res: Response): Prom
           cotacao_origem: 'referencia_manual_sede',
           cotacao_moeda: 'EUR',
           cotacao_unidade: 'EUR/g_ouro_fino',
-          cotacao_observada_em: previous ? previous.cotacao_observada_em : savedAt,
+          cotacao_observada_em: confirmQuotesToday || !previous ? savedAt : previous.cotacao_observada_em,
         };
       }),
       tetos: settings.tetos,
