@@ -38,6 +38,12 @@ export const GoldRefiningPage: React.FC = () => {
   const [touch, setTouch] = useState<Record<string, string>>({});
   const [costForms, setCostForms] = useState<Record<string, {categoria:string;descricao:string;valor:string}>>({});
   const [saleForms, setSaleForms] = useState<Record<string, {gramas:string;preco:string;custos:string;comprador:string;documento:string}>>({});
+  const [pendingSaleKeys, setPendingSaleKeys] = useState<Record<string, { signature: string; key: string }>>(() => {
+    try {
+      const stored = sessionStorage.getItem('diamante_pending_refining_sales');
+      return stored ? JSON.parse(stored) : {};
+    } catch { return {}; }
+  });
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -124,13 +130,19 @@ export const GoldRefiningPage: React.FC = () => {
 
   const registerSettlement = async (batch: RefiningBatch) => {
     const form = saleForms[batch.id] || { gramas: '', preco: '', custos: '0', comprador: '', documento: '' };
+    const signature = JSON.stringify({ batchId: batch.id, gramas: form.gramas.replace(',', '.'), preco: form.preco.replace(',', '.'), custos: form.custos.replace(',', '.'), comprador: form.comprador.trim(), documento: form.documento.trim() });
+    const existingKey = pendingSaleKeys[batch.id];
+    const idempotencyKey = existingKey?.signature === signature ? existingKey.key : crypto.randomUUID();
+    const nextPendingKeys = { ...pendingSaleKeys, [batch.id]: { signature, key: idempotencyKey } };
+    setPendingSaleKeys(nextPendingKeys);
+    sessionStorage.setItem('diamante_pending_refining_sales', JSON.stringify(nextPendingKeys));
     setBusy(true); setError(''); setNotice('');
     try {
       const token = sessionStorage.getItem('diamante_jwt_token');
       const response = await fetch('/api/admin/refining/batches/' + encodeURIComponent(batch.id) + '/settlements', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({
-          chave_idempotencia: crypto.randomUUID(),
+          chave_idempotencia: idempotencyKey,
           ouro_fino_vendido_gramas: form.gramas.replace(',', '.'),
           preco_por_grama: form.preco.replace(',', '.'),
           custos_adicionais: form.custos.replace(',', '.'),
@@ -141,6 +153,12 @@ export const GoldRefiningPage: React.FC = () => {
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.success !== true) throw new Error(payload?.error || 'Não foi possível registar a liquidação.');
       setSaleForms(v => ({ ...v, [batch.id]: { gramas: '', preco: '', custos: '0', comprador: '', documento: '' } }));
+      setPendingSaleKeys(current => {
+        const next = { ...current };
+        delete next[batch.id];
+        sessionStorage.setItem('diamante_pending_refining_sales', JSON.stringify(next));
+        return next;
+      });
       setNotice('Venda real registada para o lote ' + batch.codigo_lote + '. Receita: ' + Number(payload.liquidacao?.receita_bruta || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) + '.');
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao registar venda.'); }
