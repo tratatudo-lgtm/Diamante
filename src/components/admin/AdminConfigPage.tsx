@@ -251,10 +251,10 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                   </div>
                   <div>
                     <p className="text-xs font-bold text-white">
-                      Fórmula de Preço de Balcão Atualizada em Tempo Real
+                      Preço de Compra Calculado sobre a Cotação Diária
                     </p>
                     <p className="text-[11px] text-slate-400 font-mono">
-                      Preço Compra (€/g) = Cotação Base &times; (Toque &divide; 1000) &times; (100% - Margem Empresa %)
+                      Preço Compra (€/g) = Cotação diária do ouro fino &times; (Toque &divide; 1000) &times; (100% - Margem de Compra %)
                     </p>
                   </div>
                 </div>
