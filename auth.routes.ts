@@ -1,5 +1,6 @@
 // PATH: auth.routes.ts
 import { Router, Request, Response } from 'express';
+import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { randomInt } from 'crypto';
 import bcrypt from 'bcryptjs';
 import {
@@ -14,6 +15,11 @@ import {
 import { verifyAdmin, AdminRequest } from './middleware/verifyAdmin';
 
 export const authRouter = Router();
+
+// Sessão autenticada: devolve apenas o perfil ativo associado ao JWT emitido pelo servidor.
+authRouter.get('/session', verifyAuth, (req: AuthenticatedRequest, res: Response) => {
+  res.status(200).json({ success: true, user: req.authenticatedUser });
+});
 
 /**
  * Validação algorítmica de NIF Português
