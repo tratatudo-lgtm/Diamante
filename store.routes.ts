@@ -285,6 +285,46 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     return res.status(400).json({ success: false, message: 'Os dados da compra são inválidos. Verifique os campos e tente novamente.' });
   }
 
+  // Recover a committed request before consulting today's quote. This handles the
+  // uncertain-response case: the original transaction may have committed even if
+  // the browser never received its HTTP response.
+  try {
+    const { data: existingPurchase, error: existingPurchaseError } = await supabaseAdmin
+      .from('transacoes')
+      .select('id, idempotency_key, funcionario_id, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, descricao, estado, created_at')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle();
+
+    if (existingPurchaseError) {
+      console.error('[Store Purchase] Falha ao verificar repetição idempotente.');
+      return res.status(503).json({ success: false, message: 'Não foi possível verificar se a compra já foi registada. Tente novamente.' });
+    }
+
+    if (existingPurchase) {
+      const expectedDescription = descricao || `${tipoPeca} em ${metal}`;
+      const sameRequest =
+        existingPurchase.funcionario_id === employee.id &&
+        existingPurchase.loja_id === employee.loja_id &&
+        existingPurchase.cliente_nome === clienteNome &&
+        existingPurchase.cliente_cc === clienteCc &&
+        (existingPurchase.cliente_contacto || '') === (clienteTelemovel || '') &&
+        existingPurchase.tipo_peca === tipoPeca &&
+        existingPurchase.metal === metal &&
+        Number(existingPurchase.peso_gramas) === peso &&
+        Number(existingPurchase.valor_final) === Number(valorFinal.toFixed(2)) &&
+        (existingPurchase.descricao || '') === expectedDescription;
+
+      if (!sameRequest) {
+        return res.status(409).json({ success: false, message: 'Esta chave de repetição já foi utilizada noutra compra. Não volte a submeter a operação.' });
+      }
+
+      return res.status(200).json({ success: true, transacao: existingPurchase, replay: true });
+    }
+  } catch {
+    console.error('[Store Purchase] Erro ao verificar repetição idempotente.');
+    return res.status(503).json({ success: false, message: 'Não foi possível verificar se a compra já foi registada. Tente novamente.' });
+  }
+
   // A cotação e a margem são sempre lidas da configuração aprovada pela administração.
   let cotacaoSpot = 0;
   let margem = 0;
