@@ -363,7 +363,6 @@ setupViteOrStatic().then(() => {
     console.log(`Host: ${HOST}`);
     console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
     console.log(`WebSocket: Ativo (Socket.IO)`);
-    console.log(`Chave Mestra Ativa: +351937230116`);
     console.log(`=========================================`);
   });
 }).catch(err => {
