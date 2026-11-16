@@ -940,6 +940,25 @@ async function handleImportGoldMarketQuote(_req: AdminRequest, res: Response): P
   }
 }
 
+authRouter.get('/admin/config/cotacao-ouro/historico', verifyAdmin, async (_req: AdminRequest, res: Response): Promise<void> => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('cotacoes_ouro_historico')
+      .select('id, fonte, preco_referencia, moeda, unidade, observada_em, recebida_em, importada_em, margens_snapshot')
+      .order('importada_em', { ascending: false })
+      .limit(50);
+    if (error) {
+      console.error('[Admin Gold Quote] Falha ao consultar histórico.');
+      res.status(503).json({ success: false, message: 'Não foi possível consultar o histórico de cotações.' });
+      return;
+    }
+    res.status(200).json({ success: true, cotacoes: data || [] });
+  } catch {
+    console.error('[Admin Gold Quote] Erro interno ao consultar histórico.');
+    res.status(500).json({ success: false, message: 'Erro interno ao consultar histórico de cotações.' });
+  }
+});
+
 authRouter.post('/admin/config/cotacao-ouro/importar', verifyAdmin, handleImportGoldMarketQuote);\nauthRouter.post('/config/cotacao-ouro/importar', verifyAdmin, handleImportGoldMarketQuote);\nauthRouter.get('/admin/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.get('/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.put('/admin/config/margens', verifyAdmin, handleUpdateMargensConfig);
