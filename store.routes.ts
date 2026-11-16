@@ -289,6 +289,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   let cotacaoSpot = 0;
   let margem = 0;
   let valorSugerido = 0;
+  let metalConfig: any = null;
   try {
     const { data: configRow, error: configError } = await supabaseAdmin
       .from('configuracoes_sistema')
@@ -316,7 +317,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       !Number.isNaN(Date.parse(item.cotacao_observada_em)) &&
       lisbonDate(item.cotacao_observada_em) === todayLisbon
     );
-    const metalConfig = matching.find((item: any) => item.loja_id === employee.loja_id) ||
+    metalConfig = matching.find((item: any) => item.loja_id === employee.loja_id) ||
       matching.find((item: any) => item.loja_id == null);
     if (!metalConfig || !Number.isInteger(metalConfig.toque_millesimos) ||
         metalConfig.toque_millesimos <= 0 || metalConfig.toque_millesimos > 1000 ||
