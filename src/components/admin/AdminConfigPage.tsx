@@ -159,7 +159,8 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
         throw new Error(data?.message || 'Não foi possível importar uma cotação válida.');
       }
       setMargens(data.margens);
-      addToast('success', `Cotação XAUS importada: ${Number(data.cotacao_referencia_g).toFixed(4)} €/g de ouro fino. Margens actualizadas.`, 'Cotação de mercado actualizada');
+      await handleLoadQuoteHistory();
+      addToast('success', `Cotação XAUS importada: ${Number(data.cotacao_referencia_g).toFixed(4)} €/g de ouro fino. Histórico actualizado.`, 'Cotação de mercado actualizada');
     } catch (err: any) {
       addToast('error', err?.message || 'Falha ao importar cotação. Os preços existentes foram mantidos.');
     } finally {
