@@ -756,16 +756,41 @@ async function handleUpdateMargensConfig(req: AdminRequest, res: Response): Prom
   }
 
   try {
+    const { data: currentConfig, error: currentConfigError } = await supabaseAdmin
+      .from('configuracoes_sistema')
+      .select('valor')
+      .eq('chave', 'parametros_compra_ouro')
+      .maybeSingle();
+    if (currentConfigError) {
+      console.error('[Admin Purchase Settings] Falha ao consultar cotação anterior.');
+      res.status(503).json({ success: false, message: 'Não foi possível confirmar a cotação anterior.' });
+      return;
+    }
+
+    const previousMargins = Array.isArray(currentConfig?.valor?.margens) ? currentConfig.valor.margens : [];
+    const savedAt = new Date().toISOString();
     const payload = {
-      margens: settings.margens.map((item: any) => ({
-        ...item,
-        metal_tipo: item.metal_tipo.trim(),
-        preco_compra_grama: Number((item.cotacao_referencia_g * (item.toque_millesimos / 1000) * (1 - item.margem_percentagem / 100)).toFixed(2)),
-        cotacao_origem: 'referencia_manual_sede',
-        cotacao_moeda: 'EUR',
-        cotacao_unidade: 'EUR/g_ouro_fino',
-        cotacao_observada_em: new Date().toISOString(),
-      })),
+      margens: settings.margens.map((item: any) => {
+        const previous = previousMargins.find((candidate: any) =>
+          candidate?.id === item.id &&
+          (candidate?.loja_id ?? null) === (item.loja_id ?? null) &&
+          Number(candidate?.toque_millesimos) === item.toque_millesimos &&
+          Number(candidate?.cotacao_referencia_g) === item.cotacao_referencia_g &&
+          candidate?.cotacao_origem === 'referencia_manual_sede' &&
+          candidate?.cotacao_moeda === 'EUR' &&
+          candidate?.cotacao_unidade === 'EUR/g_ouro_fino' &&
+          typeof candidate?.cotacao_observada_em === 'string'
+        );
+        return {
+          ...item,
+          metal_tipo: item.metal_tipo.trim(),
+          preco_compra_grama: Number((item.cotacao_referencia_g * (item.toque_millesimos / 1000) * (1 - item.margem_percentagem / 100)).toFixed(2)),
+          cotacao_origem: 'referencia_manual_sede',
+          cotacao_moeda: 'EUR',
+          cotacao_unidade: 'EUR/g_ouro_fino',
+          cotacao_observada_em: previous ? previous.cotacao_observada_em : savedAt,
+        };
+      }),
       tetos: settings.tetos,
       contasBancarias: settings.contasBancarias,
     };
