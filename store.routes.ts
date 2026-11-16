@@ -212,13 +212,22 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
     }
 
     const all = Array.isArray(data?.valor?.margens) ? data.valor.margens : [];
+    const lisbonDate = (value: string | Date) => new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(value));
+    const todayLisbon = lisbonDate(new Date());
     const active = all.filter((item: any) =>
       item && item.ativo === true &&
       (item.loja_id == null || item.loja_id === employee.loja_id) &&
       Number.isInteger(item.toque_millesimos) && item.toque_millesimos > 0 && item.toque_millesimos <= 1000 &&
       Number.isFinite(item.cotacao_referencia_g) && item.cotacao_referencia_g > 0 &&
       Number.isFinite(item.margem_percentagem) && item.margem_percentagem >= 0 && item.margem_percentagem <= 100 &&
-      Number.isFinite(item.desconto_maximo_loja_perc) && item.desconto_maximo_loja_perc >= 0 && item.desconto_maximo_loja_perc <= 100
+      item.cotacao_origem === 'referencia_manual_sede' &&
+      item.cotacao_moeda === 'EUR' &&
+      item.cotacao_unidade === 'EUR/g_ouro_fino' &&
+      typeof item.cotacao_observada_em === 'string' &&
+      !Number.isNaN(Date.parse(item.cotacao_observada_em)) &&
+      lisbonDate(item.cotacao_observada_em) === todayLisbon
     );
     const byMetal = new Map<string, any>();
     for (const item of active) {
@@ -312,7 +321,13 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     if (!metalConfig || !Number.isInteger(metalConfig.toque_millesimos) ||
         metalConfig.toque_millesimos <= 0 || metalConfig.toque_millesimos > 1000 ||
         !Number.isFinite(metalConfig.cotacao_referencia_g) || metalConfig.cotacao_referencia_g <= 0 ||
-        !Number.isFinite(metalConfig.margem_percentagem) || metalConfig.margem_percentagem < 0 || metalConfig.margem_percentagem > 100) {
+        !Number.isFinite(metalConfig.margem_percentagem) || metalConfig.margem_percentagem < 0 || metalConfig.margem_percentagem > 100 ||
+        metalConfig.cotacao_origem !== 'referencia_manual_sede' ||
+        metalConfig.cotacao_moeda !== 'EUR' ||
+        metalConfig.cotacao_unidade !== 'EUR/g_ouro_fino' ||
+        typeof metalConfig.cotacao_observada_em !== 'string' ||
+        Number.isNaN(Date.parse(metalConfig.cotacao_observada_em)) ||
+        lisbonDate(metalConfig.cotacao_observada_em) !== todayLisbon) {
       return res.status(409).json({ success: false, message: 'Este metal não tem uma cotação e margem activas configuradas pela sede para a sua loja. Contacte a administração.' });
     }
 
