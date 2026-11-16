@@ -290,9 +290,19 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
 
     const configs = Array.isArray(configRow?.valor?.margens) ? configRow.valor.margens : [];
     const toqueSolicitado = Number(metal.match(/(\d{3})\s*‰/)?.[1] || 0);
+    const lisbonDate = (value: string | Date) => new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Lisbon', year: 'numeric', month: '2-digit', day: '2-digit',
+    }).format(new Date(value));
+    const todayLisbon = lisbonDate(new Date());
     const matching = configs.filter((item: any) =>
       item && item.ativo === true && Number(item.toque_millesimos) === toqueSolicitado &&
-      (item.loja_id == null || item.loja_id === employee.loja_id)
+      (item.loja_id == null || item.loja_id === employee.loja_id) &&
+      item.cotacao_origem === 'referencia_manual_sede' &&
+      item.cotacao_moeda === 'EUR' &&
+      item.cotacao_unidade === 'EUR/g_ouro_fino' &&
+      typeof item.cotacao_observada_em === 'string' &&
+      !Number.isNaN(Date.parse(item.cotacao_observada_em)) &&
+      lisbonDate(item.cotacao_observada_em) === todayLisbon
     );
     const metalConfig = matching.find((item: any) => item.loja_id === employee.loja_id) ||
       matching.find((item: any) => item.loja_id == null);
@@ -337,6 +347,10 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       p_cotacao_spot: cotacaoSpot,
       p_margem: margem,
       p_descricao: descricao || `${tipoPeca} em ${metal}`,
+      p_cotacao_origem: metalConfig.cotacao_origem,
+      p_cotacao_moeda: metalConfig.cotacao_moeda,
+      p_cotacao_unidade: metalConfig.cotacao_unidade,
+      p_cotacao_observada_em: metalConfig.cotacao_observada_em,
     });
 
     if (purchaseError || !transaction || typeof transaction !== 'object' || !transaction.id) {
