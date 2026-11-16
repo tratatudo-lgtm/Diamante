@@ -79,3 +79,21 @@ EXECUTE FUNCTION public.audit_ouro_inventory_movement();
 
 COMMENT ON TABLE public.ouro_movimentos_fisicos IS
   'Livro append-only dos eventos de expedição e recepção física de peças de ouro. Não substitui o estado actual do inventário.';
+
+-- Protect the custody ledger against accidental or privileged mutation.
+CREATE OR REPLACE FUNCTION public.reject_ouro_movement_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public, pg_temp
+AS $function$
+BEGIN
+  RAISE EXCEPTION 'O livro de movimentos físicos é imutável.';
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION public.reject_ouro_movement_mutation() FROM PUBLIC, anon, authenticated, service_role;
+DROP TRIGGER IF EXISTS trg_ouro_movimentos_immutable ON public.ouro_movimentos_fisicos;
+CREATE TRIGGER trg_ouro_movimentos_immutable
+BEFORE UPDATE OR DELETE ON public.ouro_movimentos_fisicos
+FOR EACH ROW
+EXECUTE FUNCTION public.reject_ouro_movement_mutation();
