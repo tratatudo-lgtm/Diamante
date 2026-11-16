@@ -777,7 +777,7 @@ async function handleUpdateMargensConfig(req: AdminRequest, res: Response): Prom
           (candidate?.loja_id ?? null) === (item.loja_id ?? null) &&
           Number(candidate?.toque_millesimos) === item.toque_millesimos &&
           Number(candidate?.cotacao_referencia_g) === item.cotacao_referencia_g &&
-          candidate?.cotacao_origem === 'referencia_manual_sede' &&
+          ['referencia_manual_sede', 'xaus.com'].includes(candidate?.cotacao_origem) &&
           candidate?.cotacao_moeda === 'EUR' &&
           candidate?.cotacao_unidade === 'EUR/g_ouro_fino' &&
           typeof candidate?.cotacao_observada_em === 'string'
@@ -786,10 +786,13 @@ async function handleUpdateMargensConfig(req: AdminRequest, res: Response): Prom
           ...item,
           metal_tipo: item.metal_tipo.trim(),
           preco_compra_grama: Number((item.cotacao_referencia_g * (item.toque_millesimos / 1000) * (1 - item.margem_percentagem / 100)).toFixed(2)),
-          cotacao_origem: 'referencia_manual_sede',
+          cotacao_origem: confirmQuotesToday || !previous ? 'referencia_manual_sede' : previous.cotacao_origem,
           cotacao_moeda: 'EUR',
           cotacao_unidade: 'EUR/g_ouro_fino',
           cotacao_observada_em: confirmQuotesToday || !previous ? savedAt : previous.cotacao_observada_em,
+          ...(previous?.cotacao_origem === 'xaus.com' && !confirmQuotesToday && previous?.cotacao_recebida_em
+            ? { cotacao_recebida_em: previous.cotacao_recebida_em }
+            : {}),
         };
       }),
       tetos: settings.tetos,
@@ -858,7 +861,77 @@ authRouter.get('/admin/audit-logs', verifyAdmin, async (req: AdminRequest, res: 
   }
 });
 
-authRouter.get('/admin/config/margens', verifyAdmin, handleGetMargensConfig);
+async function handleImportGoldMarketQuote(_req: AdminRequest, res: Response): Promise<void> {
+  try {
+    const response = await fetch('https://xaus.com/api/v1/spot?currency=EUR&unit=gram&compact=1&fresh=' + Date.now(), {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(6000),
+    });
+    const quote: any = await response.json().catch(() => null);
+    if (!response.ok || !quote || quote.data_state?.status !== 'fresh' ||
+        quote.data_state?.source !== 'upstream' || quote.fx_stale === true ||
+        quote.xau?.currency !== 'EUR' || quote.xau?.unit !== 'gram' ||
+        !Number.isFinite(quote.xau?.price) || quote.xau.price <= 0 ||
+        typeof quote.price_as_of !== 'string' || Number.isNaN(Date.parse(quote.price_as_of)) ||
+        typeof quote.updated_at !== 'string' || Number.isNaN(Date.parse(quote.updated_at))) {
+      res.status(503).json({ success: false, message: 'A fonte não devolveu uma cotação EUR/g fresca e verificável. Nenhum preço foi alterado.' });
+      return;
+    }
+
+    const now = Date.now();
+    const observedAt = Date.parse(quote.price_as_of);
+    const generatedAt = Date.parse(quote.updated_at);
+    if (observedAt > now + 30000 || generatedAt > now + 30000 ||
+        now - observedAt > 5 * 60 * 1000 || now - generatedAt > 2 * 60 * 1000 ||
+        Math.abs(generatedAt - observedAt) > 5 * 60 * 1000) {
+      res.status(503).json({ success: false, message: 'A cotação recebida está desactualizada ou tem timestamps inconsistentes. Nenhum preço foi alterado.' });
+      return;
+    }
+
+    const { data: currentConfig, error: readError } = await supabaseAdmin
+      .from('configuracoes_sistema').select('valor').eq('chave', 'parametros_compra_ouro').maybeSingle();
+    if (readError || !currentConfig?.valor || !Array.isArray(currentConfig.valor.margens)) {
+      res.status(503).json({ success: false, message: 'Não foi possível carregar as margens actuais. Nenhum preço foi alterado.' });
+      return;
+    }
+
+    const price = Number(quote.xau.price);
+    const margins = currentConfig.valor.margens.map((item: any) => ({
+      ...item,
+      cotacao_referencia_g: price,
+      preco_compra_grama: Number((price * (Number(item.toque_millesimos) / 1000) * (1 - Number(item.margem_percentagem) / 100)).toFixed(2)),
+      cotacao_origem: 'xaus.com',
+      cotacao_moeda: 'EUR',
+      cotacao_unidade: 'EUR/g_ouro_fino',
+      cotacao_observada_em: quote.price_as_of,
+      cotacao_recebida_em: quote.updated_at,
+    }));
+    const payload = { ...currentConfig.valor, margens };
+    const { data, error } = await supabaseAdmin.from('configuracoes_sistema')
+      .upsert({ chave: 'parametros_compra_ouro', valor: payload, updated_at: new Date().toISOString() }, { onConflict: 'chave' })
+      .select('valor').single();
+    if (error || !data) {
+      res.status(503).json({ success: false, message: 'Não foi possível guardar a cotação importada. Nenhum preço foi confirmado.' });
+      return;
+    }
+    res.status(200).json({
+      success: true,
+      fonte: 'xaus.com',
+      cotacao_referencia_g: price,
+      moeda: 'EUR',
+      unidade: 'EUR/g_ouro_fino',
+      cotacao_observada_em: quote.price_as_of,
+      cotacao_recebida_em: quote.updated_at,
+      data_state: quote.data_state,
+      margens: data.valor.margens,
+    });
+  } catch {
+    console.error('[Admin Gold Quote] Falha ao importar cotação de mercado.');
+    res.status(503).json({ success: false, message: 'Não foi possível obter uma cotação de mercado verificável. Nenhum preço foi alterado.' });
+  }
+}
+
+authRouter.post('/admin/config/cotacao-ouro/importar', verifyAdmin, handleImportGoldMarketQuote);\nauthRouter.post('/config/cotacao-ouro/importar', verifyAdmin, handleImportGoldMarketQuote);\nauthRouter.get('/admin/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.get('/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.put('/admin/config/margens', verifyAdmin, handleUpdateMargensConfig);
 authRouter.put('/config/margens', verifyAdmin, handleUpdateMargensConfig);
