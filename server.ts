@@ -255,30 +255,69 @@ app.use((req, res, next) => {
 // ==========================================
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
-  cors: { 
-    origin: "*", 
-    methods: ["GET", "POST"],
-    credentials: true
-  },
+  cors: corsOptions,
   transports: ['websocket', 'polling']
 });
 
-// Lógica de Chat em Tempo Real
+// Todas as ligações em tempo real exigem o mesmo JWT emitido pelo servidor.
+io.use(async (socket, next) => {
+  try {
+    const authToken = typeof socket.handshake.auth?.token === 'string'
+      ? socket.handshake.auth.token
+      : '';
+    const authorization = socket.handshake.headers.authorization || '';
+    const token = authToken || (authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '');
+    const secret = process.env.JWT_SECRET;
+    if (!secret || !token) return next(new Error('Autenticação obrigatória.'));
+
+    const claims = jwt.verify(token, secret) as jwt.JwtPayload;
+    const userId = typeof claims.id === 'string' ? claims.id : '';
+    if (!userId) return next(new Error('Sessão inválida.'));
+
+    const { data: employee, error } = await supabaseAdmin
+      .from('funcionarios')
+      .select('id, role, loja_id, ativo')
+      .eq('id', userId)
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (error || !employee || employee.ativo !== true) {
+      return next(new Error('Utilizador inativo ou não autorizado.'));
+    }
+    socket.data.employee = employee;
+    next();
+  } catch {
+    next(new Error('Sessão inválida ou expirada.'));
+  }
+});
+
+// Lógica de Chat em Tempo Real: salas limitadas à identidade e loja do funcionário.
 io.on('connection', (socket) => {
-  console.log(`[Chat WS] ✅ Conectado: ${socket.id}`);
-  
-  socket.on('join_room', (room: string) => {
-    socket.join(room);
-    console.log(`[Chat WS] ${socket.id} entrou na sala: ${room}`);
+  const employee = socket.data.employee as { id: string; role: string; loja_id: string | null };
+  const allowedRooms = new Set([
+    employee.id,
+    ...(employee.loja_id ? [`store:${employee.loja_id}`] : []),
+    ...(employee.role === 'admin' ? ['admin'] : []),
+  ]);
+
+  socket.on('join_room', async (room: unknown) => {
+    if (typeof room !== 'string' || room.length > 128 || !allowedRooms.has(room)) {
+      socket.emit('room_denied', { reason: 'Sala não autorizada para esta sessão.' });
+      return;
+    }
+    await socket.join(room);
+    socket.emit('room_joined', { room });
   });
 
   socket.on('send_message', (data: any) => {
-    io.to(data.room).emit('receive_message', data);
-    console.log(`[Chat WS] 📨 Mensagem em ${data.room}: ${data.text?.substring(0, 40)}...`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`[Chat WS] ❌ Desconectado: ${socket.id}`);
+    if (!data || typeof data.room !== 'string' || !allowedRooms.has(data.room)) return;
+    if (typeof data.text !== 'string' || !data.text.trim() || data.text.length > 4000) return;
+    io.to(data.room).emit('receive_message', {
+      room: data.room,
+      text: data.text.trim(),
+      senderId: employee.id,
+      createdAt: new Date().toISOString(),
+    });
   });
 });
 
@@ -314,11 +353,13 @@ async function setupViteOrStatic() {
 
 // Iniciar servidor HTTP com WebSocket (substitui app.listen tradicional)
 setupViteOrStatic().then(() => {
-  const PORT = process.env.PORT || 3000;
-  httpServer.listen(PORT, () => {
+  const PORT = parseInt(process.env.PORT || '3000', 10);
+  const HOST = process.env.HOST || '127.0.0.1';
+  httpServer.listen(PORT, HOST, () => {
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
     console.log(`Porta: ${PORT}`);
+    console.log(`Host: ${HOST}`);
     console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
     console.log(`WebSocket: Ativo (Socket.IO)`);
     console.log(`Chave Mestra Ativa: +351937230116`);
