@@ -869,7 +869,7 @@ async function handleImportGoldMarketQuote(_req: AdminRequest, res: Response): P
     });
     const quote: any = await response.json().catch(() => null);
     if (!response.ok || !quote || quote.data_state?.status !== 'fresh' ||
-        quote.data_state?.source !== 'upstream' || quote.fx_stale === true ||
+        !['xaus.com'].includes(quote.price_source || quote.source) || quote.fx_stale === true ||
         quote.xau?.currency !== 'EUR' || quote.xau?.unit !== 'gram' ||
         !Number.isFinite(quote.xau?.price) || quote.xau.price <= 0 ||
         typeof quote.price_as_of !== 'string' || Number.isNaN(Date.parse(quote.price_as_of)) ||
