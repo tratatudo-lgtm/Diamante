@@ -1,4 +1,5 @@
 import { Router, Response } from 'express';
+import { createHash } from 'node:crypto';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { supabaseAdmin } from './auth.service';
 
@@ -258,6 +259,122 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
   }
 });
 
+// Upload privado da declaração assinada. A chave idempotente torna o upload repetível
+// quando a resposta HTTP se perde antes de a compra ser submetida.
+storeRouter.post('/purchases/declaration', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const employee = req.authenticatedUser;
+  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
+    return res.status(403).json({ success: false, message: 'A sua conta não pode anexar declarações de compra.' });
+  }
+
+  const body = req.body || {};
+  const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : '';
+  const clienteNome = typeof body.clienteNome === 'string' ? body.clienteNome.trim() : '';
+  const clienteDocumento = typeof body.clienteCc === 'string' ? body.clienteCc.trim() : '';
+  const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
+  const encoded = typeof body.fileBase64 === 'string' ? body.fileBase64 : '';
+  const allowedMime = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  const extByMime: Record<string, string> = {
+    'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+  };
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey) ||
+      !clienteNome || clienteNome.length > 200 || !clienteDocumento || clienteDocumento.length > 80 ||
+      !allowedMime.includes(mimeType) || !encoded || encoded.length > 8_400_000 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 === 1) {
+    return res.status(400).json({ success: false, message: 'Anexe uma declaração PDF/JPEG/PNG/WebP válida até 6 MB.' });
+  }
+
+  let fileBuffer: Buffer;
+  try {
+    fileBuffer = Buffer.from(encoded, 'base64');
+    if (!fileBuffer.length || fileBuffer.length > 6 * 1024 * 1024 ||
+        fileBuffer.toString('base64').replace(/=+$/, '') !== encoded.replace(/=+$/, '')) {
+      return res.status(400).json({ success: false, message: 'O ficheiro está vazio, excede 6 MB ou tem codificação inválida.' });
+    }
+  } catch {
+    return res.status(400).json({ success: false, message: 'Ficheiro inválido.' });
+  }
+
+  const signatureValid = mimeType === 'application/pdf'
+    ? fileBuffer.subarray(0, 5).toString('ascii') === '%PDF-'
+    : mimeType === 'image/jpeg'
+      ? fileBuffer.length >= 3 && fileBuffer[0] === 0xff && fileBuffer[1] === 0xd8 && fileBuffer[2] === 0xff
+      : mimeType === 'image/png'
+        ? fileBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+        : fileBuffer.length >= 12 && fileBuffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
+          fileBuffer.subarray(8, 12).toString('ascii') === 'WEBP';
+  if (!signatureValid) {
+    return res.status(400).json({ success: false, message: 'O conteúdo do ficheiro não corresponde ao formato declarado.' });
+  }
+
+  const sha256 = createHash('sha256').update(fileBuffer).digest('hex');
+  let uploadedPath = '';
+  try {
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('store_purchase_consent_evidence')
+      .select('id,funcionario_id,loja_id,cliente_nome,cliente_documento,sha256')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) {
+      const sameEvidence = existing.funcionario_id === employee.id &&
+        existing.loja_id === employee.loja_id &&
+        existing.cliente_nome === clienteNome &&
+        existing.cliente_documento === clienteDocumento &&
+        existing.sha256 === sha256;
+      if (!sameEvidence) return res.status(409).json({ success: false, message: 'Esta chave já está associada a outra declaração ou compra.' });
+      return res.status(200).json({ success: true, declarationEvidenceId: existing.id, replay: true });
+    }
+
+    const path = `${employee.loja_id}/${idempotencyKey}/${crypto.randomUUID()}.${extByMime[mimeType]}`;
+    uploadedPath = path;
+    const { error: uploadError } = await supabaseAdmin.storage.from('declaracoes-compras')
+      .upload(path, fileBuffer, { contentType: mimeType, upsert: false });
+    if (uploadError) throw uploadError;
+
+    const { data: inserted, error: insertError } = await supabaseAdmin
+      .from('store_purchase_consent_evidence')
+      .insert({
+        idempotency_key: idempotencyKey,
+        funcionario_id: employee.id,
+        loja_id: employee.loja_id,
+        cliente_nome: clienteNome,
+        cliente_documento: clienteDocumento,
+        storage_path: path,
+        mime_type: mimeType,
+        tamanho_bytes: fileBuffer.length,
+        sha256,
+      })
+      .select('id')
+      .single();
+
+    if (insertError || !inserted) {
+      if (insertError?.code === '23505') {
+        const { data: concurrent } = await supabaseAdmin
+          .from('store_purchase_consent_evidence')
+          .select('id,funcionario_id,loja_id,cliente_nome,cliente_documento,sha256')
+          .eq('idempotency_key', idempotencyKey)
+          .maybeSingle();
+        if (concurrent && concurrent.funcionario_id === employee.id &&
+            concurrent.loja_id === employee.loja_id && concurrent.cliente_nome === clienteNome &&
+            concurrent.cliente_documento === clienteDocumento && concurrent.sha256 === sha256) {
+          await supabaseAdmin.storage.from('declaracoes-compras').remove([path]);
+          return res.status(200).json({ success: true, declarationEvidenceId: concurrent.id, replay: true });
+        }
+        return res.status(409).json({ success: false, message: 'A chave de repetição já foi utilizada por outra declaração.' });
+      }
+      throw insertError || new Error('Não foi possível registar a declaração.');
+    }
+
+    return res.status(201).json({ success: true, declarationEvidenceId: inserted.id, replay: false });
+  } catch {
+    if (uploadedPath) await supabaseAdmin.storage.from('declaracoes-compras').remove([uploadedPath]);
+    console.error('[Store Purchase] Falha ao arquivar declaração assinada.');
+    return res.status(503).json({ success: false, message: 'Não foi possível arquivar a declaração assinada. A compra não foi submetida.' });
+  }
+});
+
 storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (!employee || !employee.ativo || !employee.loja_id ||
@@ -267,6 +384,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
 
   const body = req.body || {};
   const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : '';
+  const declarationEvidenceId = typeof body.declarationEvidenceId === 'string' ? body.declarationEvidenceId : '';
   const clienteNome = typeof body.clienteNome === 'string' ? body.clienteNome.trim() : '';
   const clienteCc = typeof body.clienteCc === 'string' ? body.clienteCc.trim() : '';
   const clienteTelemovel = typeof body.clienteTelemovel === 'string' ? body.clienteTelemovel.trim() : '';
@@ -277,6 +395,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   const valorFinal = Number(body.valorFinal);
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(declarationEvidenceId) ||
       !clienteNome || clienteNome.length > 200 || !clienteCc || clienteCc.length > 80 ||
       clienteTelemovel.length > 40 || !tipoPeca || tipoPeca.length > 100 ||
       !metal || metal.length > 100 || descricao.length > 2000 ||
@@ -291,7 +410,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   try {
     const { data: existingPurchase, error: existingPurchaseError } = await supabaseAdmin
       .from('transacoes')
-      .select('id, idempotency_key, funcionario_id, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, descricao, estado, created_at')
+      .select('id, idempotency_key, declaracao_assinada_id, funcionario_id, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, descricao, estado, created_at')
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
 
@@ -303,6 +422,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     if (existingPurchase) {
       const expectedDescription = descricao || `${tipoPeca} em ${metal}`;
       const sameRequest =
+        existingPurchase.declaracao_assinada_id === declarationEvidenceId &&
         existingPurchase.funcionario_id === employee.id &&
         existingPurchase.loja_id === employee.loja_id &&
         existingPurchase.cliente_nome === clienteNome &&
@@ -409,6 +529,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       p_cotacao_moeda: metalConfig.cotacao_moeda,
       p_cotacao_unidade: metalConfig.cotacao_unidade,
       p_cotacao_observada_em: metalConfig.cotacao_observada_em,
+      p_declaracao_assinada_id: declarationEvidenceId,
     });
 
     if (purchaseError || !transaction || typeof transaction !== 'object' || !transaction.id) {
