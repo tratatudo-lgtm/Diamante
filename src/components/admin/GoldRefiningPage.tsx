@@ -12,6 +12,19 @@ interface RefiningBatch {
   custo_por_grama_fino?: number | null; custo_operacional_total?: number | null; custo_total?: number | null; custos_operacionais?: Array<{categoria:string;descricao:string;valor:number}>; valor_referencia_ouro_fino?: number | null; margem_potencial?: number | null; peso_recuperado_gramas?: number | null; toque_milesimos?: number | null;
   ouro_fino_recuperado_gramas?: number | null; perda_processo_gramas?: number | null;
   rendimento_percentagem?: number | null; criado_em: string;
+  reconciliacao_pesos?: {
+    peso_declarado_loja_gramas: number | null;
+    peso_recebido_sede_gramas: number;
+    diferenca_transporte_gramas: number | null;
+    peso_entrada_lote_gramas: number;
+    diferenca_entrada_lote_gramas: number;
+    perda_fundicao_gramas: number | null;
+    ouro_fino_recuperado_gramas: number | null;
+    origem_completa: boolean;
+    alerta_transporte: boolean;
+    alerta_entrada_lote: boolean;
+    estado: 'dados_incompletos' | 'divergencia' | 'reconciliado';
+  };
   ouro_fino_vendido_gramas?: number; ouro_fino_disponivel_gramas?: number; receita_realizada?: number; resultado_realizado?: number; custo_ainda_por_recuperar?: number; preco_medio_realizado_grama?: number | null;
   liquidacoes?: Array<{ id: string; ouro_fino_vendido_gramas: number; preco_por_grama: number; receita_bruta: number; resultado_liquido: number; comprador: string; referencia_documento?: string | null; liquidado_em: string }>;
   pecas?: Array<{ inventario_id: string; codigo_peca: string; peso_recebido_gramas: number; custo_aquisicao?: number | null; transacao_origem_id?: string | null }>;
@@ -160,6 +173,23 @@ export const GoldRefiningPage: React.FC = () => {
           {batches.map(b => <article key={b.id} className="rounded-2xl border border-white/[0.08] bg-[#101827] p-4 sm:p-5">
             <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-bold">{b.codigo_lote}</h3><p className="mt-1 text-[11px] text-slate-500">{b.quantidade_pecas} peças · criado em {new Date(b.criado_em).toLocaleString('pt-PT')}</p></div><span className={'rounded-md px-2 py-1 text-[10px] font-bold ' + (b.estado === 'concluido' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300')}>{b.estado === 'concluido' ? 'Concluído' : 'Em preparação'}</span></div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><div><p className="text-slate-500">Entrada</p><p className="mt-1 font-bold">{Number(b.peso_entrada_gramas).toFixed(3)} g</p></div><div><p className="text-slate-500">Custo de aquisição</p><p className="mt-1 font-bold">{Number(b.custo_aquisicao_total || 0).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</p></div>{b.estado === 'concluido' && <><div><p className="text-slate-500">Custo total</p><p className="mt-1 font-bold">{Number(b.custo_total ?? b.custo_aquisicao_total ?? 0).toLocaleString('pt-PT', {style:'currency',currency:'EUR'})}</p></div><div><p className="text-slate-500">Custo / g fino</p><p className="mt-1 font-bold text-[#d4af37]">{b.custo_por_grama_fino == null ? '—' : Number(b.custo_por_grama_fino).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</p></div><div><p className="text-slate-500">Recuperado</p><p className="mt-1 font-bold">{Number(b.peso_recuperado_gramas).toFixed(3)} g</p></div><div><p className="text-slate-500">Ouro fino</p><p className="mt-1 font-bold text-emerald-300">{Number(b.ouro_fino_recuperado_gramas).toFixed(3)} g</p></div><div><p className="text-slate-500">Perda / Rendimento</p><p className="mt-1 font-bold">{Number(b.perda_processo_gramas).toFixed(3)} g / {Number(b.rendimento_percentagem).toFixed(2)}%</p></div></>}</div>
+            {b.reconciliacao_pesos && <div className="mt-3 rounded-xl border border-white/[0.08] bg-black/10 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Reconciliação de pesos</p>
+                <span className={'rounded-md px-2 py-1 text-[10px] font-bold ' + (b.reconciliacao_pesos.estado === 'reconciliado' ? 'bg-emerald-500/10 text-emerald-300' : b.reconciliacao_pesos.estado === 'divergencia' ? 'bg-amber-500/10 text-amber-300' : 'bg-slate-500/10 text-slate-300')}>
+                  {b.reconciliacao_pesos.estado === 'reconciliado' ? 'Reconciliado' : b.reconciliacao_pesos.estado === 'divergencia' ? 'Divergência a verificar' : 'Origem incompleta'}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-3 lg:grid-cols-5">
+                <div><p className="text-slate-500">Declarado na loja</p><p className="mt-1 font-bold">{b.reconciliacao_pesos.peso_declarado_loja_gramas == null ? '—' : b.reconciliacao_pesos.peso_declarado_loja_gramas.toFixed(3) + ' g'}</p></div>
+                <div><p className="text-slate-500">Recebido na sede</p><p className="mt-1 font-bold">{b.reconciliacao_pesos.peso_recebido_sede_gramas.toFixed(3)} g</p></div>
+                <div><p className="text-slate-500">Diferença transporte</p><p className={'mt-1 font-bold ' + (b.reconciliacao_pesos.alerta_transporte ? 'text-amber-300' : '')}>{b.reconciliacao_pesos.diferenca_transporte_gramas == null ? '—' : (b.reconciliacao_pesos.diferenca_transporte_gramas > 0 ? '+' : '') + b.reconciliacao_pesos.diferenca_transporte_gramas.toFixed(3) + ' g'}</p></div>
+                <div><p className="text-slate-500">Entrada na fundição</p><p className="mt-1 font-bold">{b.reconciliacao_pesos.peso_entrada_lote_gramas.toFixed(3)} g</p></div>
+                <div><p className="text-slate-500">Diferença de entrada</p><p className={'mt-1 font-bold ' + (b.reconciliacao_pesos.alerta_entrada_lote ? 'text-amber-300' : '')}>{(b.reconciliacao_pesos.diferenca_entrada_lote_gramas > 0 ? '+' : '') + b.reconciliacao_pesos.diferenca_entrada_lote_gramas.toFixed(3) + ' g'}</p></div>
+              </div>
+              {b.estado === 'concluido' && <p className="mt-3 border-t border-white/[0.06] pt-3 text-xs text-slate-300">Perda no processo de fundição: <strong>{Number(b.reconciliacao_pesos.perda_fundicao_gramas || 0).toFixed(3)} g</strong> · Ouro fino recuperado: <strong className="text-emerald-300">{Number(b.reconciliacao_pesos.ouro_fino_recuperado_gramas || 0).toFixed(3)} g</strong></p>}
+              {!b.reconciliacao_pesos.origem_completa && <p className="mt-2 text-[10px] text-slate-400">Não foi possível confirmar o peso declarado de todas as peças de origem; não é calculada uma diferença de transporte estimada.</p>}
+            </div>}
             <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/10 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Peças incluídas · origem preservada</p><div className="mt-2 flex flex-wrap gap-2">{(b.pecas || []).map(piece => <span key={piece.inventario_id} title={piece.transacao_origem_id ? 'Compra: ' + piece.transacao_origem_id : 'Origem da compra não disponível'} className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-300">{piece.codigo_peca} · {Number(piece.peso_recebido_gramas).toFixed(3)} g · {Number(piece.custo_aquisicao || 0).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>)}</div></div>
             <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/10 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Custos operacionais</p><p className="text-xs font-bold">{Number(b.custo_operacional_total || 0).toLocaleString('pt-PT', {style:'currency',currency:'EUR'})}</p></div>
