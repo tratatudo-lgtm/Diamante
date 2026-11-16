@@ -453,6 +453,10 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
         Number(existingPurchase.valor_sugerido) === Number(Number(body.valorSugerido).toFixed(2)) &&
         Number(existingPurchase.cotacao_spot_dia) === Number(body.cotacaoSpot) &&
         Number(existingPurchase.margem_aplicada) === Number(body.margemPercent) &&
+        existingPurchase.cotacao_origem === body.cotacaoOrigem &&
+        existingPurchase.cotacao_moeda === body.cotacaoMoeda &&
+        existingPurchase.cotacao_unidade === body.cotacaoUnidade &&
+        Date.parse(existingPurchase.cotacao_observada_em) === Date.parse(body.cotacaoObservadaEm) &&
         (existingPurchase.descricao || '') === expectedDescription;
 
       if (!sameRequest) {
