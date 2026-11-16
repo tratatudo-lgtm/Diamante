@@ -12,7 +12,7 @@ interface RefiningBatch {
   custo_por_grama_fino?: number | null; custo_operacional_total?: number | null; custo_total?: number | null; custos_operacionais?: Array<{categoria:string;descricao:string;valor:number}>; valor_referencia_ouro_fino?: number | null; margem_potencial?: number | null; peso_recuperado_gramas?: number | null; toque_milesimos?: number | null;
   ouro_fino_recuperado_gramas?: number | null; perda_processo_gramas?: number | null;
   rendimento_percentagem?: number | null; criado_em: string;
-  pecas?: Array<{ inventario_id: string; codigo_peca: string; peso_recebido_gramas: number; custo_aquisicao?: number | null; transacao_origem_id?: string | null }>;
+  ouro_fino_vendido_gramas?: number; receita_realizada?: number; resultado_realizado?: number;\n  liquidacoes?: Array<{ id: string; ouro_fino_vendido_gramas: number; preco_por_grama: number; receita_bruta: number; resultado_liquido: number; comprador: string; referencia_documento?: string | null; liquidado_em: string }>;\n  pecas?: Array<{ inventario_id: string; codigo_peca: string; peso_recebido_gramas: number; custo_aquisicao?: number | null; transacao_origem_id?: string | null }>;
 }
 
 export const GoldRefiningPage: React.FC = () => {
@@ -21,7 +21,7 @@ export const GoldRefiningPage: React.FC = () => {
   const [selected, setSelected] = useState<string[]>([]);
   const [recovered, setRecovered] = useState<Record<string, string>>({});
   const [touch, setTouch] = useState<Record<string, string>>({});
-  const [costForms, setCostForms] = useState<Record<string, {categoria:string;descricao:string;valor:string}>>({});
+  const [costForms, setCostForms] = useState<Record<string, {categoria:string;descricao:string;valor:string}>>({});\n  const [saleForms, setSaleForms] = useState<Record<string, {gramas:string;preco:string;custos:string;comprador:string;documento:string}>>({});
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -106,6 +106,31 @@ export const GoldRefiningPage: React.FC = () => {
     finally { setBusy(false); }
   };
 
+  const registerSettlement = async (batch: RefiningBatch) => {
+    const form = saleForms[batch.id] || { gramas: '', preco: '', custos: '0', comprador: '', documento: '' };
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      const response = await fetch('/api/admin/refining/batches/' + encodeURIComponent(batch.id) + '/settlements', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({
+          chave_idempotencia: crypto.randomUUID(),
+          ouro_fino_vendido_gramas: form.gramas.replace(',', '.'),
+          preco_por_grama: form.preco.replace(',', '.'),
+          custos_adicionais: form.custos.replace(',', '.'),
+          comprador: form.comprador, referencia_documento: form.documento,
+        }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true) throw new Error(payload?.error || 'Não foi possível registar a liquidação.');
+      setSaleForms(v => ({ ...v, [batch.id]: { gramas: '', preco: '', custos: '0', comprador: '', documento: '' } }));
+      setNotice('Venda real registada para o lote ' + batch.codigo_lote + '. Receita: ' + Number(payload.liquidacao?.receita_bruta || 0).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' }) + '.');
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao registar venda.'); }
+    finally { setBusy(false); }
+  };
+
   return <div className="min-h-screen bg-[#080d17] px-4 py-6 text-white sm:px-6 lg:px-8">
     <div className="mx-auto max-w-7xl">
       <header className="flex flex-col justify-between gap-4 border-b border-white/10 pb-6 sm:flex-row sm:items-end">
@@ -144,6 +169,18 @@ export const GoldRefiningPage: React.FC = () => {
               </div>}
               <p className="mt-2 text-[10px] text-slate-500">Total do lote: {Number(b.custo_total ?? b.custo_aquisicao_total ?? 0).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} · inclui aquisição e custos operacionais. O custo por grama fina só é calculado após a conclusão.</p>
             </div>
+            {b.estado === 'concluido' && <div className="mt-4 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/[0.04] p-3">
+              <div className="flex flex-wrap justify-between gap-2"><div><p className="text-[10px] font-bold uppercase tracking-wider text-[#d4af37]">Venda e liquidação real</p><p className="mt-1 text-xs text-slate-400">Disponível: {Math.max(0, Number(b.ouro_fino_recuperado_gramas || 0) - Number(b.ouro_fino_vendido_gramas || 0)).toFixed(3)} g de ouro fino</p></div><div className="text-right text-xs"><p>Receita: <strong>{Number(b.receita_realizada || 0).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</strong></p><p>Resultado realizado: <strong className={Number(b.resultado_realizado || 0) >= 0 ? 'text-emerald-300' : 'text-rose-300'}>{Number(b.resultado_realizado || 0).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</strong></p></div></div>
+              {Number(b.ouro_fino_recuperado_gramas || 0) > Number(b.ouro_fino_vendido_gramas || 0) && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <input value={(saleForms[b.id] || {gramas:''}).gramas} onChange={e=>setSaleForms(v=>({...v,[b.id]:{...(v[b.id]||{preco:'',custos:'0',comprador:'',documento:''}),gramas:e.target.value}}))} inputMode="decimal" placeholder="Ouro fino vendido (g)" className="h-9 rounded-lg border border-white/10 bg-[#080d17] px-2 text-xs"/>
+                <input value={(saleForms[b.id] || {preco:''}).preco} onChange={e=>setSaleForms(v=>({...v,[b.id]:{...(v[b.id]||{gramas:'',custos:'0',comprador:'',documento:''}),preco:e.target.value}}))} inputMode="decimal" placeholder="Preço efectivo €/g" className="h-9 rounded-lg border border-white/10 bg-[#080d17] px-2 text-xs"/>
+                <input value={(saleForms[b.id] || {custos:'0'}).custos} onChange={e=>setSaleForms(v=>({...v,[b.id]:{...(v[b.id]||{gramas:'',preco:'',comprador:'',documento:''}),custos:e.target.value}}))} inputMode="decimal" placeholder="Custos adicionais €" className="h-9 rounded-lg border border-white/10 bg-[#080d17] px-2 text-xs"/>
+                <input value={(saleForms[b.id] || {comprador:''}).comprador} onChange={e=>setSaleForms(v=>({...v,[b.id]:{...(v[b.id]||{gramas:'',preco:'',custos:'0',documento:''}),comprador:e.target.value}}))} placeholder="Comprador / refinador" className="h-9 rounded-lg border border-white/10 bg-[#080d17] px-2 text-xs"/>
+                <input value={(saleForms[b.id] || {documento:''}).documento} onChange={e=>setSaleForms(v=>({...v,[b.id]:{...(v[b.id]||{gramas:'',preco:'',custos:'0',comprador:''}),documento:e.target.value}}))} placeholder="Documento / referência" className="h-9 rounded-lg border border-white/10 bg-[#080d17] px-2 text-xs"/>
+                <button disabled={busy} onClick={()=>void registerSettlement(b)} className="h-9 rounded-lg bg-[#d4af37] px-3 text-xs font-black text-[#17120a] disabled:opacity-40 sm:col-span-2 lg:col-span-5">Registar venda / liquidação</button>
+              </div>}
+              {(b.liquidacoes || []).map(sale => <div key={sale.id} className="mt-3 flex flex-wrap justify-between gap-2 border-t border-white/[0.06] pt-2 text-[11px] text-slate-300"><span>{new Date(sale.liquidado_em).toLocaleString('pt-PT')} · {sale.comprador} · {Number(sale.ouro_fino_vendido_gramas).toFixed(3)} g × {Number(sale.preco_por_grama).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}/g</span><span className="font-semibold">{Number(sale.receita_bruta).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} · Resultado {Number(sale.resultado_liquido).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</span></div>)}
+            </div>}
             {b.estado === 'em_preparacao' && <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end"><label><span className="mb-1 block text-[11px] text-slate-400">Peso recuperado (g)</span><input value={recovered[b.id] || ''} onChange={e=>setRecovered(v=>({...v,[b.id]:e.target.value}))} inputMode="decimal" placeholder="Ex.: 48,250" className="h-10 w-full rounded-lg border border-white/10 bg-[#080d17] px-3 text-sm"/></label><label><span className="mb-1 block text-[11px] text-slate-400">Toque final (‰)</span><input value={touch[b.id] || ''} onChange={e=>setTouch(v=>({...v,[b.id]:e.target.value}))} inputMode="decimal" placeholder="Ex.: 999,9" className="h-10 w-full rounded-lg border border-white/10 bg-[#080d17] px-3 text-sm"/></label><button disabled={busy} onClick={()=>void completeBatch(b)} className="h-10 rounded-lg bg-emerald-500/15 px-4 text-xs font-bold text-emerald-300 disabled:opacity-40"><ShieldCheck className="mr-1 inline h-4 w-4"/> Concluir lote</button></div>}
           </article>)}
           {!loading && batches.length === 0 && <div className="rounded-xl border border-dashed border-white/15 p-8 text-center text-sm text-slate-400">Ainda não existem lotes registados.</div>}
