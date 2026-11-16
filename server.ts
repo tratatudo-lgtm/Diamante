@@ -622,8 +622,13 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
           custos_operacionais: costs,
           liquidacoes: settlementsByBatch.get(batch.id) || [],
           ouro_fino_vendido_gramas: Number((settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.ouro_fino_vendido_gramas || 0), 0).toFixed(3)),
+          ouro_fino_disponivel_gramas: Number(Math.max(0, fineGold - (settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.ouro_fino_vendido_gramas || 0), 0)).toFixed(3)),
           receita_realizada: Number((settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.receita_bruta || 0), 0).toFixed(2)),
           resultado_realizado: Number((settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.resultado_liquido || 0), 0).toFixed(2)),
+          custo_ainda_por_recuperar: Number(Math.max(0, totalCost - (settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.custo_lote_alocado || 0), 0)).toFixed(2)),
+          preco_medio_realizado_grama: (settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.ouro_fino_vendido_gramas || 0), 0) > 0
+            ? Number(((settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.receita_bruta || 0), 0) / (settlementsByBatch.get(batch.id) || []).reduce((sum: number, sale: any) => sum + Number(sale.ouro_fino_vendido_gramas || 0), 0)).toFixed(4))
+            : null,
           pecas: piecesByBatch.get(batch.id) || [],
         };
       }),
