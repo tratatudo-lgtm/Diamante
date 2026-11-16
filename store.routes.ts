@@ -370,7 +370,24 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
 
     return res.status(201).json({ success: true, declarationEvidenceId: inserted.id, replay: false });
   } catch {
-    if (uploadedPath) await supabaseAdmin.storage.from('declaracoes-compras').remove([uploadedPath]);
+    if (uploadedPath) {
+      // An INSERT may have committed even when its HTTP response was lost.
+      // Never remove an object that a durable evidence row already references.
+      let safeToRemove = false;
+      try {
+        const { data: persisted, error: lookupError } = await supabaseAdmin
+          .from('store_purchase_consent_evidence')
+          .select('storage_path')
+          .eq('idempotency_key', idempotencyKey)
+          .maybeSingle();
+        safeToRemove = !lookupError && (!persisted || persisted.storage_path !== uploadedPath);
+      } catch {
+        // If persistence is uncertain, preserve the object rather than create a dangling row.
+      }
+      if (safeToRemove) {
+        await supabaseAdmin.storage.from('declaracoes-compras').remove([uploadedPath]);
+      }
+    }
     console.error('[Store Purchase] Falha ao arquivar declaração assinada.');
     return res.status(503).json({ success: false, message: 'Não foi possível arquivar a declaração assinada. A compra não foi submetida.' });
   }
