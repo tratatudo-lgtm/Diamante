@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS public.ouro_fundicao_liquidacoes (
   receita_bruta numeric(14,2) NOT NULL CHECK (receita_bruta > 0),
   custo_lote_alocado numeric(14,2) NOT NULL CHECK (custo_lote_alocado >= 0),
   custos_adicionais numeric(14,2) NOT NULL DEFAULT 0 CHECK (custos_adicionais >= 0),
-  resultado_liquido numeric(14,2) NOT NULL,
+  resultado_liquido numeric(14,2) NOT NULL,\n  CONSTRAINT ouro_fundicao_liquidacoes_result_check CHECK (resultado_liquido = receita_bruta - custo_lote_alocado - custos_adicionais),
   comprador text NOT NULL CHECK (char_length(btrim(comprador)) BETWEEN 2 AND 200),
   referencia_documento text,
   liquidado_em timestamptz NOT NULL DEFAULT now(),
@@ -66,6 +66,14 @@ BEGIN
   FROM public.ouro_fundicao_liquidacoes
   WHERE chave_idempotencia = p_chave_idempotencia;
   IF FOUND THEN
+    IF v_sale.lote_id <> p_lote_id
+       OR v_sale.ouro_fino_vendido_gramas <> round(p_ouro_fino_vendido_gramas, 3)
+       OR v_sale.preco_por_grama <> round(p_preco_por_grama, 6)
+       OR v_sale.custos_adicionais <> round(p_custos_adicionais, 2)
+       OR v_sale.comprador <> btrim(p_comprador)
+       OR v_sale.referencia_documento IS DISTINCT FROM nullif(btrim(coalesce(p_referencia_documento, '')), '') THEN
+      RAISE EXCEPTION 'Chave de idempotência já utilizada com dados diferentes.' USING ERRCODE = '23505';
+    END IF;
     RETURN v_sale;
   END IF;
 
