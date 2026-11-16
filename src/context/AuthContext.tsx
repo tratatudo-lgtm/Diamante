@@ -201,75 +201,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
 
     try {
-      // 1. signInWithPassword
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ email: email.trim(), password }),
+        signal: AbortSignal.timeout(15000),
       });
+      const payload = await response.json().catch(() => ({}));
+      const user = payload?.user;
+      const assignedRole = String(payload?.role || user?.role || '').trim().toLowerCase();
 
-      if (authError || !authData?.user) {
-        throw new Error('Credenciais inválidas ou conta inativa');
-      }
-
-      // 2. await supabase.rpc('get_user_session_data')
-      let sessionData: UserSessionData | null = null;
-      try {
-        sessionData = await fetchSessionMetadata(authData.user.email || email, authData.user.id);
-      } catch {
-        // If inactive, force sign out and throw standard error
-        await supabase.auth.signOut();
-        throw new Error('Credenciais inválidas ou conta inativa');
-      }
-
-      // Falhar fechado: só aceitar um perfil ativo, ligado à identidade autenticada.
       if (
-        !sessionData ||
-        sessionData.id !== authData.user.id ||
-        sessionData.ativo !== true ||
-        typeof sessionData.role !== 'string' || !sessionData.role.trim() ||
-        typeof sessionData.nome_completo !== 'string' || !sessionData.nome_completo.trim()
+        !response.ok ||
+        payload?.success !== true ||
+        typeof payload?.token !== 'string' || !payload.token ||
+        typeof user?.id !== 'string' || !user.id.trim() ||
+        typeof user?.nome_completo !== 'string' || !user.nome_completo.trim() ||
+        !assignedRole ||
+        user?.ativo !== true
       ) {
-        await supabase.auth.signOut();
-        throw new Error('Credenciais inválidas ou conta inativa');
+        throw new Error(payload?.message || 'Credenciais inválidas ou conta inativa.');
       }
 
-      // 3. Guardar apenas os dados confirmados na tabela funcionarios.
-      const assignedRole = sessionData.role;
-      const assignedLojaId = sessionData.loja_id || null;
-
-      const fullSession: UserSessionData = {
-        id: sessionData.id,
-        user_id: authData.user.id,
-        email: authData.user.email || sessionData.email || email,
-        nome_completo: sessionData.nome_completo,
-        role: assignedRole,
-        loja_id: assignedLojaId,
-        ativo: true,
-      };
-
-      setUserSession(fullSession);
-      setRole(assignedRole);
-      setLojaId(assignedLojaId);
-      setFuncionario({
-        id: fullSession.id || authData.user.id,
-        nome_completo: fullSession.nome_completo || 'Utilizador',
-        email: fullSession.email || email,
-        role: assignedRole,
-        loja_id: assignedLojaId,
-        ativo: true,
-      });
-
-      // 4. Redirecionar: role === 'admin' -> /dashboard-admin | else -> /loja-atual
-      const redirectPath = assignedRole === 'admin' ? '/dashboard-admin' : '/loja-atual';
+      setDirectSession(user, assignedRole, payload.token);
       setIsLoading(false);
-      return { success: true, redirectPath };
-
+      return {
+        success: true,
+        redirectPath: assignedRole === 'admin' ? '/dashboard-admin' : '/loja-atual',
+      };
     } catch (err: unknown) {
       setIsLoading(false);
-      console.warn('Erro de autenticação:', err);
-      // 5. Erros: Mensagem genérica estrita
-      const msg = 'Credenciais inválidas ou conta inativa';
-      setErrorMessage(msg);
+      console.warn('[AuthContext] Falha no processo de autenticação.');
+      setErrorMessage('Credenciais inválidas ou conta inativa');
       return { success: false, redirectPath: '/login' };
     }
   };
