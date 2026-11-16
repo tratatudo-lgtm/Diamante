@@ -327,7 +327,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     if (Number(valorFinal.toFixed(2)) > valorMaximoAutorizado) {
       return res.status(409).json({
         success: false,
-        message: `O valor acordado excede o limite autorizado pela sede de ${valorMaximoAutorizado.toFixed(2)} €. Flexibilidade máxima da loja: ${flexibilidadeLoja.toFixed(2)}%.`,
+        message: `O valor acordado excede o limite de compra que protege a margem aprovada pela sede: ${valorMaximoAutorizado.toFixed(2)} €.`,
       });
     }
   } catch {
