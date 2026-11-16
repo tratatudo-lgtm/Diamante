@@ -469,7 +469,7 @@ app.get('/api/admin/inventory/movements', verifyAdmin, async (req, res) => {
   try {
     let query = supabaseAdmin
       .from('ouro_movimentos_fisicos')
-      .select('id, inventario_id, evento, estado_anterior, estado_novo, loja_id, peso_declarado_gramas, peso_recebido_gramas, diferenca_peso_gramas, operador_id, ocorrido_em, observacoes')
+      .select('id, inventario_id, evento, estado_anterior, estado_novo, loja_id, peso_declarado_gramas, peso_recebido_gramas, diferenca_peso_gramas, operador_id, ocorrido_em, observacoes, lote_fundicao_id')
       .order('ocorrido_em', { ascending: false })
       .limit(limit);
     if (inventoryId) query = query.eq('inventario_id', inventoryId);
@@ -482,22 +482,27 @@ app.get('/api/admin/inventory/movements', verifyAdmin, async (req, res) => {
 
     const inventoryIds = [...new Set((data || []).map((event: any) => event.inventario_id))];
     const storeIds = [...new Set((data || []).map((event: any) => event.loja_id).filter(Boolean))];
-    const [inventoryResult, storesResult] = await Promise.all([
+    const batchIds = [...new Set((data || []).map((event: any) => event.lote_fundicao_id).filter(Boolean))];
+    const [inventoryResult, storesResult, batchesResult] = await Promise.all([
       inventoryIds.length
         ? supabaseAdmin.from('inventario_fisico').select('id, codigo_unico, metal, tipo_peca').in('id', inventoryIds)
         : Promise.resolve({ data: [], error: null }),
       storeIds.length
         ? supabaseAdmin.from('lojas').select('id, nome').in('id', storeIds)
         : Promise.resolve({ data: [], error: null }),
+      batchIds.length
+        ? supabaseAdmin.from('ouro_fundicao_lotes').select('id, codigo_lote').in('id', batchIds)
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
-    if (inventoryResult.error || storesResult.error) {
+    if (inventoryResult.error || storesResult.error || batchesResult.error) {
       console.error('[Admin Inventory Movements] Falha ao enriquecer histórico.');
       return res.status(503).json({ success: false, error: 'Não foi possível identificar peças ou lojas do histórico.' });
     }
 
     const inventoryById = new Map((inventoryResult.data || []).map((item: any) => [item.id, item]));
     const storeById = new Map((storesResult.data || []).map((store: any) => [store.id, store.nome]));
+    const batchById = new Map((batchesResult.data || []).map((batch: any) => [batch.id, batch.codigo_lote]));
     return res.json({
       success: true,
       data: (data || []).map((event: any) => ({
@@ -506,6 +511,7 @@ app.get('/api/admin/inventory/movements', verifyAdmin, async (req, res) => {
         metal: inventoryById.get(event.inventario_id)?.metal || null,
         tipo_peca: inventoryById.get(event.inventario_id)?.tipo_peca || null,
         loja_nome: storeById.get(event.loja_id) || null,
+        codigo_lote_fundicao: batchById.get(event.lote_fundicao_id) || null,
         divergencia: event.diferenca_peso_gramas != null && Math.abs(Number(event.diferenca_peso_gramas)) > 0.05,
       })),
     });
