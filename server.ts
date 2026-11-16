@@ -601,7 +601,7 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
           custo_operacional_total: Number(operationalCost.toFixed(2)),
           custo_total: Number(totalCost.toFixed(2)),
           custo_por_grama_fino: batch.estado === 'concluido' && fineGold > 0
-            ? Number((totalCost / fineGold).toFixed(2))
+            ? Number((totalCost / fineGold).toFixed(4))
             : null,
           custos_operacionais: costs,
           pecas: piecesByBatch.get(batch.id) || [],
