@@ -9,7 +9,7 @@ interface EligiblePiece {
 interface RefiningBatch {
   id: string; codigo_lote: string; estado: 'em_preparacao' | 'concluido';
   quantidade_pecas: number; peso_entrada_gramas: number; custo_aquisicao_total?: number | null;
-  custo_por_grama_fino?: number | null; peso_recuperado_gramas?: number | null; toque_milesimos?: number | null;
+  custo_por_grama_fino?: number | null; custo_operacional_total?: number | null; custo_total?: number | null; custos_operacionais?: Array<{categoria:string;descricao:string;valor:number}>; peso_recuperado_gramas?: number | null; toque_milesimos?: number | null;
   ouro_fino_recuperado_gramas?: number | null; perda_processo_gramas?: number | null;
   rendimento_percentagem?: number | null; criado_em: string;
   pecas?: Array<{ inventario_id: string; codigo_peca: string; peso_recebido_gramas: number; custo_aquisicao?: number | null; transacao_origem_id?: string | null }>;
@@ -21,6 +21,7 @@ export const GoldRefiningPage: React.FC = () => {
   const [selected, setSelected] = useState<string[]>([]);
   const [recovered, setRecovered] = useState<Record<string, string>>({});
   const [touch, setTouch] = useState<Record<string, string>>({});
+  const [costForms, setCostForms] = useState<Record<string, {categoria:string;descricao:string;valor:string}>>({});
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -69,6 +70,25 @@ export const GoldRefiningPage: React.FC = () => {
     finally { setBusy(false); }
   };
 
+  const addOperationalCost = async (batch: RefiningBatch) => {
+    const form = costForms[batch.id] || { categoria: 'fundicao', descricao: '', valor: '' };
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      const response = await fetch('/api/admin/refining/batches/' + encodeURIComponent(batch.id) + '/costs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ categoria: form.categoria, descricao: form.descricao, valor: form.valor.replace(',', '.') }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true) throw new Error(payload?.error || 'Não foi possível registar o custo.');
+      setCostForms(v => ({ ...v, [batch.id]: { categoria: 'fundicao', descricao: '', valor: '' } }));
+      setNotice('Custo operacional registado no lote ' + batch.codigo_lote + '.');
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao registar custo.'); }
+    finally { setBusy(false); }
+  };
+
   const completeBatch = async (batch: RefiningBatch) => {
     setBusy(true); setError(''); setNotice('');
     try {
@@ -113,6 +133,17 @@ export const GoldRefiningPage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-bold">{b.codigo_lote}</h3><p className="mt-1 text-[11px] text-slate-500">{b.quantidade_pecas} peças · criado em {new Date(b.criado_em).toLocaleString('pt-PT')}</p></div><span className={'rounded-md px-2 py-1 text-[10px] font-bold ' + (b.estado === 'concluido' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-amber-500/10 text-amber-300')}>{b.estado === 'concluido' ? 'Concluído' : 'Em preparação'}</span></div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4"><div><p className="text-slate-500">Entrada</p><p className="mt-1 font-bold">{Number(b.peso_entrada_gramas).toFixed(3)} g</p></div><div><p className="text-slate-500">Custo de aquisição</p><p className="mt-1 font-bold">{Number(b.custo_aquisicao_total || 0).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</p></div>{b.estado === 'concluido' && <><div><p className="text-slate-500">Custo / g fino</p><p className="mt-1 font-bold text-[#d4af37]">{b.custo_por_grama_fino == null ? '—' : Number(b.custo_por_grama_fino).toLocaleString('pt-PT', { style: 'currency', currency: 'EUR' })}</p></div><div><p className="text-slate-500">Recuperado</p><p className="mt-1 font-bold">{Number(b.peso_recuperado_gramas).toFixed(3)} g</p></div><div><p className="text-slate-500">Ouro fino</p><p className="mt-1 font-bold text-emerald-300">{Number(b.ouro_fino_recuperado_gramas).toFixed(3)} g</p></div><div><p className="text-slate-500">Perda / Rendimento</p><p className="mt-1 font-bold">{Number(b.perda_processo_gramas).toFixed(3)} g / {Number(b.rendimento_percentagem).toFixed(2)}%</p></div></>}</div>
             <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/10 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Peças incluídas · origem preservada</p><div className="mt-2 flex flex-wrap gap-2">{(b.pecas || []).map(piece => <span key={piece.inventario_id} title={piece.transacao_origem_id ? 'Compra: ' + piece.transacao_origem_id : 'Origem da compra não disponível'} className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10px] text-slate-300">{piece.codigo_peca} · {Number(piece.peso_recebido_gramas).toFixed(3)} g · {Number(piece.custo_aquisicao || 0).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</span>)}</div></div>
+            <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/10 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Custos operacionais</p><p className="text-xs font-bold">{Number(b.custo_operacional_total || 0).toLocaleString('pt-PT', {style:'currency',currency:'EUR'})}</p></div>
+              {(b.custos_operacionais || []).map((cost, index) => <div key={index} className="mt-2 flex justify-between gap-3 text-xs text-slate-300"><span>{cost.categoria} · {cost.descricao}</span><span className="font-semibold">{Number(cost.valor).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})}</span></div>)}
+              {b.estado === 'em_preparacao' && <div className="mt-3 grid gap-2 sm:grid-cols-[130px_1fr_110px_auto]">
+                <select value={(costForms[b.id] || {categoria:'fundicao'}).categoria} onChange={e=>setCostForms(v=>({...v,[b.id]:{...(v[b.id]||{descricao:'',valor:''}),categoria:e.target.value}}))} className="h-9 rounded-lg border border-white/10 bg-[#080d17] px-2 text-xs"><option value="transporte">Transporte</option><option value="analise">Análise</option><option value="fundicao">Fundição</option><option value="outro">Outro</option></select>
+                <input value={(costForms[b.id] || {descricao:''}).descricao} onChange={e=>setCostForms(v=>({...v,[b.id]:{...(v[b.id]||{categoria:'fundicao',valor:''}),descricao:e.target.value}}))} placeholder="Descrição do custo" className="h-9 rounded-lg border border-white/10 bg-[#080d17] px-2 text-xs"/>
+                <input value={(costForms[b.id] || {valor:''}).valor} onChange={e=>setCostForms(v=>({...v,[b.id]:{...(v[b.id]||{categoria:'fundicao',descricao:''}),valor:e.target.value}}))} inputMode="decimal" placeholder="Valor €" className="h-9 rounded-lg border border-white/10 bg-[#080d17] px-2 text-xs"/>
+                <button disabled={busy} onClick={()=>void addOperationalCost(b)} className="h-9 rounded-lg bg-[#d4af37]/15 px-3 text-xs font-bold text-[#e4c65b] disabled:opacity-40">Adicionar custo</button>
+              </div>}
+              <p className="mt-2 text-[10px] text-slate-500">Total do lote: {Number(b.custo_total ?? b.custo_aquisicao_total ?? 0).toLocaleString('pt-PT',{style:'currency',currency:'EUR'})} · inclui aquisição e custos operacionais.</p>
+            </div>
             {b.estado === 'em_preparacao' && <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end"><label><span className="mb-1 block text-[11px] text-slate-400">Peso recuperado (g)</span><input value={recovered[b.id] || ''} onChange={e=>setRecovered(v=>({...v,[b.id]:e.target.value}))} inputMode="decimal" placeholder="Ex.: 48,250" className="h-10 w-full rounded-lg border border-white/10 bg-[#080d17] px-3 text-sm"/></label><label><span className="mb-1 block text-[11px] text-slate-400">Toque final (‰)</span><input value={touch[b.id] || ''} onChange={e=>setTouch(v=>({...v,[b.id]:e.target.value}))} inputMode="decimal" placeholder="Ex.: 999,9" className="h-10 w-full rounded-lg border border-white/10 bg-[#080d17] px-3 text-sm"/></label><button disabled={busy} onClick={()=>void completeBatch(b)} className="h-10 rounded-lg bg-emerald-500/15 px-4 text-xs font-bold text-emerald-300 disabled:opacity-40"><ShieldCheck className="mr-1 inline h-4 w-4"/> Concluir lote</button></div>}
           </article>)}
           {!loading && batches.length === 0 && <div className="rounded-xl border border-dashed border-white/15 p-8 text-center text-sm text-slate-400">Ainda não existem lotes registados.</div>}
