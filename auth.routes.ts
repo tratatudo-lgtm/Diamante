@@ -907,15 +907,37 @@ async function handleImportGoldMarketQuote(_req: AdminRequest, res: Response): P
       cotacao_recebida_em: quote.updated_at,
     }));
     const payload = { ...currentConfig.valor, margens };
+    const { data: historyRow, error: historyError } = await supabaseAdmin
+      .from('cotacoes_ouro_historico')
+      .insert({
+        fonte: 'xaus.com',
+        preco_referencia: price,
+        moeda: 'EUR',
+        unidade: 'EUR/g_ouro_fino',
+        observada_em: quote.price_as_of,
+        recebida_em: quote.updated_at,
+        margens_snapshot: margins,
+        estado_fonte: quote.data_state,
+      })
+      .select('id')
+      .single();
+    if (historyError || !historyRow) {
+      console.error('[Admin Gold Quote] Não foi possível guardar o histórico da cotação.');
+      res.status(503).json({ success: false, message: 'Não foi possível registar o histórico da cotação. Os preços activos não foram alterados.' });
+      return;
+    }
+
     const { data, error } = await supabaseAdmin.from('configuracoes_sistema')
       .upsert({ chave: 'parametros_compra_ouro', valor: payload, updated_at: new Date().toISOString() }, { onConflict: 'chave' })
       .select('valor').single();
     if (error || !data) {
-      res.status(503).json({ success: false, message: 'Não foi possível guardar a cotação importada. Nenhum preço foi confirmado.' });
+      console.error('[Admin Gold Quote] Falha ao activar a cotação depois de guardar o histórico.');
+      res.status(503).json({ success: false, message: 'O histórico foi guardado, mas não foi possível activar a cotação. Verifique a configuração antes de novas compras.' });
       return;
     }
     res.status(200).json({
       success: true,
+      historico_id: historyRow.id,
       fonte: 'xaus.com',
       cotacao_referencia_g: price,
       moeda: 'EUR',
