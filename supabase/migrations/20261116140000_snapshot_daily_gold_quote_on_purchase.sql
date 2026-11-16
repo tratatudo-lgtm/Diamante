@@ -118,7 +118,7 @@ BEGIN
         USING ERRCODE = '42501';
     END IF;
 
-    RETURN to_jsonb(v_transaction);
+    RETURN to_jsonb(v_transaction) || jsonb_build_object('_idempotent_replay', true);
   END IF;
 
   v_inventory_code := 'INV-' || upper(replace(gen_random_uuid()::text, '-', ''));
@@ -131,7 +131,7 @@ BEGIN
     btrim(p_tipo_peca), btrim(p_metal), p_peso_gramas, 'pendente_aprovacao'
   );
 
-  RETURN to_jsonb(v_transaction);
+  RETURN to_jsonb(v_transaction) || jsonb_build_object('_idempotent_replay', false);
 END;
 $function$;
 

@@ -419,8 +419,9 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       return res.status(503).json({ success: false, message: 'Não foi possível registar a compra e o respetivo inventário. Nenhum registo parcial foi confirmado.' });
     }
 
+    const isReplay = transaction._idempotent_replay === true;
     const io = (globalThis as any).io;
-    if (io) {
+    if (!isReplay && io) {
       io.to('admin').emit('transaction:created', {
         id: transaction.id,
         loja_id: transaction.loja_id,
@@ -434,7 +435,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       });
     }
 
-    return res.status(201).json({ success: true, transacao: transaction });
+    return res.status(isReplay ? 200 : 201).json({ success: true, transacao: transaction, replay: isReplay });
   } catch {
     console.error('[Store Purchase] Erro interno ao registar compra.');
     return res.status(500).json({ success: false, message: 'Ocorreu um erro ao registar a compra.' });
