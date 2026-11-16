@@ -176,7 +176,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
     }
 
     if (!consentimentoRgpd) {
-      setErrorMessage('Confirme que a declaração foi assinada presencialmente pelo cliente.');
+      setErrorMessage('Confirme que a declaração aplicável foi assinada presencialmente pelo cliente.');
       return;
     }
 
@@ -614,9 +614,9 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
               className="mt-1 w-5 h-5 rounded border-gray-700 text-[#D4AF37] focus:ring-[#D4AF37] bg-gray-900 cursor-pointer"
             />
             <div className="text-xs text-gray-300">
-              <span className="font-semibold text-white">Consentimento RGPD obtido *</span>
+              <span className="font-semibold text-white">Declaração aplicável assinada presencialmente *</span>
               <p className="text-[11px] text-gray-400 mt-0.5 leading-relaxed">
-                Confirmo que o cliente assinou presencialmente a declaração de venda legal e o consentimento de tratamento de dados pessoais nos termos da legislação aplicável.
+                Confirmo que o cliente assinou presencialmente a declaração aplicável e que o ficheiro anexado corresponde à declaração assinada.
               </p>
             </div>
           </label>

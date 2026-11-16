@@ -362,6 +362,7 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
           await supabaseAdmin.storage.from('declaracoes-compras').remove([path]);
           return res.status(200).json({ success: true, declarationEvidenceId: concurrent.id, replay: true });
         }
+        await supabaseAdmin.storage.from('declaracoes-compras').remove([path]);
         return res.status(409).json({ success: false, message: 'A chave de repetição já foi utilizada por outra declaração.' });
       }
       throw insertError || new Error('Não foi possível registar a declaração.');

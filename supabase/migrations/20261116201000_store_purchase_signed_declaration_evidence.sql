@@ -159,7 +159,7 @@ BEGIN
     FROM public.transacoes
     WHERE idempotency_key = p_idempotency_key;
 
-    IF NOT FOUND OR v_transaction.declaracao_assinada_id <> p_declaracao_assinada_id
+    IF NOT FOUND OR v_transaction.declaracao_assinada_id IS DISTINCT FROM p_declaracao_assinada_id
       OR v_transaction.funcionario_id <> p_funcionario_id
       OR v_transaction.loja_id <> p_loja_id
       OR v_transaction.cliente_nome <> btrim(p_cliente_nome)
