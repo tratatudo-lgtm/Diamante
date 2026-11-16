@@ -123,8 +123,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const cotacaoObservadaLabel = selectedPricing?.cotacao_observada_em
     ? new Intl.DateTimeFormat('pt-PT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Lisbon' }).format(new Date(selectedPricing.cotacao_observada_em))
     : 'Sem cotação de hoje';
-  const flexibilidadeLoja = selectedPricing?.desconto_maximo_loja_perc ?? 0;
-  const valorMaximoAutorizado = Number((valorSugerido * (1 + flexibilidadeLoja / 100)).toFixed(2));
+  const valorMaximoAutorizado = valorSugerido;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,7 +160,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
     }
 
     if (Number(valorFinalEfetivo.toFixed(2)) > valorMaximoAutorizado) {
-      setErrorMessage(`O valor acordado excede o limite autorizado de ${valorMaximoAutorizado.toFixed(2)} €. Flexibilidade máxima da loja: ${flexibilidadeLoja.toFixed(2)}%.`);
+      setErrorMessage(`O valor acordado excede o limite autorizado de ${valorMaximoAutorizado.toFixed(2)} €. A margem aprovada pela sede não pode ser reduzida na negociação.`);
       return;
     }
 
