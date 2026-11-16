@@ -65,7 +65,6 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
   const cidade = typeof body.cidade === 'string' ? body.cidade.trim() : '';
   const dataNascimento = typeof body.dataNascimento === 'string' ? body.dataNascimento.trim() : '';
   const notasInternas = typeof body.notasInternas === 'string' ? body.notasInternas.trim() : '';
-  const consentimentoRgpd = body.consentimentoRgpd === true;
   const lojaId = employee.role === 'admin'
     ? (typeof body.lojaOrigemId === 'string' ? body.lojaOrigemId : '')
     : (employee.loja_id || '');
@@ -88,10 +87,10 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
       !biCc || biCc.length > 80 || !['cc', 'passaporte', 'cartao_residente', 'outro'].includes(tipoDocumento) || !/^\+[1-9]\d{7,14}$/.test(telemovel) ||
       morada.length > 300 || codigoPostal.length > 20 || paisResidencia.length > 10 || email.length > 254 ||
       cidade.length > 100 || !validBirthDate || (birthDate && birthDate > latestAllowedBirthDate) || notasInternas.length > 2000 ||
-      !lojaId || !consentimentoRgpd) {
+      !lojaId) {
     return res.status(400).json({
       success: false,
-      message: 'Preencha nome, NIF português válido, tipo e número de documento, data de nascimento válida (mínimo 18 anos), telefone internacional válido, loja e confirme o consentimento RGPD.',
+      message: 'Preencha nome, NIF português válido, tipo e número de documento, data de nascimento válida (mínimo 18 anos), telefone internacional válido e loja.',
     });
   }
 
@@ -132,8 +131,8 @@ clientsRouter.post('/', verifyAuth, async (req: AuthenticatedRequest, res: Respo
         notas_internas: notasInternas || null,
         loja_registo_id: lojaId,
         status,
-        consentimento_rgpd: true,
-        consentimento_rgpd_data: new Date().toISOString(),
+        consentimento_rgpd: false,
+        consentimento_rgpd_data: null,
       })
       .select('id,codigo_cliente,nome,nif,bi_cc,tipo_documento,telemovel,email,morada,codigo_postal,pais_residencia,cidade,loja_registo_id,status,data_nascimento,notas_internas,created_at')
       .single();
