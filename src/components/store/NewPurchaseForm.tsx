@@ -42,7 +42,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [valorFinalManual, setValorFinalManual] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [purchaseSettings, setPurchaseSettings] = useState<Array<{ toque_millesimos: number; cotacao_referencia_g: number; margem_percentagem: number; preco_compra_grama: number; desconto_maximo_loja_perc: number }>>([]);
+  const [purchaseSettings, setPurchaseSettings] = useState<Array<{ toque_millesimos: number; cotacao_referencia_g: number; margem_percentagem: number; preco_compra_grama: number; desconto_maximo_loja_perc: number; cotacao_origem: string; cotacao_moeda: string; cotacao_unidade: string; cotacao_observada_em: string }>>([]);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
@@ -120,6 +120,9 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const valorFinalEfetivo = valorFinalManual !== ''
     ? parseFloat(valorFinalManual) || 0
     : valorSugerido;
+  const cotacaoObservadaLabel = selectedPricing?.cotacao_observada_em
+    ? new Intl.DateTimeFormat('pt-PT', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Lisbon' }).format(new Date(selectedPricing.cotacao_observada_em))
+    : 'Sem cotação de hoje';
   const flexibilidadeLoja = selectedPricing?.desconto_maximo_loja_perc ?? 0;
   const valorMaximoAutorizado = Number((valorSugerido * (1 + flexibilidadeLoja / 100)).toFixed(2));
 
