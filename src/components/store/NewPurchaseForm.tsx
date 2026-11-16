@@ -43,7 +43,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [metal, setMetal] = useState('Ouro 19.2K (800‰)');
   const [pesoGramas, setPesoGramas] = useState<string>('');
   const [descricao, setDescricao] = useState('');
-  const [consentimentoRgpd, setConsentimentoRgpd] = useState(false);
+  const [declaracaoConfirmada, setDeclaracaoConfirmada] = useState(false);
   const [declaracaoAssinada, setDeclaracaoAssinada] = useState<File | null>(null);
   const [declaracaoInputKey, setDeclaracaoInputKey] = useState(0);
 
@@ -66,7 +66,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const tipoPecaId = useId();
   const pesoGramasId = useId();
   const descricaoId = useId();
-  const rgpdCheckboxId = useId();
+  const declaracaoCheckboxId = useId();
   const valorFinalId = useId();
 
   // Carregar exclusivamente preços aprovados pela sede para esta loja.
@@ -176,7 +176,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       return;
     }
 
-    if (!consentimentoRgpd) {
+    if (!declaracaoConfirmada) {
       setErrorMessage('Confirme que a declaração aplicável foi assinada presencialmente pelo cliente.');
       return;
     }
@@ -210,6 +210,10 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         valorSugerido: parseFloat(valorSugerido.toFixed(2)),
         cotacaoSpot: spotPrice,
         margemPercent,
+        cotacaoOrigem: selectedPricing.cotacao_origem,
+        cotacaoMoeda: selectedPricing.cotacao_moeda,
+        cotacaoUnidade: selectedPricing.cotacao_unidade,
+        cotacaoObservadaEm: selectedPricing.cotacao_observada_em,
         descricao: descricao.trim() || `${tipoPeca} em ${metal}`,
       };
       const declarationBuffer = await declaracaoAssinada.arrayBuffer();
@@ -295,7 +299,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       setPesoGramas('');
       setDescricao('');
       setValorFinalManual('');
-      setConsentimentoRgpd(false);
+      setDeclaracaoConfirmada(false);
       setDeclaracaoAssinada(null);
       setDeclaracaoInputKey((current) => current + 1);
 
@@ -607,13 +611,13 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
 
         {/* SECÇÃO 5: CONFIRMAÇÃO PRESENCIAL */}
         <div className="p-4 rounded-xl bg-gray-900/40 border border-gray-800">
-          <label htmlFor={rgpdCheckboxId} className="flex items-start gap-3 cursor-pointer">
+          <label htmlFor={declaracaoCheckboxId} className="flex items-start gap-3 cursor-pointer">
             <input
-              id={rgpdCheckboxId}
+              id={declaracaoCheckboxId}
               type="checkbox"
               required
-              checked={consentimentoRgpd}
-              onChange={(e) => setConsentimentoRgpd(e.target.checked)}
+              checked={declaracaoConfirmada}
+              onChange={(e) => setDeclaracaoConfirmada(e.target.checked)}
               className="mt-1 w-5 h-5 rounded border-gray-700 text-[#D4AF37] focus:ring-[#D4AF37] bg-gray-900 cursor-pointer"
             />
             <div className="text-xs text-gray-300">
