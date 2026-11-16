@@ -355,7 +355,7 @@ async function setupViteOrStatic() {
 // Iniciar servidor HTTP com WebSocket (substitui app.listen tradicional)
 setupViteOrStatic().then(() => {
   const PORT = parseInt(process.env.PORT || '3000', 10);
-  const HOST = process.env.HOST || '127.0.0.1';
+  const HOST = '127.0.0.1'; // APIs and WebSocket stay behind Nginx; never bind publicly.
   httpServer.listen(PORT, HOST, () => {
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
