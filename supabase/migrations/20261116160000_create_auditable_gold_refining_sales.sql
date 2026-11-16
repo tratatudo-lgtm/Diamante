@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS public.ouro_fundicao_liquidacoes (
   receita_bruta numeric(14,2) NOT NULL CHECK (receita_bruta > 0),
   custo_lote_alocado numeric(14,2) NOT NULL CHECK (custo_lote_alocado >= 0),
   custos_adicionais numeric(14,2) NOT NULL DEFAULT 0 CHECK (custos_adicionais >= 0),
-  resultado_liquido numeric(14,2) NOT NULL,\n  CONSTRAINT ouro_fundicao_liquidacoes_result_check CHECK (resultado_liquido = receita_bruta - custo_lote_alocado - custos_adicionais),
+  resultado_liquido numeric(14,2) NOT NULL,
+  CONSTRAINT ouro_fundicao_liquidacoes_result_check CHECK (resultado_liquido = receita_bruta - custo_lote_alocado - custos_adicionais),
   comprador text NOT NULL CHECK (char_length(btrim(comprador)) BETWEEN 2 AND 200),
   referencia_documento text,
   liquidado_em timestamptz NOT NULL DEFAULT now(),
@@ -48,6 +49,7 @@ DECLARE
   v_available numeric(14,3);
   v_total_cost numeric(14,2);
   v_allocated_cost numeric(14,2);
+  v_allocated_before numeric(14,2);
   v_revenue numeric(14,2);
   v_extra numeric(14,2);
 BEGIN
@@ -67,10 +69,10 @@ BEGIN
   WHERE chave_idempotencia = p_chave_idempotencia;
   IF FOUND THEN
     IF v_sale.lote_id <> p_lote_id
-       OR v_sale.ouro_fino_vendido_gramas <> round(p_ouro_fino_vendido_gramas, 3)
-       OR v_sale.preco_por_grama <> round(p_preco_por_grama, 6)
-       OR v_sale.custos_adicionais <> round(p_custos_adicionais, 2)
-       OR v_sale.comprador <> btrim(p_comprador)
+       OR v_sale.ouro_fino_vendido_gramas IS DISTINCT FROM round(p_ouro_fino_vendido_gramas, 3)
+       OR v_sale.preco_por_grama IS DISTINCT FROM round(p_preco_por_grama, 6)
+       OR v_sale.custos_adicionais IS DISTINCT FROM round(p_custos_adicionais, 2)
+       OR v_sale.comprador IS DISTINCT FROM btrim(p_comprador)
        OR v_sale.referencia_documento IS DISTINCT FROM nullif(btrim(coalesce(p_referencia_documento, '')), '') THEN
       RAISE EXCEPTION 'Chave de idempotência já utilizada com dados diferentes.' USING ERRCODE = '23505';
     END IF;
@@ -112,9 +114,17 @@ BEGIN
   WHERE lote_id = p_lote_id;
 
   v_total_cost := round(coalesce(v_batch.custo_aquisicao_total, 0) + v_extra, 2);
+  SELECT coalesce(sum(custo_lote_alocado), 0)::numeric(14,2)
+  INTO v_allocated_before
+  FROM public.ouro_fundicao_liquidacoes
+  WHERE lote_id = p_lote_id;
+
+  -- Na venda final, absorver o resíduo de arredondamento para fechar exactamente o custo do lote.
   v_allocated_cost := CASE
+    WHEN round(p_ouro_fino_vendido_gramas, 3) = v_available
+      THEN round(v_total_cost - v_allocated_before, 2)
     WHEN v_batch.ouro_fino_recuperado_gramas > 0
-    THEN round(v_total_cost * p_ouro_fino_vendido_gramas / v_batch.ouro_fino_recuperado_gramas, 2)
+      THEN round(v_total_cost * p_ouro_fino_vendido_gramas / v_batch.ouro_fino_recuperado_gramas, 2)
     ELSE 0
   END;
   v_revenue := round(p_ouro_fino_vendido_gramas * p_preco_por_grama, 2);
