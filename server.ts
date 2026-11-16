@@ -789,10 +789,9 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
     if (!settlements.length) return res.json({ success: true, period: { from: from || null, to: to || null }, totals: { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 }, stores: [], unmatched: { revenue: 0, result: 0 } });
 
     const batchIds = Array.from(new Set(settlements.map((sale: any) => sale.lote_id)));
-    const [batches, pieces, operationalCosts] = await Promise.all([
+    const [batches, pieces] = await Promise.all([
       fetchAll('ouro_fundicao_lotes', 'id,custo_aquisicao_total,ouro_fino_recuperado_gramas', q => q.in('id', batchIds)),
       fetchAll('ouro_fundicao_lote_pecas', 'lote_id,transacao_origem_id,custo_aquisicao,peso_recebido_gramas', q => q.in('lote_id', batchIds)),
-      fetchAll('ouro_fundicao_custos', 'lote_id,valor', q => q.in('lote_id', batchIds)),
     ]);
     const transactionIds = Array.from(new Set(pieces.map((piece: any) => piece.transacao_origem_id).filter(Boolean)));
     const transactions = transactionIds.length
