@@ -692,6 +692,41 @@ app.post('/api/admin/refining/batches/:id/complete', verifyAdmin, async (req, re
   }
 });
 
+// LIQUIDAÇÃO DE OURO REFINADO — REGISTO DE VENDAS REAIS
+app.post('/api/admin/refining/batches/:id/settlements', verifyAdmin, async (req, res) => {
+  const adminId = (req as any).adminUser?.id;
+  const batchId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  const grams = Number(typeof req.body?.ouro_fino_vendido_gramas === 'string' ? req.body.ouro_fino_vendido_gramas.replace(',', '.') : req.body?.ouro_fino_vendido_gramas);
+  const price = Number(typeof req.body?.preco_por_grama === 'string' ? req.body.preco_por_grama.replace(',', '.') : req.body?.preco_por_grama);
+  const extra = Number(typeof req.body?.custos_adicionais === 'string' ? req.body.custos_adicionais.replace(',', '.') : (req.body?.custos_adicionais ?? 0));
+  const buyer = typeof req.body?.comprador === 'string' ? req.body.comprador.trim() : '';
+  const documentRef = typeof req.body?.referencia_documento === 'string' ? req.body.referencia_documento.trim() : '';
+  const idempotencyKey = typeof req.body?.chave_idempotencia === 'string' ? req.body.chave_idempotencia.trim() : '';
+  if (!adminId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(batchId) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey) ||
+      !Number.isFinite(grams) || grams <= 0 || !Number.isFinite(price) || price <= 0 ||
+      !Number.isFinite(extra) || extra < 0 || buyer.length < 2 || buyer.length > 200 || documentRef.length > 200) {
+    return res.status(400).json({ success: false, error: 'Indique quantidade, preço, comprador e custos válidos.' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.rpc('registar_liquidacao_ouro_fundicao', {
+      p_lote_id: batchId, p_chave_idempotencia: idempotencyKey,
+      p_ouro_fino_vendido_gramas: Number(grams.toFixed(3)),
+      p_preco_por_grama: Number(price.toFixed(6)),
+      p_custos_adicionais: Number(extra.toFixed(2)),
+      p_comprador: buyer, p_referencia_documento: documentRef || null,
+      p_admin_id: adminId,
+    });
+    if (error) {
+      console.error('[Refining Settlement] Não foi possível registar liquidação.');
+      return res.status(409).json({ success: false, error: error.message || 'A liquidação não pode ser registada.' });
+    }
+    return res.status(201).json({ success: true, liquidacao: data });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Erro interno ao registar liquidação.' });
+  }
+});
+
 // DETALHE DE LOJA — CONSULTA ADMINISTRATIVA PROTEGIDA
 app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
   const lojaId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
