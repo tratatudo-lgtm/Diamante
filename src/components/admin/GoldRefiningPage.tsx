@@ -12,7 +12,9 @@ interface RefiningBatch {
   custo_por_grama_fino?: number | null; custo_operacional_total?: number | null; custo_total?: number | null; custos_operacionais?: Array<{categoria:string;descricao:string;valor:number}>; valor_referencia_ouro_fino?: number | null; margem_potencial?: number | null; peso_recuperado_gramas?: number | null; toque_milesimos?: number | null;
   ouro_fino_recuperado_gramas?: number | null; perda_processo_gramas?: number | null;
   rendimento_percentagem?: number | null; criado_em: string;
-  ouro_fino_vendido_gramas?: number; receita_realizada?: number; resultado_realizado?: number;\n  liquidacoes?: Array<{ id: string; ouro_fino_vendido_gramas: number; preco_por_grama: number; receita_bruta: number; resultado_liquido: number; comprador: string; referencia_documento?: string | null; liquidado_em: string }>;\n  pecas?: Array<{ inventario_id: string; codigo_peca: string; peso_recebido_gramas: number; custo_aquisicao?: number | null; transacao_origem_id?: string | null }>;
+  ouro_fino_vendido_gramas?: number; receita_realizada?: number; resultado_realizado?: number;
+  liquidacoes?: Array<{ id: string; ouro_fino_vendido_gramas: number; preco_por_grama: number; receita_bruta: number; resultado_liquido: number; comprador: string; referencia_documento?: string | null; liquidado_em: string }>;
+  pecas?: Array<{ inventario_id: string; codigo_peca: string; peso_recebido_gramas: number; custo_aquisicao?: number | null; transacao_origem_id?: string | null }>;
 }
 
 export const GoldRefiningPage: React.FC = () => {
@@ -21,7 +23,8 @@ export const GoldRefiningPage: React.FC = () => {
   const [selected, setSelected] = useState<string[]>([]);
   const [recovered, setRecovered] = useState<Record<string, string>>({});
   const [touch, setTouch] = useState<Record<string, string>>({});
-  const [costForms, setCostForms] = useState<Record<string, {categoria:string;descricao:string;valor:string}>>({});\n  const [saleForms, setSaleForms] = useState<Record<string, {gramas:string;preco:string;custos:string;comprador:string;documento:string}>>({});
+  const [costForms, setCostForms] = useState<Record<string, {categoria:string;descricao:string;valor:string}>>({});
+  const [saleForms, setSaleForms] = useState<Record<string, {gramas:string;preco:string;custos:string;comprador:string;documento:string}>>({});
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
