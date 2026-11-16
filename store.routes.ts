@@ -237,6 +237,10 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
         margem_percentagem: item.margem_percentagem,
         preco_compra_grama: Number((item.cotacao_referencia_g * item.toque_millesimos / 1000 * (1 - item.margem_percentagem / 100)).toFixed(2)),
         desconto_maximo_loja_perc: Number(item.desconto_maximo_loja_perc) || 0,
+        cotacao_origem: item.cotacao_origem,
+        cotacao_moeda: item.cotacao_moeda,
+        cotacao_unidade: item.cotacao_unidade,
+        cotacao_observada_em: item.cotacao_observada_em,
       })),
     });
   } catch {
