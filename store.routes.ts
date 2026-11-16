@@ -166,7 +166,7 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
   try {
     const { data, error } = await supabaseAdmin
       .from('inventario_fisico')
-      .update({ estado: 'enviado_sede', data_saida: new Date().toISOString() })
+      .update({ estado: 'enviado_sede', data_saida: new Date().toISOString(), expedido_por: employee.id })
       .eq('id', itemId)
       .eq('loja_atual_id', employee.loja_id)
       .eq('estado', 'em_loja')
