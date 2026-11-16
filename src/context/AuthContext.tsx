@@ -76,15 +76,66 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const restoreSession = useCallback(async () => {
-    if (!isSupabaseConfigured()) {
-      setIsLoading(false);
-      return;
-    }
-
+    setIsLoading(true);
     try {
-      setIsLoading(true);
+      const apiToken = sessionStorage.getItem('diamante_jwt_token');
+      if (apiToken) {
+        const response = await fetch('/api/auth/session', {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
+          signal: AbortSignal.timeout(10000),
+        });
+        const payload = await response.json().catch(() => ({}));
+        const user = payload?.user;
+        if (
+          !response.ok ||
+          payload?.success !== true ||
+          typeof user?.id !== 'string' || !user.id.trim() ||
+          typeof user?.nome_completo !== 'string' || !user.nome_completo.trim() ||
+          typeof user?.role !== 'string' || !user.role.trim() ||
+          user?.ativo !== true
+        ) {
+          sessionStorage.removeItem('diamante_jwt_token');
+          localStorage.removeItem('otp_phone');
+          setUserSession(null);
+          setFuncionario(null);
+          setRole(null);
+          setLojaId(null);
+          return;
+        }
+
+        const validUser: UserSessionData = {
+          id: user.id,
+          user_id: user.id,
+          email: typeof user.email === 'string' ? user.email : '',
+          nome_completo: user.nome_completo,
+          role: user.role,
+          loja_id: user.loja_id ?? null,
+          ativo: true,
+        };
+        setUserSession(validUser);
+        setRole(validUser.role);
+        setLojaId(validUser.loja_id ?? null);
+        setFuncionario({
+          id: validUser.id,
+          nome_completo: validUser.nome_completo,
+          email: validUser.email || '',
+          role: validUser.role,
+          loja_id: validUser.loja_id ?? null,
+          ativo: true,
+        });
+        return;
+      }
+
+      if (!isSupabaseConfigured()) {
+        setUserSession(null);
+        setFuncionario(null);
+        setRole(null);
+        setLojaId(null);
+        return;
+      }
+
       const { data: { session }, error } = await supabase.auth.getSession();
-      
       if (error || !session?.user) {
         setUserSession(null);
         setFuncionario(null);
@@ -93,82 +144,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const meta = await fetchSessionMetadata(session.user.email || '', session.user.id);
-      if (meta) {
-        setUserSession(meta);
-        setRole(meta.role || 'operador');
-        setLojaId(meta.loja_id || null);
-        setFuncionario({
-          id: (meta.id || meta.user_id || session.user.id) as string,
-          nome_completo: (meta.nome_completo || session.user.email?.split('@')[0] || 'Utilizador') as string,
-          email: (meta.email || session.user.email || '') as string,
-          role: (meta.role || 'operador') as string,
-          loja_id: (meta.loja_id || null) as string | null,
-          ativo: meta.ativo !== false,
-        });
-      } else {
-        // Default session attributes if user exists in auth
-        const defaultRole = (session.user.user_metadata?.role as string) || 'admin';
-        setRole(defaultRole);
-        setUserSession({
-          id: session.user.id,
-          email: session.user.email,
-          role: defaultRole,
-          nome_completo: session.user.user_metadata?.nome_completo || session.user.email,
-        });
+      const metadata = await fetchSessionMetadata(session.user.email || '', session.user.id);
+      if (
+        !metadata ||
+        metadata.id !== session.user.id ||
+        metadata.ativo !== true ||
+        typeof metadata.role !== 'string' || !metadata.role.trim() ||
+        typeof metadata.nome_completo !== 'string' || !metadata.nome_completo.trim()
+      ) {
+        await supabase.auth.signOut();
+        setUserSession(null);
+        setFuncionario(null);
+        setRole(null);
+        setLojaId(null);
+        return;
       }
-    } catch (err) {
-      console.warn('[AuthContext] Falha ao restaurar sessão:', err);
+
+      setUserSession(metadata);
+      setRole(metadata.role);
+      setLojaId(metadata.loja_id ?? null);
+      setFuncionario({
+        id: metadata.id,
+        nome_completo: metadata.nome_completo,
+        email: metadata.email || session.user.email || '',
+        role: metadata.role,
+        loja_id: metadata.loja_id ?? null,
+        ativo: true,
+      });
+    } catch {
+      console.warn('[AuthContext] Falha ao restaurar sessão autenticada.');
+      sessionStorage.removeItem('diamante_jwt_token');
+      localStorage.removeItem('otp_phone');
+      setUserSession(null);
+      setFuncionario(null);
+      setRole(null);
+      setLojaId(null);
     } finally {
       setIsLoading(false);
     }
   }, [fetchSessionMetadata]);
 
-    // Inicializar sessão pelo telemóvel guardado no localStorage (fluxo OTP)
   useEffect(() => {
-    const initSession = async () => {
-      setIsLoading(true);
-      try {
-        const storedPhone = localStorage.getItem('otp_phone');
-        
-        if (!storedPhone) {
-          console.warn('[AuthContext] Nenhum telemóvel encontrado em localStorage');
-          logout();
-          return;
-        }
-
-        const normalizedPhone = storedPhone.startsWith('+351') ? storedPhone : `+351${storedPhone}`;
-        
-        // Buscar dados do funcionário diretamente pela BD
-        const sessionData = await fetchSessionMetadata(normalizedPhone, 'otp-user');
-        
-        if (sessionData) {
-          setUserSession(sessionData);
-          setRole(sessionData.role);
-          setLojaId(sessionData.loja_id);
-          setFuncionario({
-            id: sessionData.id,
-            nome_completo: sessionData.nome_completo,
-            email: sessionData.email,
-            role: sessionData.role,
-            loja_id: sessionData.loja_id
-          });
-          console.log(`[AuthContext] Sessão restaurada: ${sessionData.nome_completo} (${sessionData.role})`);
-        } else {
-          console.error('[AuthContext] Funcionário inválido após refresh:', normalizedPhone);
-          localStorage.removeItem('otp_phone');
-          logout();
-        }
-      } catch (err) {
-        console.error('[AuthContext] Erro na restauração:', err);
-        logout();
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initSession();
-  }, []);
+    void restoreSession();
+  }, [restoreSession]);
 
   /**
    * FLUXO EXATO REQUISITO 1:
@@ -251,6 +269,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setDirectSession = (user: Partial<UserSessionData>, assignedRole: string, token?: string) => {
+    if (
+      !token ||
+      typeof user.id !== 'string' || !user.id.trim() ||
+      typeof user.nome_completo !== 'string' || !user.nome_completo.trim() ||
+      typeof assignedRole !== 'string' || !assignedRole.trim()
+    ) {
+      throw new Error('Sessão de API inválida ou incompleta.');
+    }
     const fullSession: UserSessionData = {
       id: user.id || 'usr-direct',
       user_id: user.user_id || user.id,
@@ -284,6 +310,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       sessionStorage.removeItem('diamante_jwt_token');
+      localStorage.removeItem('otp_phone');
       await supabase.auth.signOut();
     } catch (err) {
       console.warn('[AuthContext] Erro ao terminar sessão:', err);
