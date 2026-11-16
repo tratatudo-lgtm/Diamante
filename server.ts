@@ -786,7 +786,7 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
         if (to) filtered = filtered.lt('liquidado_em', new Date(new Date(to + 'T00:00:00Z').getTime() + 86400000).toISOString());
         return filtered;
       });
-    if (!settlements.length) return res.json({ success: true, period: { from: from || null, to: to || null }, totals: { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 }, stores: [], unmatched: { revenue: 0, result: 0 } });
+    if (!settlements.length) return res.json({ success: true, period: { from: from || null, to: to || null }, totals: { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 }, stores: [], unmatched: { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 } });
 
     const batchIds = Array.from(new Set(settlements.map((sale: any) => sale.lote_id)));
     const [batches, pieces] = await Promise.all([
@@ -832,7 +832,7 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
         }
       }
       const useAcquisitionBasis = batchAcquisitionCost > 0 && knownAcquisition > 0;
-      const basisTotal = useAcquisitionBasis ? batchAcquisitionCost : knownWeight;
+      const basisTotal = useAcquisitionBasis ? Math.max(batchAcquisitionCost, knownAcquisition) : knownWeight;
       const saleRevenue = Number(sale.receita_bruta || 0);
       const saleCost = Number(sale.custo_lote_alocado || 0);
       const saleExtra = Number(sale.custos_adicionais || 0);
