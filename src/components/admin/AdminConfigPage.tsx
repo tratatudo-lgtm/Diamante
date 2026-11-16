@@ -289,7 +289,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                         <th className="py-3 px-4">Cotação Base (€/g)</th>
                         <th className="py-3 px-4">Margem Empresa (%)</th>
                         <th className="py-3 px-4">Preço Compra Balcão</th>
-                        <th className="py-3 px-4">Flexibilidade Loja (%)</th>
+                        
                         <th className="py-3 px-4 text-center">Ativo</th>
                       </tr>
                     </thead>
@@ -344,24 +344,6 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                           {/* Preço Compra Calculado */}
                           <td className="py-3.5 px-4 font-mono text-sm font-bold text-emerald-400">
                             {Number(metal.preco_compra_grama).toFixed(2)} €/g
-                          </td>
-
-                          {/* Flexibilidade Loja */}
-                          <td className="py-3.5 px-4 font-mono">
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                step="0.5"
-                                min="0"
-                                max="15"
-                                value={metal.desconto_maximo_loja_perc}
-                                onChange={(e) =>
-                                  handleMargemChange(idx, 'desconto_maximo_loja_perc', parseFloat(e.target.value) || 0)
-                                }
-                                className="w-16 px-2 py-1 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white font-mono focus:outline-hidden focus:border-[#D4AF37]"
-                              />
-                              <span className="text-slate-400">%</span>
-                            </div>
                           </td>
 
                           {/* Ativo */}
