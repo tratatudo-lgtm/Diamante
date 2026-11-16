@@ -22,6 +22,7 @@ import {
   Check,
   AlertCircle,
   Loader2,
+  History,
   X,
 } from 'lucide-react';
 
