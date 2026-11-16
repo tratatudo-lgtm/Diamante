@@ -104,24 +104,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return;
         }
 
+        const verifiedId = user.id as string;
+        const verifiedName = user.nome_completo as string;
+        const verifiedRole = user.role as string;
+        const verifiedEmail = typeof user.email === 'string' ? user.email : '';
+        const verifiedStoreId = typeof user.loja_id === 'string' ? user.loja_id : null;
         const validUser: UserSessionData = {
-          id: user.id,
-          user_id: user.id,
-          email: typeof user.email === 'string' ? user.email : '',
-          nome_completo: user.nome_completo,
-          role: user.role,
-          loja_id: user.loja_id ?? null,
+          id: verifiedId,
+          user_id: verifiedId,
+          email: verifiedEmail,
+          nome_completo: verifiedName,
+          role: verifiedRole,
+          loja_id: verifiedStoreId,
           ativo: true,
         };
         setUserSession(validUser);
-        setRole(validUser.role);
-        setLojaId(validUser.loja_id ?? null);
+        setRole(verifiedRole);
+        setLojaId(verifiedStoreId);
         setFuncionario({
-          id: validUser.id,
-          nome_completo: validUser.nome_completo,
-          email: validUser.email || '',
-          role: validUser.role,
-          loja_id: validUser.loja_id ?? null,
+          id: verifiedId,
+          nome_completo: verifiedName,
+          email: verifiedEmail,
+          role: verifiedRole,
+          loja_id: verifiedStoreId,
           ativo: true,
         });
         return;
