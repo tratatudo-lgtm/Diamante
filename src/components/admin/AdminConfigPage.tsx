@@ -39,6 +39,8 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
   const [margens, setMargens] = useState<MargemMetalConfig[]>([]);
   const [tetos, setTetos] = useState<TetoAprovacaoConfig>({ id: '', loja_id: null, valor_limite_sem_aprovacao: 0, peso_limite_sem_aprovacao_g: 0, exigir_dupla_assinatura_acima: 0, notificar_whatsapp_master: false, telemovel_alerta: '', ativo: false });
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaConfig[]>([]);
+  const [historicoCotacoes, setHistoricoCotacoes] = useState<any[]>([]);
+  const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
 
   // Modal / Formulário Nova Conta Bancária
   const [isNewAccountOpen, setIsNewAccountOpen] = useState(false);
@@ -164,6 +166,26 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
     }
   };
 
+  const handleLoadQuoteHistory = async () => {
+    setIsLoadingHistorico(true);
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      const res = await fetch('/api/admin/config/cotacao-ouro/historico', {
+        headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success || !Array.isArray(data.cotacoes)) {
+        throw new Error(data?.message || 'Não foi possível consultar o histórico.');
+      }
+      setHistoricoCotacoes(data.cotacoes);
+    } catch (err: any) {
+      addToast('error', err?.message || 'Falha ao carregar histórico de cotações.');
+    } finally {
+      setIsLoadingHistorico(false);
+    }
+  };
+
   const handleAddAccount = () => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma conta foi adicionada.');
   const handleDeleteAccount = (_id: string) => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma conta foi removida.');
   const handleSetDefaultAccount = (_id: string) => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma alteração foi guardada.');
@@ -205,6 +227,15 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
               </button>
 
               <button
+                onClick={handleLoadQuoteHistory}
+                disabled={isLoadingHistorico}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-sky-500/30 text-sky-200 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <History className="w-4 h-4" />
+                <span>{isLoadingHistorico ? 'A carregar histórico…' : 'Histórico de cotações'}</span>
+              </button>
+
+              <button
                 onClick={handleImportGoldQuote}
                 disabled={isSaving}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/30 text-emerald-200 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
@@ -238,6 +269,35 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
               </button>
             </div>
           </div>
+
+          {historicoCotacoes.length > 0 && (
+            <section className="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h2 className="text-sm font-bold text-white">Histórico de cotações importadas</h2>
+                  <p className="text-[11px] text-slate-400">Últimas {historicoCotacoes.length} importações, com origem e timestamps</p>
+                </div>
+                <button onClick={() => setHistoricoCotacoes([])} className="text-xs text-slate-400 hover:text-white">Fechar</button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="text-slate-500 border-b border-slate-800">
+                    <tr><th className="py-2 pr-3">Cotação €/g fino</th><th className="py-2 pr-3">Origem</th><th className="py-2 pr-3">Observada</th><th className="py-2">Importada</th></tr>
+                  </thead>
+                  <tbody>
+                    {historicoCotacoes.map((quote) => (
+                      <tr key={quote.id} className="border-b border-slate-800/60 text-slate-300">
+                        <td className="py-2 pr-3 font-mono text-amber-200">{Number(quote.preco_referencia).toFixed(4)} €</td>
+                        <td className="py-2 pr-3">{quote.fonte}</td>
+                        <td className="py-2 pr-3">{quote.observada_em ? new Date(quote.observada_em).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon' }) : '—'}</td>
+                        <td className="py-2">{quote.importada_em ? new Date(quote.importada_em).toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon' }) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
 
           {/* Abas de Navegação */}
           <div className="flex items-center gap-2 mt-5 border-t border-slate-800/60 pt-3">
