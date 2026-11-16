@@ -35,10 +35,10 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [descricao, setDescricao] = useState('');
   const [consentimentoRgpd, setConsentimentoRgpd] = useState(false);
 
-  // Spot calculation configuration
-  // Cotação Spot base: ~59.50 €/g para Ouro 19.2k português, ~74.00 €/g para 24k
-  const [spotPrice, setSpotPrice] = useState<number>(59.50);
-  const [margemPercent, setMargemPercent] = useState<number>(12);
+  // A cotação e a margem vêm exclusivamente da configuração diária aprovada pela sede.
+  // Zero evita apresentar referências fictícias enquanto as definições carregam.
+  const [spotPrice, setSpotPrice] = useState<number>(0);
+  const [margemPercent, setMargemPercent] = useState<number>(0);
   const [valorFinalManual, setValorFinalManual] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
