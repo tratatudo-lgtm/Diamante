@@ -142,6 +142,28 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
     }
   };
 
+  const handleImportGoldQuote = async () => {
+    setIsSaving(true);
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      const res = await fetch('/api/admin/config/cotacao-ouro/importar', {
+        method: 'POST',
+        headers: { Accept: 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        signal: AbortSignal.timeout(8000),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success || !Array.isArray(data.margens)) {
+        throw new Error(data?.message || 'Não foi possível importar uma cotação válida.');
+      }
+      setMargens(data.margens);
+      addToast('success', `Cotação XAUS importada: ${Number(data.cotacao_referencia_g).toFixed(4)} €/g de ouro fino. Margens actualizadas.`, 'Cotação de mercado actualizada');
+    } catch (err: any) {
+      addToast('error', err?.message || 'Falha ao importar cotação. Os preços existentes foram mantidos.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleAddAccount = () => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma conta foi adicionada.');
   const handleDeleteAccount = (_id: string) => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma conta foi removida.');
   const handleSetDefaultAccount = (_id: string) => addToast('error', 'A gestão bancária ainda não tem persistência. Nenhuma alteração foi guardada.');
@@ -180,6 +202,16 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                 title="Sincronizar Parâmetros"
               >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#D4AF37]' : ''}`} />
+              </button>
+
+              <button
+                onClick={handleImportGoldQuote}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/30 text-emerald-200 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+                title="Consultar XAUS, validar actualização e importar a cotação EUR por grama de ouro fino"
+              >
+                <RefreshCw className={`w-4 h-4 ${isSaving ? 'animate-spin' : ''}`} />
+                <span>Importar cotação de mercado</span>
               </button>
 
               <button
