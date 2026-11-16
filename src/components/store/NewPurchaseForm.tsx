@@ -45,6 +45,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [descricao, setDescricao] = useState('');
   const [consentimentoRgpd, setConsentimentoRgpd] = useState(false);
   const [declaracaoAssinada, setDeclaracaoAssinada] = useState<File | null>(null);
+  const [declaracaoInputKey, setDeclaracaoInputKey] = useState(0);
 
   // A cotação e a margem vêm exclusivamente da configuração diária aprovada pela sede.
   // Zero evita apresentar referências fictícias enquanto as definições carregam.
@@ -296,6 +297,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       setValorFinalManual('');
       setConsentimentoRgpd(false);
       setDeclaracaoAssinada(null);
+      setDeclaracaoInputKey((current) => current + 1);
 
       onSuccess();
     } catch (err: unknown) {
@@ -589,6 +591,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
             Digitalize ou fotografe a declaração assinada presencialmente. O ficheiro é enviado para arquivo privado e associado a esta compra.
           </p>
           <input
+            key={declaracaoInputKey}
             type="file"
             required
             accept="application/pdf,image/jpeg,image/png,image/webp"
