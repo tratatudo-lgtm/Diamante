@@ -648,6 +648,17 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
       console.error('[Refining] Falha ao carregar peças dos lotes.');
       return res.status(503).json({ success: false, error: 'Não foi possível carregar a rastreabilidade das peças.' });
     }
+    const inventoryIds = [...new Set((pieces || []).map((piece: any) => piece.inventario_id))];
+    const { data: sourceInventory, error: sourceInventoryError } = inventoryIds.length
+      ? await supabaseAdmin.from('inventario_fisico')
+          .select('id, peso_gramas, peso_recebido_gramas, diferenca_peso_gramas')
+          .in('id', inventoryIds)
+      : { data: [], error: null };
+    if (sourceInventoryError) {
+      console.error('[Refining] Falha ao reconciliar pesos de origem.');
+      return res.status(503).json({ success: false, error: 'Não foi possível reconciliar os pesos de origem e recepção.' });
+    }
+    const sourceInventoryById = new Map((sourceInventory || []).map((item: any) => [item.id, item]));
     const { data: operationalCosts, error: costsError } = batchIds.length
       ? await supabaseAdmin.from('ouro_fundicao_custos')
           .select('lote_id, categoria, descricao, valor, criado_em')
@@ -677,8 +688,30 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
         const costs = costsByBatch.get(batch.id) || [];
         const operationalCost = costs.reduce((sum: number, cost: any) => sum + Number(cost.valor || 0), 0);
         const totalCost = acquisitionCost + operationalCost;
+        const batchPieces = piecesByBatch.get(batch.id) || [];
+        const sourceWeights = batchPieces.map((piece: any) => sourceInventoryById.get(piece.inventario_id)).filter(Boolean) as any[];
+        const declaredWeight = sourceWeights.reduce((sum: number, item: any) => sum + Number(item.peso_gramas || 0), 0);
+        const receivedWeight = batchPieces.reduce((sum: number, piece: any) => sum + Number(piece.peso_recebido_gramas || 0), 0);
+        const sourceWeightComplete = sourceWeights.length === batchPieces.length && batchPieces.length === Number(batch.quantidade_pecas);
+        const transportDifference = sourceWeightComplete ? Number((receivedWeight - declaredWeight).toFixed(3)) : null;
+        const batchEntryDifference = Number((Number(batch.peso_entrada_gramas || 0) - receivedWeight).toFixed(3));
+        const transportAlert = transportDifference !== null && Math.abs(transportDifference) > 0.05;
+        const batchEntryAlert = Math.abs(batchEntryDifference) > 0.005;
         return {
           ...batch,
+          reconciliacao_pesos: {
+            peso_declarado_loja_gramas: sourceWeightComplete ? Number(declaredWeight.toFixed(3)) : null,
+            peso_recebido_sede_gramas: Number(receivedWeight.toFixed(3)),
+            diferenca_transporte_gramas: transportDifference,
+            peso_entrada_lote_gramas: Number(Number(batch.peso_entrada_gramas).toFixed(3)),
+            diferenca_entrada_lote_gramas: batchEntryDifference,
+            perda_fundicao_gramas: batch.estado === 'concluido' ? Number(batch.perda_processo_gramas || 0) : null,
+            ouro_fino_recuperado_gramas: batch.estado === 'concluido' ? Number(fineGold.toFixed(3)) : null,
+            origem_completa: sourceWeightComplete,
+            alerta_transporte: transportAlert,
+            alerta_entrada_lote: batchEntryAlert,
+            estado: !sourceWeightComplete ? 'dados_incompletos' : (transportAlert || batchEntryAlert ? 'divergencia' : 'reconciliado'),
+          },
           custo_operacional_total: Number(operationalCost.toFixed(2)),
           custo_total: Number(totalCost.toFixed(2)),
           custo_por_grama_fino: batch.estado === 'concluido' && fineGold > 0
