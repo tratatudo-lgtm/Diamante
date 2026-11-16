@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './auth.service';
+import { verifyAdmin, AdminRequest } from './middleware/verifyAdmin';
 // PATH: server.ts
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -27,21 +28,29 @@ const isProduction = process.env.NODE_ENV === 'production';
 // =========================================================================
 // 1. CONFIGURAÇÃO DE SEGURANÇA CORS
 // =========================================================================
-const allowedOrigins = [
+const allowedOrigins = new Set([
+  process.env.ADMIN_FRONTEND_URL,
   process.env.FRONTEND_URL,
   process.env.APP_URL,
+  'https://admin-diamantedouro.duckdns.org',
   `http://localhost:${PORT}`,
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
-].filter(Boolean) as string[];
+].filter((origin): origin is string => Boolean(origin)));
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+const corsOptions: cors.CorsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('Origem não autorizada por CORS.'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'Cache-Control'],
+};
+
+app.set('trust proxy', 'loopback');
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -93,24 +102,10 @@ app.use(bruteForceProtection);
 // Suporte duplo (/auth/* e /api/auth/*) para máxima compatibilidade com frontend e clientes externos
 app.use('/auth', authRouter);
 app.use('/api/auth', authRouter);
-// Middleware CORS específico para API Admin (permitir headers customizados)
-app.use('/admin/dashboard', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-user-phone, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
 app.use('/api/v1/admin/dashboard', warroomRouter);
 
 // ENDPOINT: LISTAR TRANSAÇÕES PENDENTES PARA AUTORIZAÇÃO
-app.get('/api/v1/admin/dashboard/pending', async (req, res) => {
-  const phone = req.headers['x-user-phone'] as string;
-  if (phone !== '+351937230116' && phone !== '937230116') {
-    return res.status(403).json({ error: 'Não autorizado' });
-  }
+app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req: AdminRequest, res) => {
   
   try {
     const { data, error } = await supabaseAdmin
@@ -130,29 +125,36 @@ app.get('/api/v1/admin/dashboard/pending', async (req, res) => {
 });
 
 // ENDPOINT: AUTORIZAR TRANSAÇÃO PENDENTE
-app.post('/api/v1/admin/dashboard/authorize', async (req, res) => {
-  const phone = req.headers['x-user-phone'] as string;
-  if (phone !== '+351937230116' && phone !== '937230116') {
-    return res.status(403).json({ error: 'Não autorizado' });
-  }
+app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req: AdminRequest, res) => {
   
   const { transactionId } = req.body;
   if (!transactionId) return res.status(400).json({ error: 'ID da transação obrigatório' });
   
   try {
-    const { error } = await supabaseAdmin
+    const adminId = req.adminUser?.id;
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Sessão administrativa inválida' });
+    }
+
+    const { data, error } = await supabaseAdmin
       .from('transacoes')
-      .update({ 
-        estado: 'aprovado', 
-        aprovado_por: 'master_admin', 
-        data_aprovacao: new Date().toISOString() 
+      .update({
+        estado: 'aprovado',
+        aprovado_por: adminId,
+        data_aprovacao: new Date().toISOString()
       })
-      .eq('id', transactionId);
-      
+      .eq('id', transactionId)
+      .eq('estado', 'pendente_aprovacao')
+      .select('id')
+      .maybeSingle();
+
     if (error) throw error;
-    
-    console.log(`[ADMIN] Transação ${transactionId} autorizada por Master User`);
-    res.json({ success: true, message: 'Transação autorizada com sucesso' });
+    if (!data) {
+      return res.status(409).json({ success: false, error: 'A transação não está pendente ou já foi processada' });
+    }
+
+    console.log('[ADMIN] Transação pendente autorizada por administrador validado.');
+    return res.json({ success: true, message: 'Transação autorizada com sucesso' });
   } catch(e: any) {
     console.error('[Authorize Error]:', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -184,7 +186,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // 3.1 SALA DE GUERRA (WAR ROOM / ADMIN DASHBOARD)
 // Proxy seguro server-side para tabelas Supabase (evita falhas de CORS/Iframe no frontend)
 // =========================================================================
-app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], async (_req: Request, res: Response) => {
+app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin, async (_req: Request, res: Response) => {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
