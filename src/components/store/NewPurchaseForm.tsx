@@ -16,6 +16,16 @@ import {
   FileText
 } from 'lucide-react';
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+  }
+  return btoa(binary);
+}
+
 interface NewPurchaseFormProps {
   onSuccess: () => void;
   onShowToast: (type: 'success' | 'error' | 'info', message: string, title?: string) => void;
@@ -34,6 +44,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [pesoGramas, setPesoGramas] = useState<string>('');
   const [descricao, setDescricao] = useState('');
   const [consentimentoRgpd, setConsentimentoRgpd] = useState(false);
+  const [declaracaoAssinada, setDeclaracaoAssinada] = useState<File | null>(null);
 
   // A cotação e a margem vêm exclusivamente da configuração diária aprovada pela sede.
   // Zero evita apresentar referências fictícias enquanto as definições carregam.
@@ -165,7 +176,18 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
     }
 
     if (!consentimentoRgpd) {
-      setErrorMessage('O consentimento RGPD assinado pelo cliente é obrigatório.');
+      setErrorMessage('Confirme que a declaração foi assinada presencialmente pelo cliente.');
+      return;
+    }
+
+    if (!declaracaoAssinada) {
+      setErrorMessage('Anexe a digitalização ou fotografia da declaração assinada.');
+      return;
+    }
+
+    const allowedDeclarationTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedDeclarationTypes.includes(declaracaoAssinada.type) || declaracaoAssinada.size <= 0 || declaracaoAssinada.size > 6 * 1024 * 1024) {
+      setErrorMessage('A declaração deve ser PDF, JPEG, PNG ou WebP e não pode exceder 6 MB.');
       return;
     }
 
@@ -189,10 +211,15 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         margemPercent,
         descricao: descricao.trim() || `${tipoPeca} em ${metal}`,
       };
-      // Persist only a hash and the retry key; never persist customer data in browser storage.
+      const declarationBuffer = await declaracaoAssinada.arrayBuffer();
+      const declarationDigest = await crypto.subtle.digest('SHA-256', declarationBuffer);
+      const declarationSha256 = Array.from(new Uint8Array(declarationDigest))
+        .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+
+      // Persist only a hash and the retry key; never persist customer data or the document in browser storage.
       const fingerprintBytes = await crypto.subtle.digest(
         'SHA-256',
-        new TextEncoder().encode(JSON.stringify(purchasePayload))
+        new TextEncoder().encode(JSON.stringify({ ...purchasePayload, declarationSha256 }))
       );
       const fingerprint = Array.from(new Uint8Array(fingerprintBytes))
         .map((byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -208,13 +235,34 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         ? retryState.key
         : crypto.randomUUID();
       sessionStorage.setItem(retryStorageKey, JSON.stringify({ key: idempotencyKey, fingerprint }));
+
+      const declarationBase64 = arrayBufferToBase64(declarationBuffer);
+      const declarationResponse = await fetch('/api/store/purchases/declaration', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          idempotencyKey,
+          clienteNome: purchasePayload.clienteNome,
+          clienteCc: purchasePayload.clienteCc,
+          mimeType: declaracaoAssinada.type,
+          fileBase64: declarationBase64,
+        }),
+      });
+      const declarationResult = await declarationResponse.json().catch(() => null);
+      if (!declarationResponse.ok || !declarationResult?.success || !declarationResult?.declarationEvidenceId) {
+        throw new Error(declarationResult?.message || 'Não foi possível arquivar a declaração assinada.');
+      }
+
       const txResponse = await fetch('/api/store/purchases', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ ...purchasePayload, idempotencyKey }),
+        body: JSON.stringify({ ...purchasePayload, idempotencyKey, declarationEvidenceId: declarationResult.declarationEvidenceId }),
       });
       const txResult = await txResponse.json().catch(() => null);
       if (txResult?.partial) {
@@ -247,6 +295,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       setDescricao('');
       setValorFinalManual('');
       setConsentimentoRgpd(false);
+      setDeclaracaoAssinada(null);
 
       onSuccess();
     } catch (err: unknown) {
@@ -530,7 +579,30 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
           )}
         </div>
 
-        {/* SECÇÃO 4: CHECKBOX OBRIGATÓRIO RGPD */}
+        {/* SECÇÃO 4: ARQUIVO DA DECLARAÇÃO ASSINADA */}
+        <div className="p-4 rounded-xl bg-gray-900/40 border border-gray-800 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-white">
+            <FileText className="w-4 h-4 text-[#D4AF37]" />
+            Declaração assinada pelo cliente *
+          </div>
+          <p className="text-[11px] text-gray-400 leading-relaxed">
+            Digitalize ou fotografe a declaração assinada presencialmente. O ficheiro é enviado para arquivo privado e associado a esta compra.
+          </p>
+          <input
+            type="file"
+            required
+            accept="application/pdf,image/jpeg,image/png,image/webp"
+            onChange={(e) => setDeclaracaoAssinada(e.target.files?.[0] || null)}
+            className="block w-full text-xs text-gray-300 file:mr-3 file:rounded-lg file:border-0 file:bg-[#D4AF37] file:px-3 file:py-2 file:text-xs file:font-semibold file:text-gray-950 hover:file:bg-[#e5be40]"
+          />
+          {declaracaoAssinada && (
+            <p className="text-[11px] text-emerald-300">
+              {declaracaoAssinada.name} · {(declaracaoAssinada.size / 1024 / 1024).toFixed(2)} MB
+            </p>
+          )}
+        </div>
+
+        {/* SECÇÃO 5: CONFIRMAÇÃO PRESENCIAL */}
         <div className="p-4 rounded-xl bg-gray-900/40 border border-gray-800">
           <label htmlFor={rgpdCheckboxId} className="flex items-start gap-3 cursor-pointer">
             <input
