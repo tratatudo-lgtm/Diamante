@@ -812,7 +812,7 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
     }
     const aggregates = new Map<string, any>();
     const totals = { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 };
-    const unmatched = { revenue: 0, result: 0 };
+    const unmatched = { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 };
     for (const sale of settlements) {
       const batch = batchById.get(sale.lote_id);
       const batchPieces = piecesByBatch.get(sale.lote_id) || [];
@@ -861,7 +861,10 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
       if (allocatedShare < 0.999999) {
         const missing = Math.max(0, 1 - allocatedShare);
         unmatched.revenue += saleRevenue * missing;
+        unmatched.allocated_cost += saleCost * missing;
+        unmatched.additional_costs += saleExtra * missing;
         unmatched.result += saleResult * missing;
+        unmatched.fine_gold_sold_grams += Number(sale.ouro_fino_vendido_gramas || 0) * missing;
       }
     }
     const round = (value: number, decimals = 2) => Number(value.toFixed(decimals));
@@ -872,13 +875,29 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
       fine_gold_sold_grams: round(row.fine_gold_sold_grams, 3),
       margin_percent: row.revenue > 0 ? round(row.result / row.revenue * 100, 2) : null,
     })).sort((a, b) => b.result - a.result);
+    const roundedTotals = {
+      revenue: round(totals.revenue),
+      allocated_cost: round(totals.allocated_cost),
+      additional_costs: round(totals.additional_costs),
+      result: round(totals.result),
+      fine_gold_sold_grams: round(totals.fine_gold_sold_grams, 3),
+    };
+    // Fechar cada diferença de arredondamento na rubrica não reconciliada.
+    const sumRows = (key: string) => rows.reduce((sum, row) => sum + Number(row[key] || 0), 0);
+    const roundedUnmatched = {
+      revenue: round(roundedTotals.revenue - sumRows('revenue')),
+      allocated_cost: round(roundedTotals.allocated_cost - sumRows('allocated_cost')),
+      additional_costs: round(roundedTotals.additional_costs - sumRows('additional_costs')),
+      result: round(roundedTotals.result - sumRows('result')),
+      fine_gold_sold_grams: round(roundedTotals.fine_gold_sold_grams - sumRows('fine_gold_sold_grams'), 3),
+    };
     return res.json({
       success: true,
       period: { from: from || null, to: to || null },
-      totals: { revenue: round(totals.revenue), allocated_cost: round(totals.allocated_cost), additional_costs: round(totals.additional_costs), result: round(totals.result), fine_gold_sold_grams: round(totals.fine_gold_sold_grams, 3) },
+      totals: roundedTotals,
       stores: rows,
-      unmatched: { revenue: round(unmatched.revenue), result: round(unmatched.result) },
-      allocation_basis: 'Proporção do custo de aquisição das peças de cada loja no lote; peso como fallback quando o custo total não está disponível.',
+      unmatched: roundedUnmatched,
+      allocation_basis: 'Proporção do custo de aquisição das peças de cada loja no lote; peso como fallback quando o custo total não está disponível. Diferenças de atribuição e arredondamento ficam não reconciliadas.',
     });
   } catch (error) {
     console.error('[Refining Profitability] Falha ao calcular rentabilidade.');
