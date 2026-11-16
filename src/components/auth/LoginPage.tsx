@@ -161,7 +161,6 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
       const userRole = String(data?.role || data?.user?.role || '').toLowerCase();
       if (!data?.user?.id || !data?.token || !userRole) throw new Error('O servidor não devolveu uma sessão de funcionário válida.');
       setDirectSession(data.user, userRole, data.token);
-      localStorage.setItem('otp_phone', normalized);
 
       // Redirecionamento baseado na role real da BD
       const targetPath = userRole === 'admin' ? '/dashboard-admin' : '/loja-atual';
