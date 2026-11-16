@@ -456,6 +456,65 @@ app.get('/api/admin/inventory/receiving', verifyAdmin, async (_req, res) => {
   }
 });
 
+// HISTÓRICO AUDITÁVEL DOS MOVIMENTOS FÍSICOS DE OURO
+app.get('/api/admin/inventory/movements', verifyAdmin, async (req, res) => {
+  const requestedLimit = Number(req.query.limit || 100);
+  const limit = Number.isInteger(requestedLimit) ? Math.min(200, Math.max(1, requestedLimit)) : 100;
+  const inventoryId = typeof req.query.inventario_id === 'string' ? req.query.inventario_id.trim() : '';
+
+  if (inventoryId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(inventoryId)) {
+    return res.status(400).json({ success: false, error: 'Identificador de inventário inválido.' });
+  }
+
+  try {
+    let query = supabaseAdmin
+      .from('ouro_movimentos_fisicos')
+      .select('id, inventario_id, evento, estado_anterior, estado_novo, loja_id, peso_declarado_gramas, peso_recebido_gramas, diferenca_peso_gramas, operador_id, ocorrido_em, observacoes')
+      .order('ocorrido_em', { ascending: false })
+      .limit(limit);
+    if (inventoryId) query = query.eq('inventario_id', inventoryId);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[Admin Inventory Movements] Falha ao consultar histórico.');
+      return res.status(503).json({ success: false, error: 'Não foi possível carregar o histórico de movimentos.' });
+    }
+
+    const inventoryIds = [...new Set((data || []).map((event: any) => event.inventario_id))];
+    const storeIds = [...new Set((data || []).map((event: any) => event.loja_id).filter(Boolean))];
+    const [inventoryResult, storesResult] = await Promise.all([
+      inventoryIds.length
+        ? supabaseAdmin.from('inventario_fisico').select('id, codigo_unico, metal, tipo_peca').in('id', inventoryIds)
+        : Promise.resolve({ data: [], error: null }),
+      storeIds.length
+        ? supabaseAdmin.from('lojas').select('id, nome').in('id', storeIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (inventoryResult.error || storesResult.error) {
+      console.error('[Admin Inventory Movements] Falha ao enriquecer histórico.');
+      return res.status(503).json({ success: false, error: 'Não foi possível identificar peças ou lojas do histórico.' });
+    }
+
+    const inventoryById = new Map((inventoryResult.data || []).map((item: any) => [item.id, item]));
+    const storeById = new Map((storesResult.data || []).map((store: any) => [store.id, store.nome]));
+    return res.json({
+      success: true,
+      data: (data || []).map((event: any) => ({
+        ...event,
+        codigo_peca: inventoryById.get(event.inventario_id)?.codigo_unico || 'Peça não identificada',
+        metal: inventoryById.get(event.inventario_id)?.metal || null,
+        tipo_peca: inventoryById.get(event.inventario_id)?.tipo_peca || null,
+        loja_nome: storeById.get(event.loja_id) || null,
+        divergencia: event.diferenca_peso_gramas != null && Math.abs(Number(event.diferenca_peso_gramas)) > 0.05,
+      })),
+    });
+  } catch {
+    console.error('[Admin Inventory Movements] Erro interno.');
+    return res.status(500).json({ success: false, error: 'Erro interno ao carregar o histórico.' });
+  }
+});
+
 // RECEPÇÃO DE OURO NA SEDE — CONFIRMAÇÃO ATÓMICA POR ADMINISTRADOR
 app.post('/api/admin/inventory/:id/receive', verifyAdmin, async (req, res) => {
   const itemId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
