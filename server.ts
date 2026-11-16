@@ -811,8 +811,6 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
       current.push(piece);
       piecesByBatch.set(piece.lote_id, current);
     }
-    const costsByBatch = new Map<string, number>();
-    for (const cost of operationalCosts) costsByBatch.set(cost.lote_id, (costsByBatch.get(cost.lote_id) || 0) + Number(cost.valor || 0));
     const aggregates = new Map<string, any>();
     const totals = { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 };
     const unmatched = { revenue: 0, result: 0 };
@@ -821,6 +819,7 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
       const batchPieces = piecesByBatch.get(sale.lote_id) || [];
       const batchAcquisitionCost = Number(batch?.custo_aquisicao_total || 0);
       const storeAcquisition = new Map<string, number>();
+      const storeWeight = new Map<string, number>();
       let knownAcquisition = 0;
       let knownWeight = 0;
       for (const piece of batchPieces) {
@@ -828,11 +827,13 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
         const cost = Number(piece.custo_aquisicao || 0);
         if (tx?.loja_id) {
           storeAcquisition.set(tx.loja_id, (storeAcquisition.get(tx.loja_id) || 0) + cost);
+          storeWeight.set(tx.loja_id, (storeWeight.get(tx.loja_id) || 0) + Number(piece.peso_recebido_gramas || 0));
           knownAcquisition += cost;
           knownWeight += Number(piece.peso_recebido_gramas || 0);
         }
       }
-      const basisTotal = batchAcquisitionCost > 0 ? batchAcquisitionCost : knownWeight;
+      const useAcquisitionBasis = batchAcquisitionCost > 0 && knownAcquisition > 0;
+      const basisTotal = useAcquisitionBasis ? batchAcquisitionCost : knownWeight;
       const saleRevenue = Number(sale.receita_bruta || 0);
       const saleCost = Number(sale.custo_lote_alocado || 0);
       const saleExtra = Number(sale.custos_adicionais || 0);
@@ -843,10 +844,10 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
       totals.result += saleResult;
       totals.fine_gold_sold_grams += Number(sale.ouro_fino_vendido_gramas || 0);
       let allocatedShare = 0;
-      for (const [storeId, acquisition] of storeAcquisition) {
-        const share = basisTotal > 0
-          ? (batchAcquisitionCost > 0 ? acquisition / basisTotal : acquisition / basisTotal)
-          : 0;
+      const storeIdsForBatch = new Set([...storeAcquisition.keys(), ...storeWeight.keys()]);
+      for (const storeId of storeIdsForBatch) {
+        const basisValue = useAcquisitionBasis ? (storeAcquisition.get(storeId) || 0) : (storeWeight.get(storeId) || 0);
+        const share = basisTotal > 0 ? basisValue / basisTotal : 0;
         if (share <= 0) continue;
         allocatedShare += share;
         const key = storeId;
