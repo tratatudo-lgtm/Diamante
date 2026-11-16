@@ -1,6 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, RefreshCw, Scale } from 'lucide-react';
 
+interface MovementItem {
+  id: string;
+  evento: 'expedicao_sede' | 'recepcao_sede';
+  codigo_peca: string;
+  loja_nome?: string | null;
+  peso_declarado_gramas?: number | null;
+  peso_recebido_gramas?: number | null;
+  diferenca_peso_gramas?: number | null;
+  ocorrido_em: string;
+  observacoes?: string | null;
+  divergencia: boolean;
+}
+
 interface ReceivingItem {
   id: string;
   codigo_unico: string;
@@ -22,6 +35,10 @@ export const GoldReceivingPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [movementHistory, setMovementHistory] = useState<MovementItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,7 +62,30 @@ export const GoldReceivingPage: React.FC = () => {
     }
   }, []);
 
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
+      const response = await fetch('/api/admin/inventory/movements?limit=100', {
+        headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+        signal: AbortSignal.timeout(15000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true || !Array.isArray(payload.data)) {
+        throw new Error(payload?.error || 'Não foi possível carregar o histórico.');
+      }
+      setMovementHistory(payload.data);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : 'Erro ao carregar histórico.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (showHistory) void loadHistory(); }, [showHistory, loadHistory]);
 
   const receive = async (item: ReceivingItem) => {
     const rawWeight = weights[item.id] ?? String(item.peso_gramas);
@@ -91,7 +131,32 @@ export const GoldReceivingPage: React.FC = () => {
           <button type="button" onClick={() => void load()} disabled={loading} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:opacity-50">
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Actualizar lista
           </button>
+          <button type="button" onClick={() => setShowHistory(value => !value)} className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-[#d4af37]/30 bg-[#d4af37]/10 px-4 text-xs font-semibold text-[#e7c76a] transition hover:bg-[#d4af37]/15">
+            {showHistory ? 'Ocultar histórico' : 'Consultar histórico físico'}
+          </button>
         </div>
+
+        {showHistory && <section className="mt-6 rounded-2xl border border-white/[0.09] bg-[#101827] p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h2 className="text-base font-bold">Histórico de movimentos físicos</h2><p className="mt-1 text-xs text-slate-400">Últimos 100 registos de expedição e recepção, por ordem cronológica inversa.</p></div>
+            <button type="button" onClick={() => void loadHistory()} disabled={historyLoading} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 disabled:opacity-50">{historyLoading ? 'A actualizar...' : 'Actualizar histórico'}</button>
+          </div>
+          {historyError && <p role="alert" className="mt-3 text-sm text-rose-300">{historyError}</p>}
+          {historyLoading ? <p className="py-8 text-center text-sm text-slate-400">A carregar histórico...</p> :
+            movementHistory.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">Ainda não existem movimentos registados.</p> :
+            <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs">
+              <thead className="text-[10px] uppercase tracking-wider text-slate-500"><tr><th className="pb-3 pr-3">Data</th><th className="pb-3 pr-3">Peça</th><th className="pb-3 pr-3">Movimento</th><th className="pb-3 pr-3">Loja</th><th className="pb-3 pr-3 text-right">Declarado</th><th className="pb-3 pr-3 text-right">Recebido</th><th className="pb-3 text-right">Diferença</th></tr></thead>
+              <tbody>{movementHistory.map(event => <tr key={event.id} className="border-t border-white/[0.06]">
+                <td className="py-3 pr-3 text-slate-400">{new Date(event.ocorrido_em).toLocaleString('pt-PT')}</td>
+                <td className="py-3 pr-3 font-semibold text-white">{event.codigo_peca}</td>
+                <td className="py-3 pr-3 text-slate-300">{event.evento === 'expedicao_sede' ? 'Expedição' : 'Recepção'}</td>
+                <td className="py-3 pr-3 text-slate-400">{event.loja_nome || '—'}</td>
+                <td className="py-3 pr-3 text-right tabular-nums">{event.peso_declarado_gramas == null ? '—' : Number(event.peso_declarado_gramas).toFixed(3) + ' g'}</td>
+                <td className="py-3 pr-3 text-right tabular-nums">{event.peso_recebido_gramas == null ? '—' : Number(event.peso_recebido_gramas).toFixed(3) + ' g'}</td>
+                <td className={`py-3 text-right font-semibold tabular-nums ${event.divergencia ? 'text-amber-300' : 'text-slate-300'}`}>{event.diferenca_peso_gramas == null ? '—' : (Number(event.diferenca_peso_gramas) > 0 ? '+' : '') + Number(event.diferenca_peso_gramas).toFixed(3) + ' g'}{event.divergencia ? ' · Rever' : ''}</td>
+              </tr>)}</tbody>
+            </table></div>}
+        </section>}
 
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <div className="rounded-2xl border border-white/[0.08] bg-[#101827] p-4">
