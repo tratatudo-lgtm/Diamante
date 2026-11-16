@@ -42,7 +42,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           </div>
         );
       default:
-        return <AdminLojasPage />;
+        return <AdminLojasPage onNavigate={onNavigate} />;
     }
   };
 
