@@ -235,10 +235,13 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
       } catch {
         retryState = {};
       }
-      const idempotencyKey = retryState.fingerprint === fingerprint &&
-        typeof retryState.key === 'string' && /^[0-9a-f-]{36}$/i.test(retryState.key)
-        ? retryState.key
-        : crypto.randomUUID();
+      const hasPendingRetry = typeof retryState.key === 'string' &&
+        /^[0-9a-f-]{36}$/i.test(retryState.key) &&
+        typeof retryState.fingerprint === 'string';
+      if (hasPendingRetry && retryState.fingerprint !== fingerprint) {
+        throw new Error('Existe uma compra anterior cuja confirmação ainda não foi concluída. Não altere os dados nem inicie outra compra com esta sessão. Repita exatamente a submissão original ou peça à sede para confirmar o estado antes de iniciar uma nova operação.');
+      }
+      const idempotencyKey = hasPendingRetry ? retryState.key! : crypto.randomUUID();
       sessionStorage.setItem(retryStorageKey, JSON.stringify({ key: idempotencyKey, fingerprint }));
 
       const declarationBase64 = arrayBufferToBase64(declarationBuffer);
