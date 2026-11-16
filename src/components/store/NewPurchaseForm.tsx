@@ -42,7 +42,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const [valorFinalManual, setValorFinalManual] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [purchaseSettings, setPurchaseSettings] = useState<Array<{ toque_millesimos: number; cotacao_referencia_g: number; margem_percentagem: number; preco_compra_grama: number }>>([]);
+  const [purchaseSettings, setPurchaseSettings] = useState<Array<{ toque_millesimos: number; cotacao_referencia_g: number; margem_percentagem: number; preco_compra_grama: number; desconto_maximo_loja_perc: number }>>([]);
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
@@ -120,6 +120,8 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   const valorFinalEfetivo = valorFinalManual !== ''
     ? parseFloat(valorFinalManual) || 0
     : valorSugerido;
+  const flexibilidadeLoja = selectedPricing?.desconto_maximo_loja_perc ?? 0;
+  const valorMaximoAutorizado = Number((valorSugerido * (1 + flexibilidadeLoja / 100)).toFixed(2));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,6 +154,11 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
 
     if (valorFinalEfetivo <= 0) {
       setErrorMessage('O valor final da transação tem de ser superior a 0,00 €.');
+      return;
+    }
+
+    if (Number(valorFinalEfetivo.toFixed(2)) > valorMaximoAutorizado) {
+      setErrorMessage(`O valor acordado excede o limite autorizado de ${valorMaximoAutorizado.toFixed(2)} €. Flexibilidade máxima da loja: ${flexibilidadeLoja.toFixed(2)}%.`);
       return;
     }
 
@@ -487,6 +494,10 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
                 EUR (€)
               </span>
             </div>
+            <p className="mt-1.5 text-[11px] text-gray-400">
+              Limite autorizado pela sede: <span className="font-mono font-semibold text-[#D4AF37]">{formatCurrency(valorMaximoAutorizado)}</span>
+              <span className="ml-1">({flexibilidadeLoja.toFixed(2)}% de flexibilidade sobre o valor sugerido)</span>
+            </p>
           </div>
 
           {pesoNum > 0 && valorFinalEfetivo > 0 && (
