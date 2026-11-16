@@ -575,7 +575,17 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
     }
     return res.json({
       success: true,
-      data: (data || []).map((batch: any) => ({ ...batch, pecas: piecesByBatch.get(batch.id) || [] })),
+      data: (data || []).map((batch: any) => {
+        const fineGold = Number(batch.ouro_fino_recuperado_gramas || 0);
+        const acquisitionCost = Number(batch.custo_aquisicao_total || 0);
+        return {
+          ...batch,
+          custo_por_grama_fino: batch.estado === 'concluido' && fineGold > 0
+            ? Number((acquisitionCost / fineGold).toFixed(2))
+            : null,
+          pecas: piecesByBatch.get(batch.id) || [],
+        };
+      }),
     });
   } catch {
     return res.status(500).json({ success: false, error: 'Erro interno ao carregar lotes.' });
