@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.ouro_fundicao_liquidacoes (
   comprador text NOT NULL CHECK (char_length(btrim(comprador)) BETWEEN 2 AND 200),
   referencia_documento text,
   liquidado_em timestamptz NOT NULL DEFAULT now(),
-  registado_por uuid NOT NULL,
+  registado_por uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
   CONSTRAINT ouro_fundicao_liquidacoes_document_check CHECK (
     referencia_documento IS NULL OR char_length(btrim(referencia_documento)) <= 200
   )
@@ -58,7 +58,7 @@ BEGIN
     RAISE EXCEPTION 'Administrador não autorizado.' USING ERRCODE = '42501';
   END IF;
 
-  IF p_chave_idempotencia IS NULL THEN
+  IF p_lote_id IS NULL OR p_chave_idempotencia IS NULL THEN
     RAISE EXCEPTION 'Chave de idempotência obrigatória.' USING ERRCODE = '22023';
   END IF;
 
@@ -79,7 +79,9 @@ BEGIN
   END IF;
 
   IF p_ouro_fino_vendido_gramas IS NULL OR p_ouro_fino_vendido_gramas <= 0
+     OR round(p_ouro_fino_vendido_gramas, 3) <= 0
      OR p_preco_por_grama IS NULL OR p_preco_por_grama <= 0
+     OR round(p_preco_por_grama, 6) <= 0
      OR p_custos_adicionais IS NULL OR p_custos_adicionais < 0
      OR p_comprador IS NULL OR char_length(btrim(p_comprador)) NOT BETWEEN 2 AND 200
      OR (p_referencia_documento IS NOT NULL AND char_length(btrim(p_referencia_documento)) > 200) THEN
