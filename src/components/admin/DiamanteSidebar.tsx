@@ -26,6 +26,7 @@ import {
   MapPinned,
   PackageCheck,
   Factory,
+  ChartNoAxesCombined,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -50,6 +51,7 @@ export const menuItems: MenuItem[] = [
   { id: 'transactions', label: 'Transações', path: '/admin/transacoes', icon: ReceiptText, badge: null },
   { id: 'gold-receiving', label: 'Recepção de Ouro', path: '/admin/recepcao-ouro', icon: PackageCheck, badge: 'SEDE' },
   { id: 'gold-refining', label: 'Lotes de Fundição', path: '/admin/lotes-fundicao', icon: Factory, badge: 'OURO' },
+  { id: 'gold-profitability', label: 'Rentabilidade do Ouro', path: '/admin/rentabilidade-ouro', icon: ChartNoAxesCombined, badge: 'FIN' },
   { id: 'clients', label: 'Clientes & Fornecedores', path: '/clients', icon: UserCheck, badge: null },
   { id: 'settings', label: 'Configurações', path: '/settings', icon: SlidersHorizontal, badge: null },
   { id: 'logs', label: 'Logs & Auditoria', path: '/admin/logs', icon: Terminal, badge: null },
