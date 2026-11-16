@@ -867,7 +867,7 @@ app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
       const rows: any[] = [];
       const pageSize = 500;
       for (let offset = 0; ; offset += pageSize) {
-        let query = supabaseAdmin.from(table).select(select).range(offset, offset + pageSize - 1);
+        let query = supabaseAdmin.from(table).select(select).order('id', { ascending: true }).range(offset, offset + pageSize - 1);
         if (configure) query = configure(query);
         const { data, error } = await query;
         if (error) throw error;
