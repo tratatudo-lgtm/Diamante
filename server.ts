@@ -12,6 +12,7 @@ import warroomRouter from './warroom.routes';
 
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
