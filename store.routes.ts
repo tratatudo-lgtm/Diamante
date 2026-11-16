@@ -222,7 +222,7 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
       Number.isInteger(item.toque_millesimos) && item.toque_millesimos > 0 && item.toque_millesimos <= 1000 &&
       Number.isFinite(item.cotacao_referencia_g) && item.cotacao_referencia_g > 0 &&
       Number.isFinite(item.margem_percentagem) && item.margem_percentagem >= 0 && item.margem_percentagem <= 100 &&
-      item.cotacao_origem === 'referencia_manual_sede' &&
+      ['referencia_manual_sede', 'xaus.com'].includes(item.cotacao_origem) &&
       item.cotacao_moeda === 'EUR' &&
       item.cotacao_unidade === 'EUR/g_ouro_fino' &&
       typeof item.cotacao_observada_em === 'string' &&
@@ -322,7 +322,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
         metalConfig.toque_millesimos <= 0 || metalConfig.toque_millesimos > 1000 ||
         !Number.isFinite(metalConfig.cotacao_referencia_g) || metalConfig.cotacao_referencia_g <= 0 ||
         !Number.isFinite(metalConfig.margem_percentagem) || metalConfig.margem_percentagem < 0 || metalConfig.margem_percentagem > 100 ||
-        metalConfig.cotacao_origem !== 'referencia_manual_sede' ||
+        !['referencia_manual_sede', 'xaus.com'].includes(metalConfig.cotacao_origem) ||
         metalConfig.cotacao_moeda !== 'EUR' ||
         metalConfig.cotacao_unidade !== 'EUR/g_ouro_fino' ||
         typeof metalConfig.cotacao_observada_em !== 'string' ||
