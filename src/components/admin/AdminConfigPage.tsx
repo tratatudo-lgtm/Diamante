@@ -362,7 +362,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                       Preço Compra (€/g) = Cotação diária do ouro fino &times; (Toque &divide; 1000) &times; (100% - Margem de Compra %)
                     </p>
                     <p className="mt-1 text-[11px] text-amber-200/90">
-                      Referência inserida pela sede. Margem de compra sugerida: 15%–20%, ajustável por estratégia e custos. Guardar os parâmetros regista a data e hora da actualização.
+                      Referência inserida pela sede. A percentagem é descontada ao valor do ouro fino: por exemplo, cotação de 100 €/g, toque 999‰ e desconto de 20% resultam em cerca de 79,92 €/g. Os 15%–20% são uma referência comercial ajustável e não representam a margem contabilística sobre o preço de revenda. Guardar os parâmetros regista a data e hora da actualização.
                     </p>
                   </div>
                 </div>
@@ -381,7 +381,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                         <th className="py-3 px-4">Tipo de Metal / Teor</th>
                         <th className="py-3 px-4">Toque (‰)</th>
                         <th className="py-3 px-4">Cotação Base (€/g)</th>
-                        <th className="py-3 px-4">Margem Empresa (%)</th>
+                        <th className="py-3 px-4">Desconto de Compra (%)</th>
                         <th className="py-3 px-4">Preço Compra Balcão</th>
                         
                         <th className="py-3 px-4 text-center">Ativo</th>
