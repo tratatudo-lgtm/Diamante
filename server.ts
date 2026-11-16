@@ -70,10 +70,10 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
     return next();
   }
 
-  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown-ip';
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown-ip';
   const now = Date.now();
-  const windowMs = 60 * 1000; // Janela de 1 minuto
-  const maxAttempts = 100; // Limite amplo para testes e prevenção de ataques massivos
+  const windowMs = 60 * 1000;
+  const maxAttempts = 30;
 
   const record = rateLimitMap.get(clientIp);
 
