@@ -411,7 +411,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   try {
     const { data: existingPurchase, error: existingPurchaseError } = await supabaseAdmin
       .from('transacoes')
-      .select('id, idempotency_key, declaracao_assinada_id, funcionario_id, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, descricao, estado, created_at')
+      .select('id, idempotency_key, declaracao_assinada_id, funcionario_id, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, valor_sugerido, cotacao_spot_dia, margem_aplicada, cotacao_origem, cotacao_moeda, cotacao_unidade, cotacao_observada_em, descricao, estado, created_at')
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
 
@@ -433,6 +433,13 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
         existingPurchase.metal === metal &&
         Number(existingPurchase.peso_gramas) === peso &&
         Number(existingPurchase.valor_final) === Number(valorFinal.toFixed(2)) &&
+        Number(existingPurchase.valor_sugerido) === Number(Number(body.valorSugerido).toFixed(2)) &&
+        Number(existingPurchase.cotacao_spot_dia) === Number(body.cotacaoSpot) &&
+        Number(existingPurchase.margem_aplicada) === Number(body.margemPercent) &&
+        existingPurchase.cotacao_origem === body.cotacaoOrigem &&
+        existingPurchase.cotacao_moeda === body.cotacaoMoeda &&
+        existingPurchase.cotacao_unidade === body.cotacaoUnidade &&
+        Date.parse(existingPurchase.cotacao_observada_em) === Date.parse(body.cotacaoObservadaEm) &&
         (existingPurchase.descricao || '') === expectedDescription;
 
       if (!sameRequest) {
