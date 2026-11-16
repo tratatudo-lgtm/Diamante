@@ -752,6 +752,140 @@ app.post('/api/admin/refining/batches/:id/settlements', verifyAdmin, async (req,
   }
 });
 
+// RENTABILIDADE DE OURO — AGREGAÇÃO POR LOJA DE ORIGEM E PERÍODO DE LIQUIDAÇÃO
+app.get('/api/admin/refining/profitability', verifyAdmin, async (req, res) => {
+  const from = typeof req.query.from === 'string' ? req.query.from : '';
+  const to = typeof req.query.to === 'string' ? req.query.to : '';
+  const validDate = (value: string) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(value + 'T00:00:00Z');
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  };
+  if ((from && !validDate(from)) || (to && !validDate(to)) || (from && to && from > to)) {
+    return res.status(400).json({ success: false, error: 'Período inválido. Utilize datas no formato AAAA-MM-DD.' });
+  }
+  try {
+    const fetchAll = async (table: string, select: string, configure?: (query: any) => any) => {
+      const rows: any[] = [];
+      const pageSize = 500;
+      for (let offset = 0; ; offset += pageSize) {
+        let query = supabaseAdmin.from(table).select(select).range(offset, offset + pageSize - 1);
+        if (configure) query = configure(query);
+        const { data, error } = await query;
+        if (error) throw error;
+        rows.push(...(data || []));
+        if (!data || data.length < pageSize) break;
+      }
+      return rows;
+    };
+    const settlements = await fetchAll('ouro_fundicao_liquidacoes',
+      'id,lote_id,ouro_fino_vendido_gramas,receita_bruta,custo_lote_alocado,custos_adicionais,resultado_liquido,liquidado_em',
+      query => {
+        let filtered = query.order('liquidado_em', { ascending: true });
+        if (from) filtered = filtered.gte('liquidado_em', from + 'T00:00:00.000Z');
+        if (to) filtered = filtered.lt('liquidado_em', new Date(new Date(to + 'T00:00:00Z').getTime() + 86400000).toISOString());
+        return filtered;
+      });
+    if (!settlements.length) return res.json({ success: true, period: { from: from || null, to: to || null }, totals: { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 }, stores: [], unmatched: { revenue: 0, result: 0 } });
+
+    const batchIds = Array.from(new Set(settlements.map((sale: any) => sale.lote_id)));
+    const [batches, pieces, operationalCosts] = await Promise.all([
+      fetchAll('ouro_fundicao_lotes', 'id,custo_aquisicao_total,ouro_fino_recuperado_gramas', q => q.in('id', batchIds)),
+      fetchAll('ouro_fundicao_lote_pecas', 'lote_id,transacao_origem_id,custo_aquisicao,peso_recebido_gramas', q => q.in('lote_id', batchIds)),
+      fetchAll('ouro_fundicao_custos', 'lote_id,valor', q => q.in('lote_id', batchIds)),
+    ]);
+    const transactionIds = Array.from(new Set(pieces.map((piece: any) => piece.transacao_origem_id).filter(Boolean)));
+    const transactions = transactionIds.length
+      ? await fetchAll('transacoes', 'id,loja_id', q => q.in('id', transactionIds))
+      : [];
+    const storeIds = Array.from(new Set(transactions.map((tx: any) => tx.loja_id).filter(Boolean)));
+    const stores = storeIds.length
+      ? await fetchAll('lojas', 'id,nome', q => q.in('id', storeIds))
+      : [];
+    const batchById = new Map(batches.map((batch: any) => [batch.id, batch]));
+    const txById = new Map(transactions.map((tx: any) => [tx.id, tx]));
+    const storeNameById = new Map(stores.map((store: any) => [store.id, store.nome]));
+    const piecesByBatch = new Map<string, any[]>();
+    for (const piece of pieces) {
+      const current = piecesByBatch.get(piece.lote_id) || [];
+      current.push(piece);
+      piecesByBatch.set(piece.lote_id, current);
+    }
+    const costsByBatch = new Map<string, number>();
+    for (const cost of operationalCosts) costsByBatch.set(cost.lote_id, (costsByBatch.get(cost.lote_id) || 0) + Number(cost.valor || 0));
+    const aggregates = new Map<string, any>();
+    const totals = { revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 };
+    const unmatched = { revenue: 0, result: 0 };
+    for (const sale of settlements) {
+      const batch = batchById.get(sale.lote_id);
+      const batchPieces = piecesByBatch.get(sale.lote_id) || [];
+      const batchAcquisitionCost = Number(batch?.custo_aquisicao_total || 0);
+      const storeAcquisition = new Map<string, number>();
+      let knownAcquisition = 0;
+      let knownWeight = 0;
+      for (const piece of batchPieces) {
+        const tx = txById.get(piece.transacao_origem_id);
+        const cost = Number(piece.custo_aquisicao || 0);
+        if (tx?.loja_id) {
+          storeAcquisition.set(tx.loja_id, (storeAcquisition.get(tx.loja_id) || 0) + cost);
+          knownAcquisition += cost;
+          knownWeight += Number(piece.peso_recebido_gramas || 0);
+        }
+      }
+      const basisTotal = batchAcquisitionCost > 0 ? batchAcquisitionCost : knownWeight;
+      const saleRevenue = Number(sale.receita_bruta || 0);
+      const saleCost = Number(sale.custo_lote_alocado || 0);
+      const saleExtra = Number(sale.custos_adicionais || 0);
+      const saleResult = Number(sale.resultado_liquido || 0);
+      totals.revenue += saleRevenue;
+      totals.allocated_cost += saleCost;
+      totals.additional_costs += saleExtra;
+      totals.result += saleResult;
+      totals.fine_gold_sold_grams += Number(sale.ouro_fino_vendido_gramas || 0);
+      let allocatedShare = 0;
+      for (const [storeId, acquisition] of storeAcquisition) {
+        const share = basisTotal > 0
+          ? (batchAcquisitionCost > 0 ? acquisition / basisTotal : acquisition / basisTotal)
+          : 0;
+        if (share <= 0) continue;
+        allocatedShare += share;
+        const key = storeId;
+        const row = aggregates.get(key) || { loja_id: storeId, loja_nome: storeNameById.get(storeId) || 'Loja sem nome', revenue: 0, allocated_cost: 0, additional_costs: 0, result: 0, fine_gold_sold_grams: 0 };
+        row.revenue += saleRevenue * share;
+        row.allocated_cost += saleCost * share;
+        row.additional_costs += saleExtra * share;
+        row.result += saleResult * share;
+        row.fine_gold_sold_grams += Number(sale.ouro_fino_vendido_gramas || 0) * share;
+        aggregates.set(key, row);
+      }
+      if (allocatedShare < 0.999999) {
+        const missing = Math.max(0, 1 - allocatedShare);
+        unmatched.revenue += saleRevenue * missing;
+        unmatched.result += saleResult * missing;
+      }
+    }
+    const round = (value: number, decimals = 2) => Number(value.toFixed(decimals));
+    const rows = Array.from(aggregates.values()).map(row => ({
+      ...row,
+      revenue: round(row.revenue), allocated_cost: round(row.allocated_cost),
+      additional_costs: round(row.additional_costs), result: round(row.result),
+      fine_gold_sold_grams: round(row.fine_gold_sold_grams, 3),
+      margin_percent: row.revenue > 0 ? round(row.result / row.revenue * 100, 2) : null,
+    })).sort((a, b) => b.result - a.result);
+    return res.json({
+      success: true,
+      period: { from: from || null, to: to || null },
+      totals: { revenue: round(totals.revenue), allocated_cost: round(totals.allocated_cost), additional_costs: round(totals.additional_costs), result: round(totals.result), fine_gold_sold_grams: round(totals.fine_gold_sold_grams, 3) },
+      stores: rows,
+      unmatched: { revenue: round(unmatched.revenue), result: round(unmatched.result) },
+      allocation_basis: 'Proporção do custo de aquisição das peças de cada loja no lote; peso como fallback quando o custo total não está disponível.',
+    });
+  } catch (error) {
+    console.error('[Refining Profitability] Falha ao calcular rentabilidade.');
+    return res.status(503).json({ success: false, error: 'Não foi possível calcular a rentabilidade por loja e período.' });
+  }
+});
+
 // DETALHE DE LOJA — CONSULTA ADMINISTRATIVA PROTEGIDA
 app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
   const lojaId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
