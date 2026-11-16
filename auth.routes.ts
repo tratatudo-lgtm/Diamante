@@ -960,7 +960,8 @@ authRouter.get('/admin/config/cotacao-ouro/historico', verifyAdmin, async (_req:
 });
 
 authRouter.post('/admin/config/cotacao-ouro/importar', verifyAdmin, handleImportGoldMarketQuote);
-authRouter.post('/config/cotacao-ouro/importar', verifyAdmin, handleImportGoldMarketQuote);\nauthRouter.get('/admin/config/margens', verifyAdmin, handleGetMargensConfig);
+authRouter.post('/config/cotacao-ouro/importar', verifyAdmin, handleImportGoldMarketQuote);
+authRouter.get('/admin/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.get('/config/margens', verifyAdmin, handleGetMargensConfig);
 authRouter.put('/admin/config/margens', verifyAdmin, handleUpdateMargensConfig);
 authRouter.put('/config/margens', verifyAdmin, handleUpdateMargensConfig);
