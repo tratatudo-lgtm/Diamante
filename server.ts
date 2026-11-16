@@ -567,6 +567,21 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
       console.error('[Refining] Falha ao carregar peças dos lotes.');
       return res.status(503).json({ success: false, error: 'Não foi possível carregar a rastreabilidade das peças.' });
     }
+    const { data: operationalCosts, error: costsError } = batchIds.length
+      ? await supabaseAdmin.from('ouro_fundicao_custos')
+          .select('lote_id, categoria, descricao, valor, criado_em')
+          .in('lote_id', batchIds)
+      : { data: [], error: null };
+    if (costsError) {
+      console.error('[Refining] Falha ao carregar custos operacionais.');
+      return res.status(503).json({ success: false, error: 'Não foi possível carregar os custos operacionais.' });
+    }
+    const costsByBatch = new Map<string, any[]>();
+    for (const cost of operationalCosts || []) {
+      const current = costsByBatch.get(cost.lote_id) || [];
+      current.push(cost);
+      costsByBatch.set(cost.lote_id, current);
+    }
     const piecesByBatch = new Map<string, any[]>();
     for (const piece of pieces || []) {
       const current = piecesByBatch.get(piece.lote_id) || [];
@@ -577,7 +592,7 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
       success: true,
       data: (data || []).map((batch: any) => {
         const fineGold = Number(batch.ouro_fino_recuperado_gramas || 0);
-        const acquisitionCost = Number(batch.custo_aquisicao_total || 0);
+        const acquisitionCost = Number(batch.custo_aquisicao_total || 0);\n        const costs = costsByBatch.get(batch.id) || [];\n        const operationalCost = costs.reduce((sum: number, cost: any) => sum + Number(cost.valor || 0), 0);\n        const totalCost = acquisitionCost + operationalCost;
         return {
           ...batch,
           custo_por_grama_fino: batch.estado === 'concluido' && fineGold > 0
@@ -614,6 +629,29 @@ app.post('/api/admin/refining/batches', verifyAdmin, async (req, res) => {
     return res.status(201).json({ success: true, lote: data });
   } catch {
     return res.status(500).json({ success: false, error: 'Erro interno ao criar lote.' });
+  }
+});
+
+app.post('/api/admin/refining/batches/:id/costs', verifyAdmin, async (req, res) => {
+  const adminId = (req as any).adminUser?.id;
+  const batchId = typeof req.params.id === 'string' ? req.params.id.trim() : '';
+  const category = req.body?.categoria;
+  const description = typeof req.body?.descricao === 'string' ? req.body.descricao.trim() : '';
+  const amount = Number(typeof req.body?.valor === 'string' ? req.body.valor.replace(',', '.') : req.body?.valor);
+  if (!adminId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(batchId) ||
+      !['transporte', 'analise', 'fundicao', 'outro'].includes(category) ||
+      description.length < 2 || description.length > 300 || !Number.isFinite(amount) || amount <= 0 || amount > 10000000) {
+    return res.status(400).json({ success: false, error: 'Indique categoria, descrição e valor válidos.' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.rpc('adicionar_custo_ouro_fundicao', {
+      p_lote_id: batchId, p_categoria: category, p_descricao: description,
+      p_valor: Number(amount.toFixed(2)), p_admin_id: adminId,
+    });
+    if (error) return res.status(409).json({ success: false, error: error.message || 'Não foi possível registar o custo.' });
+    return res.status(201).json({ success: true, custo: data });
+  } catch {
+    return res.status(500).json({ success: false, error: 'Erro interno ao registar custo operacional.' });
   }
 });
 
