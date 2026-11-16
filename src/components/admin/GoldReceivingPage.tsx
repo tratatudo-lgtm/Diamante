@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, Clock3, PackageCheck, RefreshCw, Scale } f
 
 interface MovementItem {
   id: string;
-  evento: 'expedicao_sede' | 'recepcao_sede';
+  evento: 'expedicao_sede' | 'recepcao_sede' | 'entrada_fundicao';
   codigo_peca: string;
   loja_nome?: string | null;
   peso_declarado_gramas?: number | null;
@@ -12,6 +12,7 @@ interface MovementItem {
   ocorrido_em: string;
   observacoes?: string | null;
   divergencia: boolean;
+  codigo_lote_fundicao?: string | null;
 }
 
 interface ReceivingItem {
@@ -149,8 +150,8 @@ export const GoldReceivingPage: React.FC = () => {
               <tbody>{movementHistory.map(event => <tr key={event.id} className="border-t border-white/[0.06]">
                 <td className="py-3 pr-3 text-slate-400">{new Date(event.ocorrido_em).toLocaleString('pt-PT')}</td>
                 <td className="py-3 pr-3 font-semibold text-white">{event.codigo_peca}</td>
-                <td className="py-3 pr-3 text-slate-300">{event.evento === 'expedicao_sede' ? 'Expedição' : 'Recepção'}</td>
-                <td className="py-3 pr-3 text-slate-400">{event.loja_nome || '—'}</td>
+                <td className="py-3 pr-3 text-slate-300">{event.evento === 'expedicao_sede' ? 'Expedição' : event.evento === 'recepcao_sede' ? 'Recepção' : 'Entrada em fundição'}</td>
+                <td className="py-3 pr-3 text-slate-400">{event.codigo_lote_fundicao || event.loja_nome || '—'}</td>
                 <td className="py-3 pr-3 text-right tabular-nums">{event.peso_declarado_gramas == null ? '—' : Number(event.peso_declarado_gramas).toFixed(3) + ' g'}</td>
                 <td className="py-3 pr-3 text-right tabular-nums">{event.peso_recebido_gramas == null ? '—' : Number(event.peso_recebido_gramas).toFixed(3) + ' g'}</td>
                 <td className={`py-3 text-right font-semibold tabular-nums ${event.divergencia ? 'text-amber-300' : 'text-slate-300'}`}>{event.diferenca_peso_gramas == null ? '—' : (Number(event.diferenca_peso_gramas) > 0 ? '+' : '') + Number(event.diferenca_peso_gramas).toFixed(3) + ' g'}{event.divergencia ? ' · Rever' : ''}</td>
