@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { supabaseAdmin } from './auth.service';
 
@@ -327,7 +327,7 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
       return res.status(200).json({ success: true, declarationEvidenceId: existing.id, replay: true });
     }
 
-    const path = `${employee.loja_id}/${idempotencyKey}/${crypto.randomUUID()}.${extByMime[mimeType]}`;
+    const path = `${employee.loja_id}/${idempotencyKey}/${randomUUID()}.${extByMime[mimeType]}`;
     uploadedPath = path;
     const { error: uploadError } = await supabaseAdmin.storage.from('declaracoes-compras')
       .upload(path, fileBuffer, { contentType: mimeType, upsert: false });
