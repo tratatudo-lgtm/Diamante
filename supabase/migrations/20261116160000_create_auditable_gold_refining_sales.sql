@@ -50,6 +50,7 @@ DECLARE
   v_total_cost numeric(14,2);
   v_allocated_cost numeric(14,2);
   v_allocated_before numeric(14,2);
+  v_sold_after numeric(14,3);
   v_revenue numeric(14,2);
   v_extra numeric(14,2);
 BEGIN
@@ -119,14 +120,16 @@ BEGIN
   FROM public.ouro_fundicao_liquidacoes
   WHERE lote_id = p_lote_id;
 
-  -- Na venda final, absorver o resíduo de arredondamento para fechar exactamente o custo do lote.
+  -- Alocar por diferença acumulada: evita deriva de cêntimos em muitas vendas parciais.
+  v_sold_after := round(v_sold + p_ouro_fino_vendido_gramas, 3);
   v_allocated_cost := CASE
-    WHEN round(p_ouro_fino_vendido_gramas, 3) = v_available
-      THEN round(v_total_cost - v_allocated_before, 2)
     WHEN v_batch.ouro_fino_recuperado_gramas > 0
-      THEN round(v_total_cost * p_ouro_fino_vendido_gramas / v_batch.ouro_fino_recuperado_gramas, 2)
+      THEN round(v_total_cost * v_sold_after / v_batch.ouro_fino_recuperado_gramas, 2) - v_allocated_before
     ELSE 0
   END;
+  IF v_allocated_cost < 0 THEN
+    RAISE EXCEPTION 'A imputação acumulada de custos é inconsistente.' USING ERRCODE = '23514';
+  END IF;
   v_revenue := round(p_ouro_fino_vendido_gramas * p_preco_por_grama, 2);
   v_extra := round(p_custos_adicionais, 2);
 
