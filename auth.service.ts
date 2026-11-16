@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { randomInt } from 'crypto';
 import { sendWhatsAppOtp, formatPortuguesePhone } from './whatsapp.service';
 
-const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_SECRET = process.env.JWT_SECRET || '';
 if (!JWT_SECRET) throw new Error('JWT_SECRET tem de estar configurado no servidor.');
 
 const supabaseUrl =

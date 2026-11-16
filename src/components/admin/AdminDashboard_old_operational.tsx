@@ -96,9 +96,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
 
       // 1. Tentar primeiro através do endpoint server-side /api/admin/war-room (sem restrições de CORS/Iframe)
       try {
+        const token = sessionStorage.getItem('diamante_jwt_token');
+        if (!token) throw new Error('Sessão administrativa expirada. Volte a iniciar sessão.');
         const res = await fetch('/api/admin/war-room', {
-          headers: { Accept: 'application/json' },
-          signal: AbortSignal.timeout(4000),
+          headers: {
+            Accept: 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          signal: AbortSignal.timeout(10000),
         });
         if (res.ok) {
           const apiData = await res.json();

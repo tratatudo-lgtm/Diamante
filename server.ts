@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './auth.service';
+import { verifyAdmin, AdminRequest } from './middleware/verifyAdmin';
 // PATH: server.ts
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
@@ -11,6 +12,7 @@ import warroomRouter from './warroom.routes';
 
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
@@ -27,21 +29,29 @@ const isProduction = process.env.NODE_ENV === 'production';
 // =========================================================================
 // 1. CONFIGURAÇÃO DE SEGURANÇA CORS
 // =========================================================================
-const allowedOrigins = [
+const allowedOrigins = new Set([
+  process.env.ADMIN_FRONTEND_URL,
   process.env.FRONTEND_URL,
   process.env.APP_URL,
+  'https://admin-diamantedouro.duckdns.org',
   `http://localhost:${PORT}`,
   'http://localhost:3000',
   'http://localhost:5173',
   'http://127.0.0.1:3000',
-].filter(Boolean) as string[];
+].filter((origin): origin is string => Boolean(origin)));
 
-app.use(
-  cors({
-    origin: true,
-    credentials: true,
-  })
-);
+const corsOptions: cors.CorsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('Origem não autorizada por CORS.'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'Cache-Control'],
+};
+
+app.set('trust proxy', 'loopback');
+app.use(cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -61,10 +71,10 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
     return next();
   }
 
-  const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'unknown-ip';
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown-ip';
   const now = Date.now();
-  const windowMs = 60 * 1000; // Janela de 1 minuto
-  const maxAttempts = 100; // Limite amplo para testes e prevenção de ataques massivos
+  const windowMs = 60 * 1000;
+  const maxAttempts = 30;
 
   const record = rateLimitMap.get(clientIp);
 
@@ -93,24 +103,10 @@ app.use(bruteForceProtection);
 // Suporte duplo (/auth/* e /api/auth/*) para máxima compatibilidade com frontend e clientes externos
 app.use('/auth', authRouter);
 app.use('/api/auth', authRouter);
-// Middleware CORS específico para API Admin (permitir headers customizados)
-app.use('/admin/dashboard', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-user-phone, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
 app.use('/api/v1/admin/dashboard', warroomRouter);
 
 // ENDPOINT: LISTAR TRANSAÇÕES PENDENTES PARA AUTORIZAÇÃO
-app.get('/api/v1/admin/dashboard/pending', async (req, res) => {
-  const phone = req.headers['x-user-phone'] as string;
-  if (phone !== '+351937230116' && phone !== '937230116') {
-    return res.status(403).json({ error: 'Não autorizado' });
-  }
+app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req: AdminRequest, res) => {
   
   try {
     const { data, error } = await supabaseAdmin
@@ -130,29 +126,36 @@ app.get('/api/v1/admin/dashboard/pending', async (req, res) => {
 });
 
 // ENDPOINT: AUTORIZAR TRANSAÇÃO PENDENTE
-app.post('/api/v1/admin/dashboard/authorize', async (req, res) => {
-  const phone = req.headers['x-user-phone'] as string;
-  if (phone !== '+351937230116' && phone !== '937230116') {
-    return res.status(403).json({ error: 'Não autorizado' });
-  }
+app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req: AdminRequest, res) => {
   
   const { transactionId } = req.body;
   if (!transactionId) return res.status(400).json({ error: 'ID da transação obrigatório' });
   
   try {
-    const { error } = await supabaseAdmin
+    const adminId = req.adminUser?.id;
+    if (!adminId) {
+      return res.status(401).json({ success: false, error: 'Sessão administrativa inválida' });
+    }
+
+    const { data, error } = await supabaseAdmin
       .from('transacoes')
-      .update({ 
-        estado: 'aprovado', 
-        aprovado_por: 'master_admin', 
-        data_aprovacao: new Date().toISOString() 
+      .update({
+        estado: 'aprovado',
+        aprovado_por: adminId,
+        data_aprovacao: new Date().toISOString()
       })
-      .eq('id', transactionId);
-      
+      .eq('id', transactionId)
+      .eq('estado', 'pendente_aprovacao')
+      .select('id')
+      .maybeSingle();
+
     if (error) throw error;
-    
-    console.log(`[ADMIN] Transação ${transactionId} autorizada por Master User`);
-    res.json({ success: true, message: 'Transação autorizada com sucesso' });
+    if (!data) {
+      return res.status(409).json({ success: false, error: 'A transação não está pendente ou já foi processada' });
+    }
+
+    console.log('[ADMIN] Transação pendente autorizada por administrador validado.');
+    return res.json({ success: true, message: 'Transação autorizada com sucesso' });
   } catch(e: any) {
     console.error('[Authorize Error]:', e.message);
     res.status(500).json({ success: false, error: e.message });
@@ -184,7 +187,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // 3.1 SALA DE GUERRA (WAR ROOM / ADMIN DASHBOARD)
 // Proxy seguro server-side para tabelas Supabase (evita falhas de CORS/Iframe no frontend)
 // =========================================================================
-app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], async (_req: Request, res: Response) => {
+app.get(['/api/admin/war-room', '/api/war-room', '/admin/war-room'], verifyAdmin, async (_req: Request, res: Response) => {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
   const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -253,30 +256,69 @@ app.use((req, res, next) => {
 // ==========================================
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
-  cors: { 
-    origin: "*", 
-    methods: ["GET", "POST"],
-    credentials: true
-  },
+  cors: corsOptions,
   transports: ['websocket', 'polling']
 });
 
-// Lógica de Chat em Tempo Real
+// Todas as ligações em tempo real exigem o mesmo JWT emitido pelo servidor.
+io.use(async (socket, next) => {
+  try {
+    const authToken = typeof socket.handshake.auth?.token === 'string'
+      ? socket.handshake.auth.token
+      : '';
+    const authorization = socket.handshake.headers.authorization || '';
+    const token = authToken || (authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '');
+    const secret = process.env.JWT_SECRET;
+    if (!secret || !token) return next(new Error('Autenticação obrigatória.'));
+
+    const claims = jwt.verify(token, secret) as jwt.JwtPayload;
+    const userId = typeof claims.id === 'string' ? claims.id : '';
+    if (!userId) return next(new Error('Sessão inválida.'));
+
+    const { data: employee, error } = await supabaseAdmin
+      .from('funcionarios')
+      .select('id, role, loja_id, ativo')
+      .eq('id', userId)
+      .eq('ativo', true)
+      .maybeSingle();
+
+    if (error || !employee || employee.ativo !== true) {
+      return next(new Error('Utilizador inativo ou não autorizado.'));
+    }
+    socket.data.employee = employee;
+    next();
+  } catch {
+    next(new Error('Sessão inválida ou expirada.'));
+  }
+});
+
+// Lógica de Chat em Tempo Real: salas limitadas à identidade e loja do funcionário.
 io.on('connection', (socket) => {
-  console.log(`[Chat WS] ✅ Conectado: ${socket.id}`);
-  
-  socket.on('join_room', (room: string) => {
-    socket.join(room);
-    console.log(`[Chat WS] ${socket.id} entrou na sala: ${room}`);
+  const employee = socket.data.employee as { id: string; role: string; loja_id: string | null };
+  const allowedRooms = new Set([
+    employee.id,
+    ...(employee.loja_id ? [`store:${employee.loja_id}`] : []),
+    ...(employee.role === 'admin' ? ['admin'] : []),
+  ]);
+
+  socket.on('join_room', async (room: unknown) => {
+    if (typeof room !== 'string' || room.length > 128 || !allowedRooms.has(room)) {
+      socket.emit('room_denied', { reason: 'Sala não autorizada para esta sessão.' });
+      return;
+    }
+    await socket.join(room);
+    socket.emit('room_joined', { room });
   });
 
   socket.on('send_message', (data: any) => {
-    io.to(data.room).emit('receive_message', data);
-    console.log(`[Chat WS] 📨 Mensagem em ${data.room}: ${data.text?.substring(0, 40)}...`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`[Chat WS] ❌ Desconectado: ${socket.id}`);
+    if (!data || typeof data.room !== 'string' || !allowedRooms.has(data.room)) return;
+    if (typeof data.text !== 'string' || !data.text.trim() || data.text.length > 4000) return;
+    io.to(data.room).emit('receive_message', {
+      room: data.room,
+      text: data.text.trim(),
+      senderId: employee.id,
+      createdAt: new Date().toISOString(),
+    });
   });
 });
 
@@ -312,14 +354,15 @@ async function setupViteOrStatic() {
 
 // Iniciar servidor HTTP com WebSocket (substitui app.listen tradicional)
 setupViteOrStatic().then(() => {
-  const PORT = process.env.PORT || 3000;
-  httpServer.listen(PORT, () => {
+  const PORT = parseInt(process.env.PORT || '3000', 10);
+  const HOST = '127.0.0.1'; // APIs and WebSocket stay behind Nginx; never bind publicly.
+  httpServer.listen(PORT, HOST, () => {
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
     console.log(`Porta: ${PORT}`);
+    console.log(`Host: ${HOST}`);
     console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
     console.log(`WebSocket: Ativo (Socket.IO)`);
-    console.log(`Chave Mestra Ativa: +351937230116`);
     console.log(`=========================================`);
   });
 }).catch(err => {
