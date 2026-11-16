@@ -110,7 +110,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
   };
 
   // Gravar Configurações (PUT /admin/config/margens)
-  const handleSaveConfigs = async () => {
+  const handleSaveConfigs = async (confirmarCotacoesHoje = false) => {
     setIsSaving(true);
     try {
       const token = sessionStorage.getItem('diamante_jwt_token');
@@ -124,6 +124,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
           margens,
           tetos,
           contasBancarias,
+          confirmarCotacoesHoje,
         }),
       });
 
@@ -179,6 +180,16 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                 title="Sincronizar Parâmetros"
               >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-[#D4AF37]' : ''}`} />
+              </button>
+
+              <button
+                onClick={() => handleSaveConfigs(true)}
+                disabled={isSaving}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-amber-500/30 text-amber-200 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+                title="Regista a cotação actualmente introduzida como confirmada hoje pela sede"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+                <span>Confirmar cotação de hoje</span>
               </button>
 
               <button
