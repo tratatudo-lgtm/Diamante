@@ -592,12 +592,18 @@ app.get('/api/admin/refining/batches', verifyAdmin, async (_req, res) => {
       success: true,
       data: (data || []).map((batch: any) => {
         const fineGold = Number(batch.ouro_fino_recuperado_gramas || 0);
-        const acquisitionCost = Number(batch.custo_aquisicao_total || 0);\n        const costs = costsByBatch.get(batch.id) || [];\n        const operationalCost = costs.reduce((sum: number, cost: any) => sum + Number(cost.valor || 0), 0);\n        const totalCost = acquisitionCost + operationalCost;
+        const acquisitionCost = Number(batch.custo_aquisicao_total || 0);
+        const costs = costsByBatch.get(batch.id) || [];
+        const operationalCost = costs.reduce((sum: number, cost: any) => sum + Number(cost.valor || 0), 0);
+        const totalCost = acquisitionCost + operationalCost;
         return {
           ...batch,
+          custo_operacional_total: Number(operationalCost.toFixed(2)),
+          custo_total: Number(totalCost.toFixed(2)),
           custo_por_grama_fino: batch.estado === 'concluido' && fineGold > 0
-            ? Number((acquisitionCost / fineGold).toFixed(2))
+            ? Number((totalCost / fineGold).toFixed(2))
             : null,
+          custos_operacionais: costs,
           pecas: piecesByBatch.get(batch.id) || [],
         };
       }),
