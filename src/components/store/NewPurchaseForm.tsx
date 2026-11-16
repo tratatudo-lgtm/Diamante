@@ -507,8 +507,8 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
               </span>
             </div>
             <p className="mt-1.5 text-[11px] text-gray-400">
-              Limite autorizado pela sede: <span className="font-mono font-semibold text-[#D4AF37]">{formatCurrency(valorMaximoAutorizado)}</span>
-              <span className="ml-1">({flexibilidadeLoja.toFixed(2)}% de flexibilidade sobre o valor sugerido)</span>
+              Limite máximo de compra aprovado pela sede: <span className="font-mono font-semibold text-[#D4AF37]">{formatCurrency(valorMaximoAutorizado)}</span>
+              <span className="ml-1">A margem definida pela sede não pode ser ultrapassada.</span>
             </p>
           </div>
 
