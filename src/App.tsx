@@ -31,9 +31,11 @@ import { GoldReceivingPage } from './components/admin/GoldReceivingPage';
 import { GoldRefiningPage } from './components/admin/GoldRefiningPage';
 import { RefiningProfitabilityPage } from './components/admin/RefiningProfitabilityPage';
 import { Loader2 } from 'lucide-react';
+import { getPortalMode, getPortalUrlForRole, isRoleAllowedOnPortal } from './config/portal-routing';
 
 function AppRouter() {
   const { isAuthenticated, role, userSession, isLoading } = useAuth();
+  const portalMode = typeof window !== 'undefined' ? getPortalMode(window.location.hostname) : 'app';
 
   const isAdmin =
     role === 'admin' ||
@@ -104,9 +106,22 @@ function AppRouter() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Cada subdomínio é um portal separado; a autorização continua a ser validada pelo backend.
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || portalMode === 'public' || portalMode === 'app') return;
+
+    if (!isRoleAllowedOnPortal(portalMode, role || userSession?.role)) {
+      window.location.replace(getPortalUrlForRole(role || userSession?.role));
+    }
+  }, [isAuthenticated, isLoading, portalMode, role, userSession?.role]);
+
   // Redirecionamento e proteção de rotas
   useEffect(() => {
     if (!isLoading) {
+      if (portalMode === 'public') {
+        if (currentPath !== '/') navigate('/');
+        return;
+      }
       if (currentPath === '/register') {
         navigate('/login');
         return;
@@ -133,7 +148,7 @@ function AppRouter() {
         }
       }
     }
-  }, [isAuthenticated, role, userSession, isAdmin, isLoading, currentPath]);
+  }, [isAuthenticated, role, userSession, isAdmin, isLoading, currentPath, portalMode]);
 
   if (isLoading) {
     return (
@@ -144,6 +159,11 @@ function AppRouter() {
         </p>
       </div>
     );
+  }
+
+  // O domínio principal é exclusivamente institucional, mesmo para sessões já autenticadas.
+  if (portalMode === 'public') {
+    return <LandingPage />;
   }
 
   // 2. Ecrã de Login Centralizado
