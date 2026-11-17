@@ -42,6 +42,7 @@ test('requires a second signature when the first signature already exists', () =
 
 test('uses the active threshold for transactions without a first signature', () => {
   const transaction = { primeira_aprovacao_por: null, valor_final: 1200 };
+  assert.equal(requiresSecondPurchaseApproval(transaction, true, 1200), true);
   assert.equal(requiresSecondPurchaseApproval(transaction, true, 1000), true);
   assert.equal(requiresSecondPurchaseApproval(transaction, true, 1500), false);
   assert.equal(requiresSecondPurchaseApproval(transaction, false, 1000), false);
