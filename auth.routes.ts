@@ -701,7 +701,16 @@ async function handleGetMargensConfig(_req: Request, res: Response): Promise<voi
     res.status(200).json({
       success: true,
       margens: Array.isArray(stored.margens) ? stored.margens : DEFAULT_BUSINESS_SETTINGS.margens,
-      tetos: stored.tetos && typeof stored.tetos === 'object' ? stored.tetos : DEFAULT_BUSINESS_SETTINGS.tetos,
+      tetos: stored.tetos && typeof stored.tetos === 'object'
+        ? {
+            ...DEFAULT_BUSINESS_SETTINGS.tetos,
+            ...stored.tetos,
+            // Backward compatibility: preserve the old policy until explicitly changed.
+            exigir_dupla_assinatura: typeof stored.tetos.exigir_dupla_assinatura === 'boolean'
+              ? stored.tetos.exigir_dupla_assinatura
+              : stored.tetos.ativo === true && Number(stored.tetos.exigir_dupla_assinatura_acima) > 0,
+          }
+        : DEFAULT_BUSINESS_SETTINGS.tetos,
       contasBancarias: Array.isArray(stored.contasBancarias) ? stored.contasBancarias : DEFAULT_BUSINESS_SETTINGS.contasBancarias,
     });
   } catch {
