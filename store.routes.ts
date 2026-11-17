@@ -201,7 +201,7 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
   const employee = req.authenticatedUser;
   const itemId = typeof req.params.id === 'string' ? req.params.id : '';
   const lojaId = await resolveRequestedStore(employee, req.body?.lojaId, res);
-  if (!lojaId) return;
+  if (!lojaId || !employee) return;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(itemId)) {
     return res.status(400).json({ success: false, message: 'Identificador de inventário inválido.' });
   }
@@ -305,7 +305,7 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
 storeRouter.post('/purchases/declaration', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   const lojaId = await resolveRequestedStore(employee, req.body?.lojaId, res);
-  if (!lojaId) return;
+  if (!lojaId || !employee) return;
 
   const body = req.body || {};
   const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : '';
@@ -357,6 +357,7 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
       .insert({
         idempotency_key: idempotencyKey,
         funcionario_id: employee.id,
+        actor_role: employee.role,
         loja_id: lojaId,
         cliente_nome: clienteNome,
         cliente_documento: clienteDocumento,
@@ -484,7 +485,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   try {
     const { data: existingPurchase, error: existingPurchaseError } = await supabaseAdmin
       .from('transacoes')
-      .select('id, idempotency_key, declaracao_assinada_id, funcionario_id, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, valor_sugerido, cotacao_spot_dia, margem_aplicada, cotacao_origem, cotacao_moeda, cotacao_unidade, cotacao_observada_em, descricao, estado, created_at')
+      .select('id, idempotency_key, declaracao_assinada_id, funcionario_id, registado_por_role, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, valor_sugerido, cotacao_spot_dia, margem_aplicada, cotacao_origem, cotacao_moeda, cotacao_unidade, cotacao_observada_em, descricao, estado, created_at')
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
 
@@ -498,6 +499,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       const sameRequest =
         existingPurchase.declaracao_assinada_id === declarationEvidenceId &&
         existingPurchase.funcionario_id === employee.id &&
+        existingPurchase.registado_por_role === employee.role &&
         existingPurchase.loja_id === lojaId &&
         existingPurchase.cliente_nome === clienteNome &&
         existingPurchase.cliente_cc === clienteCc &&
