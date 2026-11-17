@@ -38,7 +38,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
 
   // Estados de Configuração
   const [margens, setMargens] = useState<MargemMetalConfig[]>([]);
-  const [tetos, setTetos] = useState<TetoAprovacaoConfig>({ id: '', loja_id: null, valor_limite_sem_aprovacao: 0, peso_limite_sem_aprovacao_g: 0, exigir_dupla_assinatura_acima: 0, notificar_whatsapp_master: false, telemovel_alerta: '', ativo: false });
+  const [tetos, setTetos] = useState<TetoAprovacaoConfig>({ id: '', loja_id: null, valor_limite_sem_aprovacao: 0, peso_limite_sem_aprovacao_g: 0, exigir_dupla_assinatura_acima: 0, exigir_dupla_assinatura: false, notificar_whatsapp_master: false, telemovel_alerta: '', ativo: false });
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaConfig[]>([]);
   const [historicoCotacoes, setHistoricoCotacoes] = useState<any[]>([]);
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
