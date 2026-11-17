@@ -25,10 +25,10 @@ test('só administradores entram no portal administrativo', () => {
   assert.equal(isRoleAllowedOnPortal('admin', null), false);
 });
 
-test('o portal de loja aceita funções não administrativas e rejeita admin', () => {
+test('o portal de loja aceita funcionários, gestores e administradores', () => {
   assert.equal(isRoleAllowedOnPortal('store', 'funcionario'), true);
   assert.equal(isRoleAllowedOnPortal('store', 'gestor'), true);
-  assert.equal(isRoleAllowedOnPortal('store', 'admin'), false);
+  assert.equal(isRoleAllowedOnPortal('store', 'admin'), true);
   assert.equal(isRoleAllowedOnPortal('store', undefined), false);
 });
 
