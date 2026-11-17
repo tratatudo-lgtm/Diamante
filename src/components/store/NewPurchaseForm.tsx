@@ -74,6 +74,9 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   useEffect(() => {
     let active = true;
     const loadPurchaseSettings = async () => {
+      setSettingsLoading(true);
+      setPurchaseSettings([]);
+      setSettingsError(null);
       try {
         const token = sessionStorage.getItem('diamante_jwt_token');
         if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
