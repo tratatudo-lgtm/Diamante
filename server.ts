@@ -26,6 +26,7 @@ import { isSocketTokenActive } from './socket-session';
 import { verifyAdmin } from './middleware/verifyAdmin';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { sendWhatsAppBirthdayGreeting } from './whatsapp.service';
+import { requiresSecondPurchaseApproval } from './store-purchase-validation';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -290,8 +291,11 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
       : 0;
     // Once the first signature exists, never downgrade the transaction to
     // single approval even if the threshold configuration changes meanwhile.
-    const requiresDoubleSignature = Boolean(transaction.primeira_aprovacao_por) ||
-      (doubleSignatureAt > 0 && Number(transaction.valor_final) >= doubleSignatureAt);
+    const requiresDoubleSignature = requiresSecondPurchaseApproval(
+      transaction,
+      thresholds?.ativo === true,
+      doubleSignatureAt,
+    );
 
     if (requiresDoubleSignature && !transaction.primeira_aprovacao_por) {
       const now = new Date().toISOString();
