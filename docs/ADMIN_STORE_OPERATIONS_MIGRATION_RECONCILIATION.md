@@ -30,7 +30,7 @@ Estes pares são correspondências por nome, não uma prova de igualdade do cont
 - `20261116201000_store_purchase_signed_declaration_evidence.sql`
 - `20261117023000_audit_and_protect_purchase_declarations.sql`
 
-A função de produção foi consultada directamente e continua com 14 argumentos. O código de compras da branch usa a assinatura de 20 argumentos. O bucket e as tabelas de evidência/auditoria também não estavam presentes quando foram feitas as verificações iniciais. Por isso, estas dependências têm de ser aplicadas e validadas pela ordem correcta antes de activar compras administrativas.
+A função de produção foi consultada directamente e continua com 14 argumentos. Uma nova leitura de `information_schema.columns` confirmou que `transacoes` ainda não tem `declaracao_assinada_id`, campos de snapshot de cotação nem `registado_por_role`; as tabelas `store_purchase_consent_evidence` e `store_purchase_declaration_access_logs` também não existem. O bucket privado não foi encontrado na verificação anterior. Por isso, estas dependências têm de ser aplicadas e validadas pela ordem correcta antes de activar compras administrativas.
 
 ## Colisões de timestamp no repositório
 
@@ -47,7 +47,7 @@ Foram detectados prefixos repetidos em ficheiros SQL locais:
 
 ## Nova migração desta branch
 
-`20261117170000_allow_admin_store_operations.sql` acrescenta o papel real do actor à evidência documental e à transacção e actualiza a RPC de 20 argumentos para aceitar:
+`20261117170000_allow_admin_store_operations.sql` acrescenta o papel real do actor à evidência documental e à transacção e actualiza a RPC de 19 argumentos para aceitar:
 - funcionário activo, apenas na sua loja atribuída;
 - administrador activo, numa loja activa explicitamente seleccionada.
 
