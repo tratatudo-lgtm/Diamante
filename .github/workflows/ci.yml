@@ -8,6 +8,7 @@ on:
   pull_request:
     branches:
       - main
+      - fix/purchase-idempotent-replay-20261116
 
 permissions:
   contents: read
