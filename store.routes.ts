@@ -331,18 +331,25 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
 
     if (insertError || !inserted) {
       if (insertError?.code === '23505') {
-        const { data: concurrent } = await supabaseAdmin
+        const { data: concurrent, error: concurrentLookupError } = await supabaseAdmin
           .from('store_purchase_consent_evidence')
           .select('id,funcionario_id,loja_id,cliente_nome,cliente_documento,sha256')
           .eq('idempotency_key', idempotencyKey)
           .maybeSingle();
-        if (concurrent && concurrent.funcionario_id === employee.id &&
+
+        if (concurrentLookupError || !concurrent) {
+          // The unique conflict proves that a row exists, but a failed read
+          // cannot tell us which object it references. Preserve this upload.
+          console.error('[Store Purchase] Conflito documental sem leitura conclusiva; ficheiro preservado para reconciliação.');
+          return res.status(503).json({ success: false, message: 'A declaração está a ser processada. Repita a mesma operação ou contacte a sede antes de iniciar outra compra.' });
+        }
+
+        await supabaseAdmin.storage.from('declaracoes-compras').remove([path]);
+        if (concurrent.funcionario_id === employee.id &&
             concurrent.loja_id === employee.loja_id && concurrent.cliente_nome === clienteNome &&
             concurrent.cliente_documento === clienteDocumento && concurrent.sha256 === sha256) {
-          await supabaseAdmin.storage.from('declaracoes-compras').remove([path]);
           return res.status(200).json({ success: true, declarationEvidenceId: concurrent.id, replay: true });
         }
-        await supabaseAdmin.storage.from('declaracoes-compras').remove([path]);
         return res.status(409).json({ success: false, message: 'A chave de repetição já foi utilizada por outra declaração.' });
       }
       throw insertError || new Error('Não foi possível registar a declaração.');
