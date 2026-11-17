@@ -34,7 +34,7 @@ return async function verifyAuth(req: AuthenticatedRequest, res: Response, next:
   }
 
   try {
-    const claims = jwt.verify(header.slice(7).trim(), secret) as jwt.JwtPayload;
+    const claims = jwt.verify(header.slice(7).trim(), secret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
     const userId = typeof claims.id === 'string' ? claims.id : '';
     if (!userId) {
       res.status(401).json({ success: false, message: 'Sessão inválida.' });
