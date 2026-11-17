@@ -18,18 +18,7 @@ export interface AdminRequest extends Request {
     role: string;
     nome_completo?: string;
   };
-};
 }
-
-export const verifyAdmin = createVerifyAdmin({
-  secret: JWT_SECRET,
-  findActiveEmployee: async (id: string) => {
-    const { data, error } = await supabaseAdmin.from('funcionarios')
-      .select('id, nome_completo, telemovel, role, ativo')
-      .eq('id', id).eq('ativo', true).maybeSingle();
-    return { data, error };
-  },
-});
 
 /**
  * Autoriza exclusivamente funcionários ativos com role "admin" na tabela
@@ -90,4 +79,15 @@ return async function verifyAdmin(
     console.error('[verifyAdmin] Erro interno ao validar permissões.');
     res.status(500).json({ success: false, message: 'Erro interno ao validar permissões.' });
   }
+};
 }
+
+export const verifyAdmin = createVerifyAdmin({
+  secret: JWT_SECRET,
+  findActiveEmployee: async (id: string) => {
+    const { data, error } = await supabaseAdmin.from('funcionarios')
+      .select('id, nome_completo, telemovel, role, ativo')
+      .eq('id', id).eq('ativo', true).maybeSingle();
+    return { data, error };
+  },
+});
