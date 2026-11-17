@@ -16,6 +16,28 @@ function canReadClients(role: string): boolean {
   return role === 'admin' || role === 'funcionario';
 }
 
+async function findClientInStore(
+  employee: NonNullable<AuthenticatedRequest['authenticatedUser']>,
+  clientId: string,
+  requestedStoreId?: unknown,
+) {
+  let storeId = employee.loja_id;
+  if (employee.role === 'admin') {
+    if (typeof requestedStoreId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedStoreId)) {
+      return { client: null, error: null, invalidScope: true };
+    }
+    const { data: store, error: storeError } = await supabaseAdmin.from('lojas')
+      .select('id').eq('id', requestedStoreId).eq('ativo', true).maybeSingle();
+    if (storeError) return { client: null, error: storeError, invalidScope: false };
+    if (!store) return { client: null, error: null, invalidScope: true };
+    storeId = requestedStoreId;
+  }
+  if (!storeId) return { client: null, error: null, invalidScope: true };
+  const { data: client, error } = await supabaseAdmin.from('clientes')
+    .select('id,loja_registo_id').eq('id', clientId).eq('loja_registo_id', storeId).maybeSingle();
+  return { client, error, invalidScope: false };
+}
+
 clientsRouter.get('/', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (!employee || !canReadClients(employee.role) || (employee.role !== 'admin' && !employee.loja_id)) {
@@ -175,10 +197,9 @@ clientsRouter.get('/:id/documents', verifyAuth, async (req: AuthenticatedRequest
   const clientId = String(req.params.id || '');
   if (!employee || !canReadClients(employee.role) || (employee.role !== 'admin' && !employee.loja_id)) return res.status(403).json({ success: false, message: 'Acesso não autorizado.' });
   try {
-    let clientQuery = supabaseAdmin.from('clientes').select('id,loja_registo_id').eq('id', clientId);
-    if (employee.role !== 'admin') clientQuery = clientQuery.eq('loja_registo_id', employee.loja_id as string);
-    const { data: client, error: clientError } = await clientQuery.maybeSingle();
-    if (clientError || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
+    const { client, error: clientError, invalidScope } = await findClientInStore(employee, clientId, req.query.lojaId);
+    if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
+    if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
     const { data, error } = await supabaseAdmin.from('cliente_documentos')
       .select('id,tipo_documento,numero_documento,data_emissao,data_validade,mime_type,tamanho_bytes,uploaded_at,substituido_em,storage_path')
       .eq('cliente_id', clientId).order('uploaded_at', { ascending: false }).limit(50);
@@ -261,11 +282,9 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
   let storagePath = '';
   let previousId: string | null = null;
   try {
-    let clientQuery = supabaseAdmin.from('clientes').select('id,loja_registo_id')
-      .eq('id', clientId);
-    if (employee.role !== 'admin') clientQuery = clientQuery.eq('loja_registo_id', employee.loja_id as string);
-    const { data: client, error: clientError } = await clientQuery.maybeSingle();
-    if (clientError || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
+    const { client, error: clientError, invalidScope } = await findClientInStore(employee, clientId, body.lojaId);
+    if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
+    if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
 
     const { data: previous, error: previousError } = await supabaseAdmin.from('cliente_documentos')
       .select('id').eq('cliente_id', clientId).is('substituido_em', null).maybeSingle();
@@ -320,6 +339,9 @@ clientsRouter.patch('/:id/birthday-consent', verifyAuth, async (req: Authenticat
     return res.status(400).json({ success: false, message: 'Indique o consentimento de forma explícita.' });
   }
   try {
+    const { client, error: clientError, invalidScope } = await findClientInStore(employee, String(req.params.id || ''), req.body?.lojaId);
+    if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
+    if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
     const { data, error } = await supabaseAdmin.rpc('set_client_birthday_whatsapp_consent', {
       p_client_id: req.params.id,
       p_consent: consent,
@@ -344,10 +366,14 @@ clientsRouter.patch('/:id/status', verifyAuth, async (req: AuthenticatedRequest,
     return res.status(400).json({ success: false, message: 'Classificação de cliente inválida.' });
   }
 
+  const { client, error: clientError, invalidScope } = await findClientInStore(employee, String(req.params.id || ''), req.body?.lojaId);
+  if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
+  if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
   const { data, error } = await supabaseAdmin
     .from('clientes')
     .update({ status })
     .eq('id', req.params.id)
+    .eq('loja_registo_id', client.loja_registo_id)
     .select('id,status')
     .maybeSingle();
   if (error) return res.status(503).json({ success: false, message: 'Não foi possível atualizar o cliente.' });
