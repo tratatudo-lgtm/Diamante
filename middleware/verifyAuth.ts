@@ -14,18 +14,7 @@ export interface AuthenticatedRequest extends Request {
     telemovel?: string;
     ativo: boolean;
   };
-};
 }
-
-export const verifyAuth = createVerifyAuth({
-  secret: process.env.JWT_SECRET,
-  findActiveEmployee: async (id: string) => {
-    const { data, error } = await supabaseAdmin.from('funcionarios')
-      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
-      .eq('id', id).eq('ativo', true).maybeSingle();
-    return { data, error };
-  },
-});
 
 /** Validates the API JWT and re-loads the active employee from Supabase. */
 export interface VerifyAuthDependencies { secret: string | undefined; findActiveEmployee: (id: string) => Promise<{ data: any; error?: unknown | null }>; }
@@ -100,4 +89,15 @@ return async function verifyAuth(req: AuthenticatedRequest, res: Response, next:
   } catch {
     res.status(401).json({ success: false, message: 'Sessão inválida ou expirada.' });
   }
+};
 }
+
+export const verifyAuth = createVerifyAuth({
+  secret: process.env.JWT_SECRET,
+  findActiveEmployee: async (id: string) => {
+    const { data, error } = await supabaseAdmin.from('funcionarios')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
+      .eq('id', id).eq('ativo', true).maybeSingle();
+    return { data, error };
+  },
+});
