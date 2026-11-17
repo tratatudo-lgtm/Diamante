@@ -361,6 +361,19 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
     return res.status(403).json({ success: false, message: 'Não tem autorização para consultar clientes.' });
   }
   const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : '';
+  let lojaId = employee.loja_id;
+  if (employee.role === 'admin') {
+    const requestedStoreId = typeof req.query.lojaId === 'string' ? req.query.lojaId : '';
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedStoreId)) {
+      return res.status(400).json({ success: false, message: 'Seleccione uma loja válida.' });
+    }
+    const { data: store, error: storeError } = await supabaseAdmin.from('lojas')
+      .select('id').eq('id', requestedStoreId).eq('ativo', true).maybeSingle();
+    if (storeError) return res.status(503).json({ success: false, message: 'Não foi possível validar a loja.' });
+    if (!store) return res.status(404).json({ success: false, message: 'Loja não encontrada ou inactiva.' });
+    lojaId = requestedStoreId;
+  }
+  if (!lojaId) return res.status(403).json({ success: false, message: 'A conta não tem loja atribuída.' });
   try {
     const base = () => {
       let query = supabaseAdmin
@@ -368,7 +381,7 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
         .select('id,nome,bi_cc,nif,telemovel,loja_registo_id,created_at,tipo_documento,data_validade_documento,consentimento_whatsapp_aniversario')
         .order('created_at', { ascending: false })
         .limit(200);
-      if (employee.role !== 'admin') query = query.eq('loja_registo_id', employee.loja_id as string);
+      query = query.eq('loja_registo_id', lojaId as string);
       return query;
     };
 
@@ -397,8 +410,8 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
         .from('transacoes')
         .select('cliente_cc')
         .in('cliente_cc', ids);
-      // Funcionários não podem inferir actividade de compras de outras lojas.
-      if (employee.role !== 'admin') transactionsQuery = transactionsQuery.eq('loja_id', employee.loja_id as string);
+      // O histórico mostrado fica limitado à loja operacional seleccionada.
+      transactionsQuery = transactionsQuery.eq('loja_id', lojaId as string);
       const { data: txRows, error } = await transactionsQuery;
       if (error) throw error;
       for (const tx of txRows || []) counts.set(tx.cliente_cc, (counts.get(tx.cliente_cc) || 0) + 1);
