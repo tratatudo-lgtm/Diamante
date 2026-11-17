@@ -30,8 +30,9 @@ CREATE TABLE IF NOT EXISTS public.store_purchase_consent_evidence (
 );
 
 ALTER TABLE public.store_purchase_consent_evidence ENABLE ROW LEVEL SECURITY;
-REVOKE ALL PRIVILEGES ON TABLE public.store_purchase_consent_evidence FROM anon, authenticated;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.store_purchase_consent_evidence TO service_role;
+-- Remove Supabase's broad default table grants from service_role as well.
+REVOKE ALL PRIVILEGES ON TABLE public.store_purchase_consent_evidence FROM PUBLIC, anon, authenticated, service_role;
+GRANT SELECT, INSERT ON TABLE public.store_purchase_consent_evidence TO service_role;
 
 ALTER TABLE public.transacoes
   ADD COLUMN IF NOT EXISTS declaracao_assinada_id uuid
