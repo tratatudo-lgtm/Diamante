@@ -75,7 +75,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast,
       const response = await fetch(`/api/clients/${encodeURIComponent(clientId)}/birthday-consent`, {
         method: 'PATCH',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
-        body: JSON.stringify({ consentimento }),
+        body: JSON.stringify({ consentimento, lojaId: selectedStoreId || undefined }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || result?.success !== true) throw new Error(result?.message || 'Não foi possível registar o consentimento.');
@@ -107,7 +107,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast,
       const response = await fetch(`/api/clients/${encodeURIComponent(clientId)}/documents`, {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
-        body: JSON.stringify({ tipoDocumento: documentType, numeroDocumento: documentNumber, dataEmissao: documentIssueDate || null, dataValidade: documentExpiryDate, mimeType: documentFile.type, fileName: documentFile.name, fileBase64: base64 }),
+        body: JSON.stringify({ tipoDocumento: documentType, numeroDocumento: documentNumber, dataEmissao: documentIssueDate || null, dataValidade: documentExpiryDate, mimeType: documentFile.type, fileName: documentFile.name, fileBase64: base64, lojaId: selectedStoreId || undefined }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || result?.success !== true) throw new Error(result?.message || 'Falha ao actualizar documento.');
