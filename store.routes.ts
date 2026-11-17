@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
+import { decodeDeclarationFile } from './store-purchase-validation';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { supabaseAdmin } from './auth.service';
 
@@ -273,39 +274,18 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
   const clienteDocumento = typeof body.clienteCc === 'string' ? body.clienteCc.trim() : '';
   const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
   const encoded = typeof body.fileBase64 === 'string' ? body.fileBase64 : '';
-  const allowedMime = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
   const extByMime: Record<string, string> = {
     'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
   };
 
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey) ||
-      !clienteNome || clienteNome.length > 200 || !clienteDocumento || clienteDocumento.length > 80 ||
-      !allowedMime.includes(mimeType) || !encoded || encoded.length > 8_400_000 ||
-      !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 === 1) {
+      !clienteNome || clienteNome.length > 200 || !clienteDocumento || clienteDocumento.length > 80) {
     return res.status(400).json({ success: false, message: 'Anexe uma declaração PDF/JPEG/PNG/WebP válida até 6 MB.' });
   }
 
-  let fileBuffer: Buffer;
-  try {
-    fileBuffer = Buffer.from(encoded, 'base64');
-    if (!fileBuffer.length || fileBuffer.length > 6 * 1024 * 1024 ||
-        fileBuffer.toString('base64').replace(/=+$/, '') !== encoded.replace(/=+$/, '')) {
-      return res.status(400).json({ success: false, message: 'O ficheiro está vazio, excede 6 MB ou tem codificação inválida.' });
-    }
-  } catch {
-    return res.status(400).json({ success: false, message: 'Ficheiro inválido.' });
-  }
-
-  const signatureValid = mimeType === 'application/pdf'
-    ? fileBuffer.subarray(0, 5).toString('ascii') === '%PDF-'
-    : mimeType === 'image/jpeg'
-      ? fileBuffer.length >= 3 && fileBuffer[0] === 0xff && fileBuffer[1] === 0xd8 && fileBuffer[2] === 0xff
-      : mimeType === 'image/png'
-        ? fileBuffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-        : fileBuffer.length >= 12 && fileBuffer.subarray(0, 4).toString('ascii') === 'RIFF' &&
-          fileBuffer.subarray(8, 12).toString('ascii') === 'WEBP';
-  if (!signatureValid) {
-    return res.status(400).json({ success: false, message: 'O conteúdo do ficheiro não corresponde ao formato declarado.' });
+  const fileBuffer = decodeDeclarationFile(encoded, mimeType);
+  if (!fileBuffer) {
+    return res.status(400).json({ success: false, message: 'O ficheiro está vazio, excede 6 MB ou não corresponde a um PDF/JPEG/PNG/WebP válido.' });
   }
 
   const sha256 = createHash('sha256').update(fileBuffer).digest('hex');
