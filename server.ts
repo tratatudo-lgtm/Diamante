@@ -33,6 +33,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// A aplicação só confia no proxy local Nginx; nunca confiar cegamente em X-Forwarded-For.
+app.set('trust proxy', 'loopback');
 const args = process.argv.slice(2);
 const portArgIndex = args.indexOf('--port');
 const cliPort = portArgIndex !== -1 && args[portArgIndex + 1] ? parseInt(args[portArgIndex + 1], 10) : null;
@@ -88,18 +90,19 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
     return next();
   }
 
-  // Nunca confiar em X-Forwarded-For fornecido pelo cliente.
-  const remoteAddress = req.socket.remoteAddress;
+  // req.ip respeita apenas o proxy loopback explicitamente confiado acima.
+  // O Nginx acrescenta o IP real do cliente no fim de X-Forwarded-For.
+  const clientIp = typeof req.ip === 'string'
+    ? req.ip.trim().toLowerCase().replace(/^::ffff:/, '')
+    : '';
 
-  if (typeof remoteAddress !== 'string' || !remoteAddress.trim()) {
+  if (!clientIp) {
     res.status(503).json({
       success: false,
       message: 'Não foi possível validar a origem do pedido.',
     });
     return;
   }
-
-  const clientIp = remoteAddress.trim().toLowerCase().replace(/^::ffff:/, '');
   const now = Date.now();
   const windowMs = 60 * 1000;
   const maxAttempts = 30;
