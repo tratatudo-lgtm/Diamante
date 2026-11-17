@@ -15,7 +15,8 @@ CREATE INDEX IF NOT EXISTS idx_store_declaration_access_logs_actor_time
   ON public.store_purchase_declaration_access_logs (accessed_by, accessed_at DESC);
 
 ALTER TABLE public.store_purchase_declaration_access_logs ENABLE ROW LEVEL SECURITY;
-REVOKE ALL PRIVILEGES ON TABLE public.store_purchase_declaration_access_logs FROM PUBLIC, anon, authenticated;
+-- Supabase default privileges include UPDATE/DELETE for service_role; revoke them explicitly.
+REVOKE ALL PRIVILEGES ON TABLE public.store_purchase_declaration_access_logs FROM PUBLIC, anon, authenticated, service_role;
 GRANT SELECT, INSERT ON TABLE public.store_purchase_declaration_access_logs TO service_role;
 
 CREATE OR REPLACE FUNCTION public.prevent_mutation_of_linked_purchase_declaration()
