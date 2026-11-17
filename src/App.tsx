@@ -135,7 +135,11 @@ function AppRouter() {
       if (isAuthenticated) {
         // Se estiver autenticado e tentar aceder a login/register/landing, direciona para o painel apropriado
         if (currentPath === '/login' || currentPath === '/register' || currentPath === '/') {
-          const target = isAdmin ? '/dashboard-admin' : '/loja-atual';
+          // No domínio da loja, qualquer sessão válida abre a operação da loja,
+          // incluindo administradores. No domínio admin, o admin abre o Dashboard.
+          const target = portalMode === 'store'
+            ? '/loja-atual'
+            : isAdmin ? '/dashboard-admin' : '/loja-atual';
           navigate(target);
           return;
         }
