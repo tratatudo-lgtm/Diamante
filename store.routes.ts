@@ -1,3 +1,4 @@
+import { createStoreDeclarationRouter } from './store-declaration-router';
 import { Router, Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { decodeDeclarationFile } from './store-purchase-validation';
@@ -382,131 +383,37 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
   }
 });
 
-// Consulta controlada da declaração arquivada. O bucket permanece privado:
-// a aplicação verifica a associação e o SHA-256 antes de emitir URL assinada curta.
-async function deliverPurchaseDeclaration(
-  purchaseId: string,
-  actor: { id: string; role: string; lojaId: string | null },
-  res: Response
-): Promise<void> {
-  if (!isUuid(purchaseId)) {
-    res.status(400).json({ success: false, message: 'Identificador de compra inválido.' });
-    return;
-  }
-
-  try {
-    const { data: purchase, error: purchaseError } = await supabaseAdmin
-      .from('transacoes')
-      .select('id, loja_id, declaracao_assinada_id')
-      .eq('id', purchaseId)
-      .maybeSingle();
-
-    if (purchaseError) {
-      console.error('[Store Declaration] Falha ao consultar a compra.');
-      res.status(503).json({ success: false, message: 'Não foi possível validar a compra.' });
-      return;
-    }
-    if (!purchase) {
-      res.status(404).json({ success: false, message: 'Compra não encontrada.' });
-      return;
-    }
-    if (!canAccessPurchaseDeclaration(actor, purchase.loja_id)) {
-      res.status(403).json({ success: false, message: 'Não tem autorização para consultar documentos desta loja.' });
-      return;
-    }
-    if (!purchase.declaracao_assinada_id) {
-      res.status(404).json({ success: false, message: 'Esta compra não tem declaração arquivada.' });
-      return;
-    }
-
-    const { data: evidence, error: evidenceError } = await supabaseAdmin
-      .from('store_purchase_consent_evidence')
-      .select('id, storage_path, mime_type, tamanho_bytes, sha256, versao_declaracao')
-      .eq('id', purchase.declaracao_assinada_id)
-      .maybeSingle();
-
-    if (evidenceError || !evidence) {
-      console.error('[Store Declaration] Evidência associada indisponível.');
-      res.status(503).json({ success: false, message: 'Não foi possível validar o documento arquivado.' });
-      return;
-    }
-
-    const { data: file, error: downloadError } = await supabaseAdmin.storage
-      .from('declaracoes-compras')
-      .download(evidence.storage_path);
-    if (downloadError || !file) {
-      console.error('[Store Declaration] Falha ao obter o ficheiro privado.');
-      res.status(503).json({ success: false, message: 'O documento não está temporariamente disponível.' });
-      return;
-    }
-
-    const bytes = Buffer.from(await file.arrayBuffer());
-    const actualHash = createHash('sha256').update(bytes).digest('hex');
-    if (bytes.length !== Number(evidence.tamanho_bytes) || actualHash !== evidence.sha256) {
-      console.error('[Store Declaration] Integridade documental não confirmada.');
-      res.status(409).json({ success: false, message: 'A integridade do documento não pôde ser confirmada. O acesso foi bloqueado.' });
-      return;
-    }
-
-    const { data: signed, error: signedError } = await supabaseAdmin.storage
-      .from('declaracoes-compras')
-      .createSignedUrl(evidence.storage_path, 60);
-    if (signedError || !signed?.signedUrl) {
-      console.error('[Store Declaration] Falha ao criar URL temporário.');
-      res.status(503).json({ success: false, message: 'Não foi possível disponibilizar o documento.' });
-      return;
-    }
-
-    const { error: auditError } = await supabaseAdmin
-      .from('store_purchase_declaration_access_logs')
-      .insert({
-        transacao_id: purchase.id,
-        evidence_id: evidence.id,
-        accessed_by: actor.id,
-        accessed_role: actor.role,
-        sha256_verified: true,
-      });
-    if (auditError) {
-      console.error('[Store Declaration] Falha ao registar auditoria; URL não disponibilizado.');
-      res.status(503).json({ success: false, message: 'Não foi possível registar o acesso ao documento.' });
-      return;
-    }
-
-    res.status(200).json({
-      success: true,
-      url: signed.signedUrl,
-      expiresInSeconds: 60,
-      mimeType: evidence.mime_type,
-      sha256: actualHash,
-      declarationVersion: evidence.versao_declaracao,
-    });
-  } catch {
-    console.error('[Store Declaration] Erro interno ao consultar documento.');
-    res.status(500).json({ success: false, message: 'Erro interno ao consultar a declaração.' });
-  }
-}
-
-storeRouter.get('/purchases/:id/declaration', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const employee = req.authenticatedUser;
-  if (!employee?.ativo || employee.role !== 'funcionario' || !employee.loja_id) {
-    res.status(403).json({ success: false, message: 'A consulta de declarações está reservada a funcionários ativos da loja.' });
-    return;
-  }
-  await deliverPurchaseDeclaration(req.params.id, {
-    id: employee.id, role: employee.role, lojaId: employee.loja_id,
-  }, res);
-});
-
-storeRouter.get('/admin/purchases/:id/declaration', verifyAdmin, async (req: any, res: Response) => {
-  const admin = req.adminUser;
-  if (!admin?.id || admin.role !== 'admin') {
-    res.status(403).json({ success: false, message: 'Acesso reservado a administradores ativos.' });
-    return;
-  }
-  await deliverPurchaseDeclaration(req.params.id, {
-    id: admin.id, role: 'admin', lojaId: null,
-  }, res);
-});
+// Rotas de consulta isoladas para permitir testes HTTP sem serviços externos.
+storeRouter.use(createStoreDeclarationRouter({
+  verifyAuth,
+  verifyAdmin,
+  repository: {
+    async getPurchase(id) {
+      const { data, error } = await supabaseAdmin.from('transacoes')
+        .select('id, loja_id, declaracao_assinada_id').eq('id', id).maybeSingle();
+      return { data, error };
+    },
+    async getEvidence(id) {
+      const { data, error } = await supabaseAdmin.from('store_purchase_consent_evidence')
+        .select('id, storage_path, mime_type, tamanho_bytes, sha256, versao_declaracao')
+        .eq('id', id).maybeSingle();
+      return { data, error };
+    },
+    async download(path) {
+      const { data, error } = await supabaseAdmin.storage.from('declaracoes-compras').download(path);
+      return { data: data ? new Uint8Array(await data.arrayBuffer()) : null, error };
+    },
+    async createSignedUrl(path, expiresInSeconds) {
+      const { data, error } = await supabaseAdmin.storage.from('declaracoes-compras')
+        .createSignedUrl(path, expiresInSeconds);
+      return { data: data ? { signedUrl: data.signedUrl } : null, error };
+    },
+    async recordAccess(log) {
+      const { error } = await supabaseAdmin.from('store_purchase_declaration_access_logs').insert(log);
+      return { error };
+    },
+  },
+}));
 
 storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
