@@ -315,8 +315,16 @@ export async function verifyOtpAndAuthenticate(
   role?: string;
   statusCode?: number;
 }> {
-  const formatted = formatPortuguesePhone(rawPhone);
   const code = typeof inputCode === 'string' ? inputCode.trim() : '';
+  if (typeof rawPhone !== 'string' || !/^\d{6}$/.test(code)) {
+    return {
+      success: false,
+      message: 'Introduza um número de telemóvel válido e um código de 6 algarismos.',
+      statusCode: 400,
+    };
+  }
+
+  const formatted = formatPortuguesePhone(rawPhone);
 
   if (!formatted) {
     return {
