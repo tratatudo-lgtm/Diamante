@@ -735,6 +735,7 @@ async function handleUpdateMargensConfig(req: AdminRequest, res: Response): Prom
     Number.isFinite(t.valor_limite_sem_aprovacao) && t.valor_limite_sem_aprovacao >= 0 &&
     Number.isFinite(t.peso_limite_sem_aprovacao_g) && t.peso_limite_sem_aprovacao_g >= 0 &&
     Number.isFinite(t.exigir_dupla_assinatura_acima) && t.exigir_dupla_assinatura_acima >= 0 &&
+    (!t.ativo || t.exigir_dupla_assinatura_acima > 0) &&
     typeof t.notificar_whatsapp_master === 'boolean' &&
     typeof t.ativo === 'boolean' &&
     (t.telemovel_alerta === undefined || (typeof t.telemovel_alerta === 'string' && t.telemovel_alerta.length <= 40));
