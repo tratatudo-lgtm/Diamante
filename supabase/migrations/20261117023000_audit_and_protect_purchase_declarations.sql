@@ -50,3 +50,37 @@ CREATE TRIGGER trg_prevent_mutation_of_linked_purchase_declaration
 
 COMMENT ON TABLE public.store_purchase_declaration_access_logs IS
   'Registo imutável de consultas autorizadas às declarações de compra; escrito apenas pelo backend service_role.';
+
+
+-- Também proteger o objeto físico no Storage. A proteção dos metadados,
+-- isoladamente, não impediria uma remoção/substituição administrativa do blob.
+CREATE OR REPLACE FUNCTION public.prevent_mutation_of_linked_declaration_storage_object()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, storage
+AS $function$
+BEGIN
+  IF OLD.bucket_id = 'declaracoes-compras' AND EXISTS (
+    SELECT 1
+    FROM public.store_purchase_consent_evidence e
+    JOIN public.transacoes t ON t.declaracao_assinada_id = e.id
+    WHERE e.storage_path = OLD.name
+  ) THEN
+    RAISE EXCEPTION 'O ficheiro de uma declaração associada a uma compra não pode ser alterado ou eliminado'
+      USING ERRCODE = '55000';
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+DROP TRIGGER IF EXISTS trg_prevent_mutation_of_linked_declaration_storage_object
+  ON storage.objects;
+CREATE TRIGGER trg_prevent_mutation_of_linked_declaration_storage_object
+  BEFORE UPDATE OR DELETE ON storage.objects
+  FOR EACH ROW
+  EXECUTE FUNCTION public.prevent_mutation_of_linked_declaration_storage_object();
