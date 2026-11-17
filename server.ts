@@ -288,7 +288,10 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
     const doubleSignatureAt = thresholds?.ativo === true
       ? Number(thresholds.exigir_dupla_assinatura_acima) || 0
       : 0;
-    const requiresDoubleSignature = doubleSignatureAt > 0 && Number(transaction.valor_final) >= doubleSignatureAt;
+    // Once the first signature exists, never downgrade the transaction to
+    // single approval even if the threshold configuration changes meanwhile.
+    const requiresDoubleSignature = Boolean(transaction.primeira_aprovacao_por) ||
+      (doubleSignatureAt > 0 && Number(transaction.valor_final) >= doubleSignatureAt);
 
     if (requiresDoubleSignature && !transaction.primeira_aprovacao_por) {
       const now = new Date().toISOString();
