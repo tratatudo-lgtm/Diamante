@@ -5,7 +5,6 @@ import { decodeDeclarationFile } from './store-purchase-validation';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { supabaseAdmin } from './auth.service';
 import { verifyAdmin } from './middleware/verifyAdmin';
-import { canAccessPurchaseDeclaration, isUuid } from './store-declaration-access';
 
 const storeRouter = Router();
 
