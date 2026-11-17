@@ -255,19 +255,38 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
   if (challengeError || challengeStatus !== 'created') {
     return {
       success: false,
-      message: challengeStatus === 'rate_limited'
-        ? 'Demasiados pedidos de código. Tente novamente mais tarde.'
-        : 'Não foi possível preparar a validação. Tente novamente mais tarde.',
-      statusCode: challengeStatus === 'rate_limited' ? 429 : 503,
+      message: challengeStatus === 'pending'
+        ? 'Já existe um código ativo. Utilize o código recebido ou aguarde a sua expiração.'
+        : challengeStatus === 'rate_limited'
+          ? 'Demasiados pedidos de código. Tente novamente mais tarde.'
+          : 'Não foi possível preparar a validação. Tente novamente mais tarde.',
+      statusCode: challengeStatus === 'pending' || challengeStatus === 'rate_limited' ? 429 : 503,
     };
   }
 
   console.log('[Auth Service] Utilizador validado; a iniciar envio de OTP.');
 
-  // 3. Envia código via Evolution API
-  const sendResult = await sendWhatsAppOtp(formatted, otpCode);
+  // 3. Envia código via Evolution API. Revoke only this exact challenge if delivery fails.
+  let sendResult: Awaited<ReturnType<typeof sendWhatsAppOtp>>;
+  try {
+    sendResult = await sendWhatsAppOtp(formatted, otpCode);
+  } catch {
+    await supabaseAdmin.rpc('revoke_whatsapp_otp_challenge', {
+      p_phone_hash: phoneHash,
+      p_code_hash: codeHash,
+    });
+    return {
+      success: false,
+      message: 'Não foi possível confirmar o envio real do código por WhatsApp. Solicite um novo código mais tarde.',
+      statusCode: 502,
+    };
+  }
+
   if (!sendResult.success || sendResult.simulated) {
-    await supabaseAdmin.rpc('revoke_whatsapp_otp_challenge', { p_phone_hash: phoneHash });
+    await supabaseAdmin.rpc('revoke_whatsapp_otp_challenge', {
+      p_phone_hash: phoneHash,
+      p_code_hash: codeHash,
+    });
     return {
       success: false,
       message: 'Não foi possível confirmar o envio real do código por WhatsApp. Solicite um novo código mais tarde.',
