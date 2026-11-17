@@ -542,14 +542,14 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                       <input
                         id="dual-purchase-approval"
                         type="checkbox"
-                        checked={tetos.ativo}
-                        onChange={(e) => setTetos({ ...tetos, ativo: e.target.checked })}
+                        checked={tetos.exigir_dupla_assinatura}
+                        onChange={(e) => setTetos({ ...tetos, exigir_dupla_assinatura: e.target.checked })}
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D4AF37]"></div>
                     </label>
                   </div>
-                  <div className={tetos.ativo ? '' : 'opacity-50'}>
+                  <div className={tetos.exigir_dupla_assinatura ? '' : 'opacity-50'}>
                     <label htmlFor="dual-purchase-threshold" className="block text-xs font-semibold text-white mb-1">
                       Limite a partir do qual são necessárias duas assinaturas (€)
                     </label>
@@ -559,7 +559,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                         type="number"
                         min="0.01"
                         step="50"
-                        disabled={!tetos.ativo}
+                        disabled={!tetos.exigir_dupla_assinatura}
                         value={tetos.exigir_dupla_assinatura_acima}
                         onChange={(e) =>
                           setTetos({ ...tetos, exigir_dupla_assinatura_acima: parseFloat(e.target.value) || 0 })
@@ -568,7 +568,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                       />
                       <span className="text-sm font-mono text-slate-400">EUR</span>
                     </div>
-                    {tetos.ativo && tetos.exigir_dupla_assinatura_acima <= 0 && (
+                    {tetos.exigir_dupla_assinatura && tetos.exigir_dupla_assinatura_acima <= 0 && (
                       <p className="text-[11px] text-amber-400 mt-2">
                         Define um limite superior a zero para ativar a regra de dupla aprovação.
                       </p>
