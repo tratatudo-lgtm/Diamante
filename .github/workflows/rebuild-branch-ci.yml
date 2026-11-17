@@ -41,5 +41,8 @@ jobs:
       - name: TypeScript check
         run: bun run lint
 
+      - name: Automated unit tests
+        run: bun run test
+
       - name: Production build
         run: bun run build
