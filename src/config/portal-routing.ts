@@ -25,8 +25,9 @@ export function isRoleAllowedOnPortal(
   }
 
   if (portal === 'store') {
-    return typeof role === 'string' && role.trim().length > 0
-      && role.trim().toLowerCase() !== 'admin';
+    // Administradores também podem entrar no portal operacional da loja.
+    // As rotas e APIs administrativas continuam protegidas por role no backend.
+    return typeof role === 'string' && role.trim().length > 0;
   }
 
   return true;
