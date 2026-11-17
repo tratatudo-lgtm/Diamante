@@ -260,24 +260,23 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
               </div>
 
               {!isAdmin && (
-              {/* Indicador Status: Online / Offline */}
-              <div
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${
-                  isClockedIn
-                    ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-400'
-                    : 'bg-rose-950/60 border-rose-700/60 text-rose-400'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isClockedIn ? 'bg-emerald-400' : 'bg-rose-500'
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${
+                    isClockedIn
+                      ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-400'
+                      : 'bg-rose-950/60 border-rose-700/60 text-rose-400'
                   }`}
-                />
-                <span>{isClockedIn ? 'Turno Ativo (Online)' : 'Fora de Turno (Offline)'}</span>
-              </div>
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isClockedIn ? 'bg-emerald-400' : 'bg-rose-500'
+                    }`}
+                  />
+                  <span>{isClockedIn ? 'Turno Ativo (Online)' : 'Fora de Turno (Offline)'}</span>
+                </div>
+              )}
             </div>
           </div>
-              )}
 
           {!isAdmin && (
   
