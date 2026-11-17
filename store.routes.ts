@@ -332,12 +332,13 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
   try {
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('store_purchase_consent_evidence')
-      .select('id,funcionario_id,loja_id,cliente_nome,cliente_documento,sha256')
+      .select('id,funcionario_id,actor_role,loja_id,cliente_nome,cliente_documento,sha256')
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
     if (existingError) throw existingError;
     if (existing) {
       const sameEvidence = existing.funcionario_id === employee.id &&
+        existing.actor_role === employee.role &&
         existing.loja_id === lojaId &&
         existing.cliente_nome === clienteNome &&
         existing.cliente_documento === clienteDocumento &&
@@ -373,7 +374,7 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
       if (insertError?.code === '23505') {
         const { data: concurrent, error: concurrentLookupError } = await supabaseAdmin
           .from('store_purchase_consent_evidence')
-          .select('id,funcionario_id,loja_id,cliente_nome,cliente_documento,sha256')
+          .select('id,funcionario_id,actor_role,loja_id,cliente_nome,cliente_documento,sha256')
           .eq('idempotency_key', idempotencyKey)
           .maybeSingle();
 
@@ -386,6 +387,7 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
 
         await supabaseAdmin.storage.from('declaracoes-compras').remove([path]);
         if (concurrent.funcionario_id === employee.id &&
+            concurrent.actor_role === employee.role &&
             concurrent.loja_id === lojaId && concurrent.cliente_nome === clienteNome &&
             concurrent.cliente_documento === clienteDocumento && concurrent.sha256 === sha256) {
           return res.status(200).json({ success: true, declarationEvidenceId: concurrent.id, replay: true });
