@@ -162,8 +162,13 @@ export default function LoginPage({ onNavigate, onBackToLanding }: LoginPageProp
       if (!data?.user?.id || !data?.token || !userRole) throw new Error('O servidor não devolveu uma sessão de funcionário válida.');
       setDirectSession(data.user, userRole, data.token);
 
-      // Redirecionamento baseado na role real da BD
-      const targetPath = userRole === 'admin' ? '/dashboard-admin' : '/loja-atual';
+      // O portal de destino prevalece sobre a role para a experiência operacional:
+      // um admin que inicia sessão no domínio da loja entra na Sala de Operações.
+      const isStorePortal = typeof window !== 'undefined'
+        && window.location.hostname.trim().toLowerCase() === 'loja-diamantedouro.duckdns.org';
+      const targetPath = isStorePortal
+        ? '/loja-atual'
+        : userRole === 'admin' ? '/dashboard-admin' : '/loja-atual';
       if (onNavigate) {
         onNavigate(targetPath);
       } else {
