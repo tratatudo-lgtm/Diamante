@@ -122,6 +122,10 @@ function AppRouter() {
         if (currentPath !== '/') navigate('/');
         return;
       }
+      if ((portalMode === 'store' || portalMode === 'admin') && currentPath === '/') {
+        navigate('/login');
+        return;
+      }
       if (currentPath === '/register') {
         navigate('/login');
         return;
@@ -177,7 +181,7 @@ function AppRouter() {
   }
 
   // 3. Ecrã de Apresentação Pré-Login (Landing Page Oficial)
-  if (!isAuthenticated || currentPath === '/') {
+  if ((!isAuthenticated && portalMode === 'app') || currentPath === '/') {
     return <LandingPage onAccessSystem={() => navigate('/login')} />;
   }
 
