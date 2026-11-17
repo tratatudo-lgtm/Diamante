@@ -63,10 +63,10 @@ export interface PurchaseApprovalState {
  */
 export function requiresSecondPurchaseApproval(
   transaction: PurchaseApprovalState,
-  thresholdEnabled: boolean,
+  dualApprovalEnabled: boolean,
   threshold: number,
 ): boolean {
   if (Boolean(transaction.primeira_aprovacao_por)) return true;
-  return thresholdEnabled && Number.isFinite(threshold) && threshold > 0 &&
+  return dualApprovalEnabled && Number.isFinite(threshold) && threshold > 0 &&
     Number(transaction.valor_final) >= threshold;
 }
