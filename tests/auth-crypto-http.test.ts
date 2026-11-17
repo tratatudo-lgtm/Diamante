@@ -8,6 +8,7 @@ const secret = 'test-only-secret-with-at-least-32-characters-long';
 process.env.JWT_SECRET = secret;
 process.env.SUPABASE_URL = 'http://127.0.0.1:54321';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only-service-role-key-not-used-for-network';
+process.env.OTP_HMAC_SECRET = 'test-only-otp-hmac-secret-with-at-least-32-characters';
 
 const { createVerifyAuth } = await import('../middleware/verifyAuth');
 const { createVerifyAdmin } = await import('../middleware/verifyAdmin');
