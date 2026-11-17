@@ -91,7 +91,8 @@ export interface TetoAprovacaoConfig {
   exigir_dupla_assinatura_acima: number; // EUR (ex: 5000)
   notificar_whatsapp_master: boolean;
   telemovel_alerta?: string;
-  ativo: boolean; // Ativa a exigência de dois administradores acima do limite configurado.
+  ativo: boolean; // Estado geral da configuração, independente da política de aprovação.
+  exigir_dupla_assinatura: boolean; // Exige dois administradores a partir do limite definido.
 }
 
 export interface ContaBancariaConfig {
