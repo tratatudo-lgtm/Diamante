@@ -1,0 +1,39 @@
+services:
+  diamante-os:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:?Set VITE_SUPABASE_URL in .env}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:?Set VITE_SUPABASE_ANON_KEY in .env}
+    image: diamante-os:production
+    container_name: diamante-os
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      FRONTEND_URL: https://diamantedouro.duckdns.org
+      APP_URL: https://diamantedouro.duckdns.org
+      EVOLUTION_API_URL: http://evolution-api:8080
+      EVOLUTION_INSTANCE: diamante-os
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - evolution-net
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+networks:
+  evolution-net:
+    external: true
+    name: evolution-docker_evolution-net
