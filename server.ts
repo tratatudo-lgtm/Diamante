@@ -313,12 +313,11 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
 
     if (result.status !== 200) return res.status(result.status).json(result.body);
 
-    if (result.body.requiresSecondApproval === false) {
+    if ('approved' in result) {
       const approved = result.approved;
-      const now = result.approvedAt;
       const io = (globalThis as any).io;
       if (io) {
-        const event = { id: approved.id, loja_id: approved.loja_id, estado: 'aprovado', approved_at: now };
+        const event = { id: approved.id, loja_id: approved.loja_id, estado: 'aprovado', approved_at: result.approvedAt };
         io.to('admin').emit('transaction:approved', event);
         if (approved.loja_id) io.to('store:' + approved.loja_id).emit('transaction:approved', event);
       }
