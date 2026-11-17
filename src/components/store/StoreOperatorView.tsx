@@ -205,7 +205,7 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
         )}
 
         {activeTab === 3 && (
-          <ProtectedClients onShowToast={addToast} />
+          <ProtectedClients onShowToast={addToast} selectedStoreId={role === 'admin' ? selectedStoreId : undefined} />
         )}
 
         {activeTab === 4 && (
