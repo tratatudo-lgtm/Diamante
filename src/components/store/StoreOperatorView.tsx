@@ -30,6 +30,7 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
   // 2: Inventário
   // 3: Clientes Protegidos
   // 4: Perfil & Configurações
+  const role = userSession?.role || funcionario?.role;
   const [activeTab, setActiveTab] = useState<number>(0);
   const [activeStores, setActiveStores] = useState<Array<{ id: string; nome: string; codigo_loja: string }>>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>(() => sessionStorage.getItem('diamante_admin_store_scope') || '');
@@ -91,7 +92,6 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
     onNavigate('/login');
   };
 
-  const role = userSession?.role || funcionario?.role;
   const lojaNome = userSession?.loja_nome || 'Sala de Operações';
   const selectedStore = activeStores.find((store) => store.id === selectedStoreId);
   const codigoLoja = selectedStore?.codigo_loja || userSession?.codigo_loja || 'LOJA';
