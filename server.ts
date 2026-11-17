@@ -286,14 +286,14 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
     }
 
     const thresholds = settings?.valor?.tetos;
-    const doubleSignatureAt = thresholds?.ativo === true
+    const doubleSignatureAt = thresholds?.exigir_dupla_assinatura === true
       ? Number(thresholds.exigir_dupla_assinatura_acima) || 0
       : 0;
     // Once the first signature exists, never downgrade the transaction to
     // single approval even if the threshold configuration changes meanwhile.
     const requiresDoubleSignature = requiresSecondPurchaseApproval(
       transaction,
-      thresholds?.ativo === true,
+      thresholds?.exigir_dupla_assinatura === true,
       doubleSignatureAt,
     );
 
