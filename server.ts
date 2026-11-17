@@ -45,6 +45,9 @@ const isProduction = process.env.NODE_ENV === 'production';
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   process.env.APP_URL,
+  'https://diamantedouro.duckdns.org',
+  'https://loja-diamantedouro.duckdns.org',
+  'https://admin-diamantedouro.duckdns.org',
   `http://localhost:${PORT}`,
   'http://localhost:3000',
   'http://localhost:5173',
