@@ -41,7 +41,7 @@ return async function verifyAdmin(
 
     let decoded: any;
     try {
-      decoded = jwt.verify(authHeader.slice(7).trim(), dependencies.secret);
+      decoded = jwt.verify(authHeader.slice(7).trim(), dependencies.secret, { algorithms: ['HS256'] });
     } catch {
       res.status(401).json({ success: false, message: 'Sessão inválida ou expirada.' });
       return;
@@ -61,7 +61,10 @@ return async function verifyAdmin(
       return;
     }
 
-    if (!funcionario || funcionario.role !== 'admin') {
+    const adminRole = typeof funcionario?.role === 'string'
+      ? funcionario.role.trim().toLowerCase()
+      : '';
+    if (!funcionario || funcionario.ativo !== true || funcionario.id !== userId || adminRole !== 'admin') {
       res.status(403).json({ success: false, message: 'Acesso reservado a administradores autorizados.' });
       return;
     }
@@ -69,7 +72,7 @@ return async function verifyAdmin(
     req.adminUser = {
       id: funcionario.id,
       telemovel: funcionario.telemovel || undefined,
-      role: funcionario.role,
+      role: adminRole,
       nome_completo: funcionario.nome_completo || undefined,
     };
 
