@@ -50,6 +50,8 @@ BEGIN
     RETURN;
   END IF;
 
+  -- Never replace a still-valid challenge. This prevents concurrent requests
+  -- from delivering different codes while only the last code remains usable.
   INSERT INTO public.whatsapp_otp_challenges AS current_challenge (
     phone_hash, employee_id, code_hash, expires_at, attempts,
     request_window_started_at, request_count, consumed_at, created_at, updated_at
@@ -74,12 +76,25 @@ BEGIN
     END,
     consumed_at = NULL,
     updated_at = now()
-  WHERE current_challenge.request_window_started_at <= now() - interval '15 minutes'
-     OR current_challenge.request_count < 5
+  WHERE (current_challenge.consumed_at IS NOT NULL OR current_challenge.expires_at <= now())
+    AND (
+      current_challenge.request_window_started_at <= now() - interval '15 minutes'
+      OR current_challenge.request_count < 5
+    )
   RETURNING current_challenge.request_count INTO v_request_count;
 
   IF NOT FOUND THEN
-    RETURN QUERY SELECT 'rate_limited'::text;
+    IF EXISTS (
+      SELECT 1
+      FROM public.whatsapp_otp_challenges
+      WHERE phone_hash = p_phone_hash
+        AND consumed_at IS NULL
+        AND expires_at > now()
+    ) THEN
+      RETURN QUERY SELECT 'pending'::text;
+    ELSE
+      RETURN QUERY SELECT 'rate_limited'::text;
+    END IF;
     RETURN;
   END IF;
 
@@ -157,7 +172,12 @@ BEGIN
 END;
 $function$;
 
-CREATE OR REPLACE FUNCTION public.revoke_whatsapp_otp_challenge(p_phone_hash text)
+DROP FUNCTION IF EXISTS public.revoke_whatsapp_otp_challenge(text);
+
+CREATE OR REPLACE FUNCTION public.revoke_whatsapp_otp_challenge(
+  p_phone_hash text,
+  p_code_hash text
+)
 RETURNS void
 LANGUAGE sql
 SECURITY DEFINER
@@ -165,15 +185,17 @@ SET search_path = pg_catalog, public, pg_temp
 AS $function$
   UPDATE public.whatsapp_otp_challenges
   SET consumed_at = COALESCE(consumed_at, now()), updated_at = now()
-  WHERE phone_hash = p_phone_hash;
+  WHERE phone_hash = p_phone_hash
+    AND code_hash = p_code_hash
+    AND consumed_at IS NULL;
 $function$;
 
 REVOKE ALL ON FUNCTION public.create_whatsapp_otp_challenge(text, uuid, text, timestamptz) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.consume_whatsapp_otp_challenge(text, text) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.revoke_whatsapp_otp_challenge(text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.revoke_whatsapp_otp_challenge(text, text) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_whatsapp_otp_challenge(text, uuid, text, timestamptz) TO service_role;
 GRANT EXECUTE ON FUNCTION public.consume_whatsapp_otp_challenge(text, text) TO service_role;
-GRANT EXECUTE ON FUNCTION public.revoke_whatsapp_otp_challenge(text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.revoke_whatsapp_otp_challenge(text, text) TO service_role;
 
 COMMENT ON TABLE public.whatsapp_otp_challenges IS
   'Desafios OTP de autenticação WhatsApp persistentes; os hashes são HMAC e as linhas só são operadas por RPCs do backend.';
