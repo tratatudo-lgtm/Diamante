@@ -18,13 +18,27 @@ export interface AdminRequest extends Request {
     role: string;
     nome_completo?: string;
   };
+};
 }
+
+export const verifyAdmin = createVerifyAdmin({
+  secret: JWT_SECRET,
+  findActiveEmployee: async (id: string) => {
+    const { data, error } = await supabaseAdmin.from('funcionarios')
+      .select('id, nome_completo, telemovel, role, ativo')
+      .eq('id', id).eq('ativo', true).maybeSingle();
+    return { data, error };
+  },
+});
 
 /**
  * Autoriza exclusivamente funcionários ativos com role "admin" na tabela
  * funcionarios. Cabeçalhos e campos do body nunca são prova de identidade.
  */
-export async function verifyAdmin(
+export interface VerifyAdminDependencies { secret: string; findActiveEmployee: (id: string) => Promise<{ data: any; error?: unknown | null }>; }
+
+export function createVerifyAdmin(dependencies: VerifyAdminDependencies) {
+return async function verifyAdmin(
   req: AdminRequest,
   res: Response,
   next: NextFunction
@@ -38,7 +52,7 @@ export async function verifyAdmin(
 
     let decoded: any;
     try {
-      decoded = jwt.verify(authHeader.slice(7).trim(), JWT_SECRET);
+      decoded = jwt.verify(authHeader.slice(7).trim(), dependencies.secret);
     } catch {
       res.status(401).json({ success: false, message: 'Sessão inválida ou expirada.' });
       return;
@@ -50,12 +64,7 @@ export async function verifyAdmin(
       return;
     }
 
-    const { data: funcionario, error } = await supabaseAdmin
-      .from('funcionarios')
-      .select('id, nome_completo, telemovel, role, ativo')
-      .eq('id', userId)
-      .eq('ativo', true)
-      .maybeSingle();
+    const { data: funcionario, error } = await dependencies.findActiveEmployee(userId);
 
     if (error) {
       console.error('[verifyAdmin] Falha na consulta de permissões do funcionário.');
