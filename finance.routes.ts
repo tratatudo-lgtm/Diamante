@@ -130,7 +130,7 @@ router.patch('/payments/:id/status', async (req: Request, res: Response) => {
   try {
     const id = text(req.params.id, 64);
     const estado = text(req.body?.estado, 16);
-    if (!id || !['pago', 'rejeitado'].includes(estado)) {
+    if (!UUID_RE.test(id) || !['pago', 'rejeitado'].includes(estado)) {
       return res.status(400).json({ success: false, message: 'Estado de pagamento inválido.' });
     }
 
