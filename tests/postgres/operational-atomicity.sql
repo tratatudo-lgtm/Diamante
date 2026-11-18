@@ -179,6 +179,23 @@ CREATE TABLE public.crm_expansion_site_events(
  old_values jsonb,new_values jsonb,created_at timestamptz NOT NULL DEFAULT now()
 );
 \ir ../../supabase/migrations/20261118220000_atomic_crm_opportunity_expansion_writes.sql
+DO $crm_rpc_permissions$
+BEGIN
+ IF has_function_privilege('authenticated','public.create_crm_opportunity_with_event(uuid,jsonb)','EXECUTE')
+ OR has_function_privilege('authenticated','public.update_crm_opportunity_with_event(uuid,uuid,timestamptz,jsonb)','EXECUTE')
+ OR has_function_privilege('authenticated','public.create_crm_expansion_site_with_event(uuid,jsonb)','EXECUTE')
+ OR has_function_privilege('authenticated','public.update_crm_expansion_site_with_event(uuid,uuid,timestamptz,jsonb)','EXECUTE') THEN
+  RAISE EXCEPTION 'authenticated não pode executar RPCs CRM SECURITY DEFINER';
+ END IF;
+ IF NOT has_function_privilege('service_role','public.create_crm_opportunity_with_event(uuid,jsonb)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.update_crm_opportunity_with_event(uuid,uuid,timestamptz,jsonb)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.create_crm_expansion_site_with_event(uuid,jsonb)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.update_crm_expansion_site_with_event(uuid,uuid,timestamptz,jsonb)','EXECUTE') THEN
+  RAISE EXCEPTION 'service_role não tem EXECUTE nas RPCs CRM';
+ END IF;
+END $crm_rpc_permissions$;
+
+
 \ir ../../supabase/migrations/20261118210000_atomic_collab_comment_audit.sql
 \ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
 \ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
@@ -567,6 +584,14 @@ CREATE TRIGGER fail_expansion_audit BEFORE INSERT ON public.crm_expansion_site_e
 DO $crm_atomic$
 DECLARE v jsonb; v_id uuid; n integer; failed boolean; stamp timestamptz; v_site_id uuid;
 BEGIN
+ failed:=false;
+ BEGIN
+  PERFORM public.create_crm_opportunity_with_event('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+   '{"title":"Admin inactivo","opportunity_type":"parceria"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário inactivo conseguiu criar oportunidade'; END IF;
+
  v:=public.create_crm_opportunity_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   '{"title":"Oportunidade teste","opportunity_type":"parceria","stage":"lead","priority":"normal","expected_value":1000,"notes":"teste"}'::jsonb);
  v_id:=(v->>'id')::uuid;
@@ -599,6 +624,14 @@ BEGIN
  SELECT count(*) INTO n FROM public.crm_opportunities WHERE title='Oportunidade rollback';
  IF n<>0 THEN RAISE EXCEPTION 'Oportunidade parcial persistiu sem evento'; END IF;
  PERFORM set_config('test.fail_crm_audit','off',true);
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_crm_expansion_site_with_event('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+   '{"name":"Local de admin inactivo","address":"Rua de teste, 30","city":"Porto"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário inactivo conseguiu criar estudo de expansão'; END IF;
 
  v:=public.create_crm_expansion_site_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   '{"name":"Local teste","address":"Rua de teste, 10","city":"Porto","status":"em_avaliacao","footfall_score":4}'::jsonb);
