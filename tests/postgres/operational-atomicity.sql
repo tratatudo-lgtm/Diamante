@@ -126,7 +126,8 @@ CREATE TABLE public.cliente_documentos (
 );
 CREATE UNIQUE INDEX cliente_documentos_um_documento_ativo_por_cliente_uidx
  ON public.cliente_documentos(cliente_id) WHERE substituido_em IS NULL;
-\ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql\n\\ir ../../supabase/migrations/20261118213000_atomic_client_document_replacement.sql
+\ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql
+\ir ../../supabase/migrations/20261118213000_atomic_client_document_replacement.sql
 \ir ../../supabase/migrations/20261118210000_atomic_collab_comment_audit.sql
 \ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
 \ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
