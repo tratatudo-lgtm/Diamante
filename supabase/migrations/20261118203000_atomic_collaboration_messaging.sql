@@ -23,7 +23,7 @@ BEGIN
   END IF;
   SELECT array_agg(member_id ORDER BY member_id), count(DISTINCT member_id)
     INTO v_members, v_member_count
-  FROM unnest(p_member_ids) AS member_id;
+  FROM unnest(p_member_ids) AS u(member_id);
   IF v_member_count <> cardinality(p_member_ids) THEN
     RAISE EXCEPTION 'duplicate_members' USING ERRCODE='22023';
   END IF;
@@ -73,7 +73,7 @@ BEGIN
   INSERT INTO public.collab_conversation_members(conversation_id,funcionario_id,papel)
   SELECT v_conversation.id, member_id,
          CASE WHEN member_id=p_actor_id THEN 'criador' ELSE 'membro' END
-  FROM unnest(v_members) AS member_id;
+  FROM unnest(v_members) AS u(member_id);
 
   RETURN jsonb_build_object('id',v_conversation.id,'existing',false);
 END;
