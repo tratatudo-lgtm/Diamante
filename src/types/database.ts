@@ -37,6 +37,7 @@ export interface Transacao {
   metal?: string | null;
   descricao?: string | null;
   created_at: string;
+  declaracao_assinada_id?: string | null;
 }
 
 export interface KpiLojaDiaria {
