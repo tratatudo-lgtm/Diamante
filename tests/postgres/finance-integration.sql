@@ -84,9 +84,13 @@ INSERT INTO public.despesas_operacionais(
 ) VALUES (
   '20000000-0000-4000-8000-000000000003',
   '11111111-1111-4111-8111-111111111111',
-  'energia_agua','Ajuste energia rejeitado',3.33,'2026-11-07','rejeitada',
+  'energia_agua','Ajuste energia rejeitado',3.33,'2026-11-07','pendente',
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 );
+UPDATE public.despesas_operacionais
+SET estado='rejeitada',rejeitado_por='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    rejected_at=now(),motivo_rejeicao='Comprovativo insuficiente',updated_at=now()
+WHERE id='20000000-0000-4000-8000-000000000003';
 
 -- Payment audit and valid state transition.
 INSERT INTO public.transacoes_financeiras(
