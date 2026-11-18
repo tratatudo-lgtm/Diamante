@@ -140,7 +140,16 @@ router.patch('/:id', async (req: AuthenticatedRequest,res: Response) => {
   if(!updated)return fail(res,409,'O objectivo foi alterado por outro administrador. Actualize a página.');
   const action=update.status?'status_changed':'updated';
   const {error:eventError}=await supabaseAdmin.from('operational_goal_events').insert({goal_id:current.id,actor_id:actor(req).id,action,old_values:current,new_values:updated});
-  if(eventError){await supabaseAdmin.from('operational_goals').update({title:current.title,description:current.description,target_value:current.target_value,status:current.status,starts_on:current.starts_on,ends_on:current.ends_on,updated_at:current.updated_at}).eq('id',current.id).eq('updated_at',updated.updated_at);return fail(res,503,'Não foi possível guardar o histórico. A alteração foi revertida.');}
+  if(eventError){
+    const {data:rolledBack,error:rollbackError}=await supabaseAdmin.from('operational_goals')
+      .update({title:current.title,description:current.description,target_value:current.target_value,status:current.status,starts_on:current.starts_on,ends_on:current.ends_on,updated_at:current.updated_at})
+      .eq('id',current.id).eq('updated_at',updated.updated_at).select('id').maybeSingle();
+    if(rollbackError||!rolledBack){
+      console.error('[Goals] Falha ao confirmar rollback após erro de auditoria.');
+      return fail(res,503,'A auditoria falhou e não foi possível confirmar a reversão. Actualize o objectivo antes de tentar novamente.');
+    }
+    return fail(res,503,'Não foi possível guardar o histórico. A alteração foi revertida.');
+  }
   if(current.scope==='funcionario'&&current.funcionario_id)await notify(current.funcionario_id,current.id,'goal_updated','Objectivo actualizado',updated.title);
   if(current.scope==='loja'&&current.loja_id) {
     const {data:team}=await supabaseAdmin.from('funcionarios').select('id').eq('loja_id',current.loja_id).eq('ativo',true);
