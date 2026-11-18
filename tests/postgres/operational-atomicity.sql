@@ -257,7 +257,7 @@ CREATE TRIGGER fail_collab_membership BEFORE INSERT ON public.collab_conversatio
 CREATE FUNCTION public.reject_test_conversation_activity()
 RETURNS trigger LANGUAGE plpgsql AS $
 BEGIN
- RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';
+ IF current_setting('test.fail_collab_activity',true)='on' THEN\n  RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';\n END IF;
 END $;
 CREATE TRIGGER fail_collab_activity BEFORE UPDATE ON public.collab_conversations
  FOR EACH ROW EXECUTE FUNCTION public.reject_test_conversation_activity();
@@ -317,6 +317,7 @@ BEGIN
    RAISE EXCEPTION 'last_message_at não foi actualizado na mesma transacção';
  END IF;
 
+ PERFORM set_config('test.fail_collab_activity','on',true);
  SELECT last_message_at INTO v_last FROM public.collab_conversations WHERE id=v_id;
  failed:=false;
  BEGIN
