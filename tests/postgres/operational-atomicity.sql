@@ -565,7 +565,7 @@ CREATE TRIGGER fail_expansion_audit BEFORE INSERT ON public.crm_expansion_site_e
  FOR EACH ROW EXECUTE FUNCTION public.reject_test_crm_audit();
 
 DO $crm_atomic$
-DECLARE v jsonb; v_id uuid; n integer; failed boolean; stamp timestamptz; site_id uuid;
+DECLARE v jsonb; v_id uuid; n integer; failed boolean; stamp timestamptz; v_site_id uuid;
 BEGIN
  v:=public.create_crm_opportunity_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   '{"title":"Oportunidade teste","opportunity_type":"parceria","stage":"lead","priority":"normal","expected_value":1000,"notes":"teste"}'::jsonb);
@@ -602,16 +602,16 @@ BEGIN
 
  v:=public.create_crm_expansion_site_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   '{"name":"Local teste","address":"Rua de teste, 10","city":"Porto","status":"em_avaliacao","footfall_score":4}'::jsonb);
- site_id:=(v->>'id')::uuid;
- SELECT count(*) INTO n FROM public.crm_expansion_site_events WHERE site_id=site_id;
+ v_site_id:=(v->>'id')::uuid;
+ SELECT count(*) INTO n FROM public.crm_expansion_site_events WHERE crm_expansion_site_events.site_id=v_site_id;
  IF n<>1 THEN RAISE EXCEPTION 'Estudo de expansão criado sem evento'; END IF;
  stamp:=(v->>'updated_at')::timestamptz;
- v:=public.update_crm_expansion_site_with_event(site_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+ v:=public.update_crm_expansion_site_with_event(v_site_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
   stamp,'{"status":"visita_pendente","monthly_rent":1200}'::jsonb);
  IF v->>'status'<>'visita_pendente' OR (v->>'monthly_rent')::numeric<>1200 THEN
   RAISE EXCEPTION 'Actualização do estudo de expansão falhou';
  END IF;
- SELECT count(*) INTO n FROM public.crm_expansion_site_events WHERE site_id=site_id;
+ SELECT count(*) INTO n FROM public.crm_expansion_site_events WHERE crm_expansion_site_events.site_id=v_site_id;
  IF n<>2 THEN RAISE EXCEPTION 'Actualização do estudo sem evento'; END IF;
  failed:=false;
  BEGIN
