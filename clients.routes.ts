@@ -280,7 +280,6 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
   }
 
   let storagePath = '';
-  let previousId: string | null = null;
   try {
     const { client, error: clientError, invalidScope } = await findClientInStore(employee, clientId, body.lojaId);
     if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
@@ -304,6 +303,8 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
       p_tamanho_bytes: fileBuffer.length,
     });
     if (replaceError || !replaced?.documento_id) {
+      await supabaseAdmin.storage.from('documentos-clientes').remove([storagePath]);
+      storagePath = '';
       if (replaceError?.code === '42501') return res.status(403).json({ success: false, message: 'Não tem autorização para actualizar documentos deste cliente.' });
       if (replaceError?.code === 'P0002') return res.status(404).json({ success: false, message: 'Cliente não encontrado.' });
       if (replaceError?.code === '22023') return res.status(400).json({ success: false, message: 'Os dados do documento são inválidos.' });
@@ -312,8 +313,6 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
     return res.status(201).json({ success: true, documento_id: inserted.id, message: 'Documento actualizado e versão anterior arquivada.' });
   } catch {
     if (storagePath) await supabaseAdmin.storage.from('documentos-clientes').remove([storagePath]);
-    if (previousId) await supabaseAdmin.from('cliente_documentos')
-      .update({ substituido_em: null, substituido_por: null }).eq('id', previousId);
     return res.status(503).json({ success: false, message: 'Não foi possível guardar o novo documento. A versão anterior foi preservada.' });
   }
 });
