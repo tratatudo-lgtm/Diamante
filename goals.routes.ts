@@ -141,21 +141,20 @@ router.patch('/:id', async (req: AuthenticatedRequest,res: Response) => {
   const nextStart=String(update.starts_on ?? current.starts_on); const nextEnd=String(update.ends_on ?? current.ends_on);
   if(nextEnd<nextStart)return fail(res,400,'A data final deve ser posterior à inicial.');
   if(Object.keys(update).length===1)return fail(res,400,'Não foram indicadas alterações.');
-  const {data:updated,error}=await supabaseAdmin.from('operational_goals').update(update).eq('id',current.id).eq('updated_at',current.updated_at).select('*').maybeSingle();
-  if(error)return fail(res,503,'Não foi possível actualizar o objectivo.');
-  if(!updated)return fail(res,409,'O objectivo foi alterado por outro administrador. Actualize a página.');
-  const action=update.status?'status_changed':'updated';
-  const {error:eventError}=await supabaseAdmin.from('operational_goal_events').insert({goal_id:current.id,actor_id:actor(req).id,action,old_values:current,new_values:updated});
-  if(eventError){
-    const {data:rolledBack,error:rollbackError}=await supabaseAdmin.from('operational_goals')
-      .update({title:current.title,description:current.description,target_value:current.target_value,status:current.status,starts_on:current.starts_on,ends_on:current.ends_on,updated_at:current.updated_at})
-      .eq('id',current.id).eq('updated_at',updated.updated_at).select('id').maybeSingle();
-    if(rollbackError||!rolledBack){
-      console.error('[Goals] Falha ao confirmar rollback após erro de auditoria.');
-      return fail(res,503,'A auditoria falhou e não foi possível confirmar a reversão. Actualize o objectivo antes de tentar novamente.');
-    }
-    return fail(res,503,'Não foi possível guardar o histórico. A alteração foi revertida.');
+  delete update.updated_at;
+  const {data:updatedData,error}=await supabaseAdmin.rpc('update_operational_goal_with_event',{
+    p_goal_id:current.id,p_actor_id:actor(req).id,
+    p_expected_updated_at:current.updated_at,p_changes:update,
+  });
+  const updated=updatedData as any;
+  if(error){
+    if(error.code==='P0002')return fail(res,404,'Objectivo não encontrado.');
+    if(error.code==='40001')return fail(res,409,'O objectivo foi alterado por outro administrador. Actualize a página.');
+    if(error.code==='42501')return fail(res,403,'Apenas administradores activos podem gerir objectivos.');
+    if(error.code==='22023')return fail(res,400,'Os dados do objectivo são inválidos.');
+    return fail(res,503,'Não foi possível actualizar o objectivo e guardar o histórico.');
   }
+  if(!updated?.id)return fail(res,503,'Não foi possível confirmar a actualização do objectivo.');
   if(current.scope==='funcionario'&&current.funcionario_id)await notify(current.funcionario_id,current.id,'goal_updated','Objectivo actualizado',updated.title);
   if(current.scope==='loja'&&current.loja_id) {
     const {data:team}=await supabaseAdmin.from('funcionarios').select('id').eq('loja_id',current.loja_id).eq('ativo',true);
