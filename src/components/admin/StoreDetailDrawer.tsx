@@ -280,7 +280,7 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
                         {tx.estado}
                       </span>
 
-                      {(tx as Transacao & { declaracao_assinada_id?: string | null }).declaracao_assinada_id && (
+                      {tx.declaracao_assinada_id && (
                         <button
                           onClick={() => handleViewDeclaration(tx.id)}
                           disabled={isOpeningDeclaration === tx.id}
