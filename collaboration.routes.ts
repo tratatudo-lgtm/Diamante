@@ -239,10 +239,16 @@ router.post('/reports/:id/comments', async (req: AuthenticatedRequest, res: Resp
   const comment = typeof req.body?.comentario === 'string' ? req.body.comentario.trim() : '';
   if (!comment || comment.length > 4000) return fail(res, 400, 'O comentário deve ter entre 1 e 4.000 caracteres.');
   if (!(await canAccessReport(req.params.id, req))) return fail(res, 404, 'Ocorrência não encontrada.');
-  const { data, error } = await supabaseAdmin.from('collab_report_comments').insert({
-    report_id: req.params.id, funcionario_id: employee(req).id, comentario: comment, interno: false,
-  }).select('id, funcionario_id, comentario, created_at, funcionarios(nome_completo, role)').single();
-  if (error || !data) return fail(res, 503, 'Não foi possível adicionar o comentário.');
+  const { data, error } = await supabaseAdmin.rpc('create_collab_report_comment_with_event', {
+    p_report_id: req.params.id,
+    p_actor_id: employee(req).id,
+    p_comment: comment,
+  });
+  if (error || !data?.id) {
+    if (error?.code === '42501' || error?.code === 'P0002') return fail(res, 404, 'Ocorrência não encontrada.');
+    if (error?.code === '22023') return fail(res, 400, 'O comentário é inválido.');
+    return fail(res, 503, 'Não foi possível adicionar o comentário e o respectivo registo de auditoria.');
+  }
   const { data: report } = await supabaseAdmin.from('collab_reports').select('reporter_id, assigned_to').eq('id', req.params.id).single();
   const io = (globalThis as any).io;
   if (report) {
