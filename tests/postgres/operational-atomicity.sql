@@ -615,7 +615,7 @@ BEGIN
  IF n<>2 THEN RAISE EXCEPTION 'Actualização do estudo sem evento'; END IF;
  failed:=false;
  BEGIN
-  PERFORM public.update_crm_expansion_site_with_event(site_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  PERFORM public.update_crm_expansion_site_with_event(v_site_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
    stamp,'{"name":"actualização obsoleta"}'::jsonb);
  EXCEPTION WHEN SQLSTATE '40001' THEN failed:=true;
  END;
