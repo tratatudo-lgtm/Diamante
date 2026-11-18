@@ -72,9 +72,12 @@ router.post('/', async (req: AdminRequest,res: Response) => {
     created_by:actor(req).id,closed_at:['ganha','perdida'].includes(body.stage)?new Date().toISOString():null,
   };
   if((row.contact_email&&row.contact_email.length>254)||(row.location&&row.location.length>240)||(row.contact_name&&row.contact_name.length>160)||(row.contact_phone&&row.contact_phone.length>40)||(row.notes.length>8000)||(row.next_action&&row.next_action.length>1000))return fail(res,400,'Um dos campos excede o limite permitido.');
-  const {data,error}=await supabaseAdmin.from('crm_opportunities').insert(row).select('*').single();
-  if(error||!data)return fail(res,503,'Não foi possível criar a oportunidade.');
-  if(!await recordEvent(data.id,'created',null,data,actor(req).id)){await supabaseAdmin.from('crm_opportunities').delete().eq('id',data.id);return fail(res,503,'Não foi possível registar o histórico da oportunidade.');}
+  const {data,error}=await supabaseAdmin.rpc('create_crm_opportunity_with_event',{
+    p_actor_id:actor(req).id,
+    p_payload:row,
+  });
+  if(error||!data)return fail(res,error?.code==='42501'?403:400,'Não foi possível criar a oportunidade e o respectivo histórico.');
+
   if(assigned)await notify(assigned,data.id,'opportunity_assigned','Nova oportunidade atribuída',title);
   (globalThis as any).io?.to('admin').emit('opportunity:created',{id:data.id});
   return res.status(201).json({success:true,opportunity:data});
@@ -100,10 +103,17 @@ router.patch('/:id', async (req: AdminRequest,res: Response) => {
   if(!Object.keys(update).length)return fail(res,400,'Não foram fornecidas alterações.');
   const stage=String(update.stage??current.stage);
   if(['ganha','perdida'].includes(stage))update.closed_at=current.closed_at||new Date().toISOString();else if('stage'in update)update.closed_at=null;
-  const {data:updated,error}=await supabaseAdmin.from('crm_opportunities').update(update).eq('id',current.id).select('*').single();
-  if(error||!updated)return fail(res,503,'Não foi possível actualizar a oportunidade.');
-  const action='stage'in update&&update.stage!==current.stage?'stage_changed':'updated';
-  if(!await recordEvent(current.id,action,current,updated,actor(req).id)){await supabaseAdmin.from('crm_opportunities').update(Object.fromEntries(Object.keys(update).map(k=>[k,(current as any)[k]]))).eq('id',current.id);return fail(res,503,'Não foi possível registar o histórico; as alterações foram revertidas.');}
+  const {data:updated,error}=await supabaseAdmin.rpc('update_crm_opportunity_with_event',{
+    p_id:current.id,
+    p_actor_id:actor(req).id,
+    p_expected_updated_at:current.updated_at,
+    p_payload:update,
+  });
+  if(error||!updated){
+    if(error?.code==='40001')return fail(res,409,'A oportunidade foi alterada por outro utilizador. Actualize os dados e tente novamente.');
+    if(error?.code==='P0002')return fail(res,404,'Oportunidade não encontrada.');
+    return fail(res,error?.code==='42501'?403:400,'Não foi possível actualizar a oportunidade e o respectivo histórico.');
+  }
   const recipients=new Set<string>();if(typeof updated.assigned_to==='string')recipients.add(updated.assigned_to);if(typeof current.assigned_to==='string')recipients.add(current.assigned_to);
   for(const employeeId of recipients)await notify(employeeId,current.id,'opportunity_updated','Oportunidade actualizada',updated.title);
   (globalThis as any).io?.to('admin').emit('opportunity:updated',{id:current.id});
