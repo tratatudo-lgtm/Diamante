@@ -128,30 +128,19 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
     update.status = req.body.status;
   }
   if (!Object.keys(update).length) return fail(res, 400, 'Não foram indicadas alterações válidas.');
-  update.updated_at = new Date().toISOString();
-  if (update.status === 'concluida') update.completed_at = new Date().toISOString();
-  else if (update.status) update.completed_at = null;
-  const { data: updated, error: updateError } = await supabaseAdmin.from('operational_tasks')
-    .update(update).eq('id', current.id).eq('updated_at', current.updated_at)
-    .select('id,title,description,status,priority,assigned_to,created_by,loja_id,due_at,completed_at,created_at,updated_at').maybeSingle();
-  if (updateError) return fail(res, 503, 'Não foi possível actualizar a tarefa.');
-  if (!updated) return fail(res, 409, 'A tarefa foi alterada por outro utilizador. Actualize a página.');
-  const action = update.assigned_to ? 'reassigned' : update.status && update.status !== current.status ? 'status_changed' : 'updated';
-  const { error: eventError } = await supabaseAdmin.from('operational_task_events').insert({
-    task_id: current.id, actor_id: actor.id, action, old_values: current, new_values: updated,
+  const { data: updatedData, error: updateError } = await supabaseAdmin.rpc('update_operational_task_with_event', {
+    p_task_id: current.id, p_actor_id: actor.id,
+    p_expected_updated_at: current.updated_at, p_changes: update,
   });
-  if (eventError) {
-    const { data: rolledBack, error: rollbackError } = await supabaseAdmin.from('operational_tasks').update({
-      title: current.title, description: current.description, status: current.status, priority: current.priority,
-      assigned_to: current.assigned_to, loja_id: current.loja_id, due_at: current.due_at,
-      completed_at: current.completed_at, updated_at: current.updated_at,
-    }).eq('id', current.id).eq('updated_at', updated.updated_at).select('id').maybeSingle();
-    if (rollbackError || !rolledBack) {
-      console.error('[Tasks] Falha ao confirmar rollback após erro de auditoria.');
-      return fail(res, 503, 'A auditoria falhou e não foi possível confirmar a reversão. Actualize a tarefa antes de tentar novamente.');
-    }
-    return fail(res, 503, 'Não foi possível guardar o histórico. A alteração foi revertida; tente novamente.');
+  const updated = updatedData as any;
+  if (updateError) {
+    if (updateError.code === 'P0002') return fail(res, 404, 'Tarefa não encontrada.');
+    if (updateError.code === '40001') return fail(res, 409, 'A tarefa foi alterada por outro utilizador. Actualize a página.');
+    if (updateError.code === '42501') return fail(res, 403, 'Não está autorizado a actualizar esta tarefa.');
+    if (updateError.code === '22023') return fail(res, 400, 'Os dados da tarefa são inválidos.');
+    return fail(res, 503, 'Não foi possível actualizar a tarefa e guardar o histórico.');
   }
+  if (!updated?.id) return fail(res, 503, 'Não foi possível confirmar a actualização da tarefa.');
   if (updated.assigned_to !== current.assigned_to) {
     await notify(updated.assigned_to, current.id, 'task_assigned', 'Tarefa atribuída', updated.title);
     (globalThis as any).io?.to(current.assigned_to).emit('task:updated', { id: current.id });
