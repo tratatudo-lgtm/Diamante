@@ -69,6 +69,14 @@ CREATE TABLE public.collab_report_events (
 
 INSERT INTO public.funcionarios(id,nome_completo,role,ativo,loja_id) VALUES
  ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee','Funcionário inactivo','funcionario',false,'11111111-1111-4111-8111-111111111111');
+CREATE TABLE public.collab_report_comments (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ report_id uuid NOT NULL REFERENCES public.collab_reports(id) ON DELETE CASCADE,
+ funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ comentario text NOT NULL CHECK(length(trim(comentario)) BETWEEN 1 AND 4000),
+ interno boolean NOT NULL DEFAULT false,
+ created_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE public.collab_conversations (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tipo text NOT NULL CHECK(tipo IN ('directa','grupo')),
  titulo text, criada_por uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
@@ -94,6 +102,7 @@ CREATE TABLE public.collab_messages (
 );
 
 \ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql
+\ir ../../supabase/migrations/20261118210000_atomic_collab_comment_audit.sql
 \ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
 \ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
 
@@ -350,3 +359,56 @@ BEGIN
 END $collab$;
 
 SELECT 'POSTGRES_COLLAB_MESSAGING_ATOMICITY_OK' AS result;
+
+-- Report comments and their audit event must commit or roll back together.
+INSERT INTO public.collab_reports(titulo,descricao,categoria,reporter_id,assigned_to)
+VALUES ('Ocorrência de teste','Descrição suficientemente longa para teste','outro',
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+
+CREATE FUNCTION public.reject_test_collab_comment_event()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.action='commented' AND current_setting('test.fail_collab_comment_event',true)='on' THEN
+  RAISE EXCEPTION 'injected_comment_event_failure' USING ERRCODE='P0001';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER fail_collab_comment_event BEFORE INSERT ON public.collab_report_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_collab_comment_event();
+
+DO $comment_audit$
+DECLARE v_report_id uuid; v jsonb; n integer; failed boolean;
+BEGIN
+ SELECT id INTO v_report_id FROM public.collab_reports WHERE titulo='Ocorrência de teste';
+ v:=public.create_collab_report_comment_with_event(v_report_id,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Comentário de auditoria');
+ IF v->>'comentario'<>'Comentário de auditoria' OR (v->'funcionarios'->>'nome_completo')<>'Admin A' THEN
+  RAISE EXCEPTION 'A RPC não devolveu os dados do comentário esperados';
+ END IF;
+ SELECT count(*) INTO n FROM public.collab_report_events
+ WHERE report_id=v_report_id AND action='commented'
+   AND new_values->>'comment_id'=v->>'id';
+ IF n<>1 THEN RAISE EXCEPTION 'O comentário não tem exactamente um evento de auditoria'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_report_comment_with_event(v_report_id,
+   'cccccccc-cccc-4ccc-8ccc-cccccccccccc','Comentário sem acesso');
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário sem acesso conseguiu comentar'; END IF;
+
+ PERFORM set_config('test.fail_collab_comment_event','on',true);
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_report_comment_with_event(v_report_id,
+   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Comentário deve sofrer rollback');
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada do evento de comentário não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.collab_report_comments
+ WHERE report_id=v_report_id AND comentario='Comentário deve sofrer rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Comentário parcial persistiu sem evento de auditoria'; END IF;
+END $comment_audit$;
+
+SELECT 'POSTGRES_COLLAB_COMMENT_AUDIT_ATOMICITY_OK' AS result;
