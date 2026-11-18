@@ -90,7 +90,9 @@ CREATE TABLE public.collab_messages (
  body text NOT NULL CHECK(length(trim(body)) BETWEEN 1 AND 4000),
  created_at timestamptz NOT NULL DEFAULT now(), edited_at timestamptz, deleted_at timestamptz
 );
-\n\ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql\n\ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
+
+\ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql
+\ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
 \ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
 
 DO $audit$
@@ -257,7 +259,9 @@ CREATE TRIGGER fail_collab_membership BEFORE INSERT ON public.collab_conversatio
 CREATE FUNCTION public.reject_test_conversation_activity()
 RETURNS trigger LANGUAGE plpgsql AS $
 BEGIN
- IF current_setting('test.fail_collab_activity',true)='on' THEN\n  RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';\n END IF;
+ IF current_setting('test.fail_collab_activity',true)='on' THEN
+  RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';
+ END IF;
 END $;
 CREATE TRIGGER fail_collab_activity BEFORE UPDATE ON public.collab_conversations
  FOR EACH ROW EXECUTE FUNCTION public.reject_test_conversation_activity();
