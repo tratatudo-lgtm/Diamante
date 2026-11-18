@@ -86,6 +86,13 @@ BEGIN
 
   IF TG_OP = 'INSERT' THEN
     v_actor := NEW.criado_por;
+    IF NEW.estado <> 'pendente'
+       OR NEW.pago_por IS NOT NULL OR NEW.paid_at IS NOT NULL
+       OR NEW.rejeitado_por IS NOT NULL OR NEW.rejected_at IS NOT NULL
+       OR NEW.motivo_rejeicao IS NOT NULL THEN
+      RAISE EXCEPTION 'Um pagamento novo tem de começar pendente e sem dados de transições anteriores.'
+        USING ERRCODE = '23514';
+    END IF;
     IF v_actor IS NULL OR NOT EXISTS (
       SELECT 1 FROM public.funcionarios f
       WHERE f.id = v_actor AND f.ativo = true AND f.role = 'admin'
