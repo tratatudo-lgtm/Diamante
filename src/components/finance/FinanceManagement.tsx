@@ -298,8 +298,14 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
   };
 
   const handleRejectPayment = async (txId: string) => {
+    const motivo = window.prompt('Indique o motivo da rejeição (mínimo 5 caracteres):');
+    if (motivo === null) return;
+    if (motivo.trim().length < 5) {
+      setActionError('O motivo da rejeição deve ter pelo menos 5 caracteres.');
+      return;
+    }
     try {
-      await rejectPayment(txId);
+      await rejectPayment(txId, motivo.trim());
       if (selectedTx?.id === txId) setSelectedTx((prev) => prev ? { ...prev, estado: 'rejeitado' } : null);
     } catch (err: any) {
       setActionError(err?.message || 'Falha ao rejeitar o pagamento.');
@@ -908,16 +914,16 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                   </div>
                 </div>
 
-                {/* Comprovativo Bancário Digital Simulador */}
+                {/* Referência documental fornecida no registo; não comprova liquidação bancária. */}
                 <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <FileText className="w-4 h-4 text-[#D4AF37]" />
                     <div>
                       <p className="text-[11px] font-semibold text-white">
-                        Comprovativo SEPA Digital
+                        Referência documental (não verificada)
                       </p>
                       <p className="text-[10px] font-mono text-slate-400">
-                        Ref: {selectedTx.comprovativoRef || 'SEPA-REF-PEND'}
+                        Ref: {selectedTx.comprovativoRef || 'Sem referência documental'}
                       </p>
                     </div>
                   </div>
@@ -926,7 +932,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition-colors cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5 text-[#D4AF37]" />
-                    <span>Visualizar Recibo</span>
+                    <span>Visualizar registo</span>
                   </button>
                 </div>
               </div>
@@ -957,7 +963,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors cursor-pointer"
                     >
                       <Printer className="w-4 h-4 text-[#D4AF37]" />
-                      <span>Imprimir Comprovativo</span>
+                      <span>Imprimir registo interno</span>
                     </button>
 
                     <button
@@ -974,7 +980,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
         )}
 
         {/* =========================================================
-            6. MODAL DO COMPROVATIVO OFICIAL (Impressão / Visualização)
+            6. MODAL DO REGISTO INTERNO DE PAGAMENTO (não é comprovativo bancário)
            ========================================================= */}
         {isReceiptModalOpen && selectedTx && (
           <div
@@ -1004,13 +1010,17 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
 
               <div className="text-center py-2">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">
-                  Comprovativo de Liquidação Financeira
+                  Registo Interno de Pagamento
                 </span>
                 <p className="text-2xl font-black text-slate-900 font-mono mt-1">
                   {formatEUR(selectedTx.valor)}
                 </p>
-                <p className="text-xs text-emerald-700 font-bold uppercase mt-1">
-                  &bull; Operação Liquidada com Sucesso &bull;
+                <p className={`text-xs font-bold uppercase mt-1 ${selectedTx.estado === 'pago' ? 'text-amber-700' : selectedTx.estado === 'rejeitado' ? 'text-rose-700' : 'text-slate-600'}`}>
+                  {selectedTx.estado === 'pago'
+                    ? 'Marcado como pago no sistema — sem confirmação bancária integrada'
+                    : selectedTx.estado === 'rejeitado'
+                      ? 'Pagamento rejeitado'
+                      : 'Pagamento pendente'}
                 </p>
               </div>
 
@@ -1046,7 +1056,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                 <div className="flex justify-between">
                   <span className="text-slate-500">Código SEPA:</span>
                   <span className="font-mono text-[10px]">
-                    {selectedTx.comprovativoRef || 'SEPA-AUT-9921'}
+                    {selectedTx.comprovativoRef || 'Não fornecido'}
                   </span>
                 </div>
               </div>
