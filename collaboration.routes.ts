@@ -162,12 +162,20 @@ router.post('/conversations/:id/messages', async (req: AuthenticatedRequest, res
     if (error?.code === 'P0002') return fail(res, 404, 'Conversa não encontrada.');
     return fail(res, 503, 'Não foi possível enviar a mensagem.');
   }
-  const { data, error: senderError } = await supabaseAdmin.from('collab_messages')
-    .select('id, conversation_id, sender_id, body, created_at, funcionarios(nome_completo, role)')
-    .eq('id', messageData.id).single();
-  if (senderError || !data) return fail(res, 503, 'A mensagem foi registada, mas não foi possível carregar os seus detalhes.');
-  const { data: recipients } = await supabaseAdmin.from('collab_conversation_members')
+  // The RPC returns the committed row. Do not turn a successful write into
+  // an HTTP error because a follow-up read failed: clients may retry and send
+  // the same message twice.
+  const data = {
+    id: messageData.id,
+    conversation_id: messageData.conversation_id,
+    sender_id: messageData.sender_id,
+    body: messageData.body,
+    created_at: messageData.created_at,
+    funcionarios: { nome_completo: employee(req).nome_completo, role: employee(req).role },
+  };
+  const { data: recipients, error: recipientsError } = await supabaseAdmin.from('collab_conversation_members')
     .select('funcionario_id').eq('conversation_id', id);
+  if (recipientsError) console.error('[Collaboration] Falha ao obter destinatários do evento de mensagem.');
   const io = (globalThis as any).io;
   for (const recipient of recipients || []) {
     io?.to(recipient.funcionario_id).emit('chat:message', data);
