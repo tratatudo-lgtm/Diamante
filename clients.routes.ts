@@ -285,7 +285,7 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
     if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
     if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
 
-    const safeName = fileName.replace(/[^\\p{L}\\p{N}._-]/gu, '_');
+    const safeName = fileName.replace(/[^\p{L}\p{N}._-]/gu, '_');
     storagePath = `${clientId}/${crypto.randomUUID()}.${extByMime[mimeType]}`;
     const { error: uploadError } = await supabaseAdmin.storage.from('documentos-clientes')
       .upload(storagePath, fileBuffer, { contentType: mimeType, upsert: false, metadata: { originalName: safeName } });
@@ -310,7 +310,7 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
       if (replaceError?.code === '22023') return res.status(400).json({ success: false, message: 'Os dados do documento são inválidos.' });
       throw replaceError || new Error('Falha ao substituir documento.');
     }
-    return res.status(201).json({ success: true, documento_id: inserted.id, message: 'Documento actualizado e versão anterior arquivada.' });
+    return res.status(201).json({ success: true, documento_id: replaced.documento_id, message: 'Documento actualizado e versão anterior arquivada.' });
   } catch {
     if (storagePath) await supabaseAdmin.storage.from('documentos-clientes').remove([storagePath]);
     return res.status(503).json({ success: false, message: 'Não foi possível guardar o novo documento. A versão anterior foi preservada.' });
