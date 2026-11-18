@@ -153,7 +153,7 @@ END $$;
 
 
 -- Atomic task update and audit; injected event failures must roll back the row update.
-DO $
+DO $$
 DECLARE v jsonb; v_id uuid; v_stamp timestamptz; n integer; failed boolean;
 BEGIN
  v:=public.create_operational_task_with_event('Tarefa update','Antes',
@@ -185,10 +185,10 @@ BEGIN
  EXCEPTION WHEN SQLSTATE '40001' THEN failed:=true;
  END;
  IF NOT failed THEN RAISE EXCEPTION 'Actualização stale de tarefa não foi bloqueada'; END IF;
-END $;
+END $$;
 
 -- Atomic goal update and audit.
-DO $
+DO $$
 DECLARE v jsonb; v_id uuid; v_stamp timestamptz; n integer; failed boolean;
 BEGIN
  v:=public.create_operational_goal_with_event('Objectivo update','Antes','loja',
@@ -213,6 +213,6 @@ BEGIN
  IF NOT failed THEN RAISE EXCEPTION 'Falha de auditoria da actualização do objectivo não foi injectada'; END IF;
  SELECT count(*) INTO n FROM public.operational_goals WHERE id=v_id AND title='Objectivo actualizado';
  IF n<>1 THEN RAISE EXCEPTION 'Actualização parcial do objectivo persistiu após falha de auditoria'; END IF;
-END $;
+END $$;
 
 SELECT 'POSTGRES_OPERATIONAL_ATOMICITY_OK' AS result;
