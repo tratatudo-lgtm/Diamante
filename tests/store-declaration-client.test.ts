@@ -46,12 +46,15 @@ describe('requestStoreDeclarationUrl', () => {
     )).rejects.toThrow('Não foi possível validar ou abrir a declaração.');
   });
 
-  test('recusa URL HTTP e URLs com credenciais', async () => {
+  test('recusa URL HTTP, host externo e URLs com credenciais', async () => {
     await expect(requestStoreDeclarationUrl(request, async () =>
       response(200, { success: true, url: 'http://example.com/document.pdf' }),
     )).rejects.toThrow('endereço temporário do documento não é seguro');
     await expect(requestStoreDeclarationUrl(request, async () =>
-      response(200, { success: true, url: 'https://user:pass@example.com/document.pdf' }),
+      response(200, { success: true, url: 'https://attacker.example/storage/v1/object/sign/file.pdf' }),
+    )).rejects.toThrow('endereço temporário do documento não é seguro');
+    await expect(requestStoreDeclarationUrl(request, async () =>
+      response(200, { success: true, url: 'https://user:pass@ytpetuvvxbmlafsisfaf.supabase.co/storage/v1/object/sign/file.pdf' }),
     )).rejects.toThrow('endereço temporário do documento não é seguro');
   });
 });
