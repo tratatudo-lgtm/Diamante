@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { StoreDashboard } from './StoreDashboard';
 import { NewPurchaseForm } from './NewPurchaseForm';
@@ -30,8 +30,45 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
   // 2: Inventário
   // 3: Clientes Protegidos
   // 4: Perfil & Configurações
+  const role = userSession?.role || funcionario?.role;
   const [activeTab, setActiveTab] = useState<number>(0);
+  const [activeStores, setActiveStores] = useState<Array<{ id: string; nome: string; codigo_loja: string }>>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState<string>(() => sessionStorage.getItem('diamante_admin_store_scope') || '');
+  const [storesLoading, setStoresLoading] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  useEffect(() => {
+    if (role !== 'admin') return;
+    let active = true;
+    const loadStores = async () => {
+      setStoresLoading(true);
+      try {
+        const token = sessionStorage.getItem('diamante_jwt_token');
+        if (!token) throw new Error('Sessão expirada.');
+        const response = await fetch('/api/store/stores', {
+          headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok || payload?.success !== true || !Array.isArray(payload.lojas)) {
+          throw new Error(payload?.message || 'Não foi possível carregar as lojas activas.');
+        }
+        if (!active) return;
+        const stores = payload.lojas as Array<{ id: string; nome: string; codigo_loja: string }>;
+        setActiveStores(stores);
+        const persisted = sessionStorage.getItem('diamante_admin_store_scope') || '';
+        if (!stores.some((store) => store.id === persisted)) {
+          setSelectedStoreId('');
+          sessionStorage.removeItem('diamante_admin_store_scope');
+        }
+      } catch (error) {
+        if (active) addToast('error', error instanceof Error ? error.message : 'Falha ao carregar lojas.');
+      } finally {
+        if (active) setStoresLoading(false);
+      }
+    };
+    void loadStores();
+    return () => { active = false; };
+  }, [role]);
 
   const addToast = (type: 'success' | 'error' | 'info', message: string, title?: string) => {
     const newToast: ToastMessage = {
@@ -55,9 +92,9 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
     onNavigate('/login');
   };
 
-  const role = userSession?.role || funcionario?.role;
   const lojaNome = userSession?.loja_nome || 'Sala de Operações';
-  const codigoLoja = userSession?.codigo_loja || 'LOJA';
+  const selectedStore = activeStores.find((store) => store.id === selectedStoreId);
+  const codigoLoja = selectedStore?.codigo_loja || userSession?.codigo_loja || 'LOJA';
 
   const navItems = [
     { label: 'Painel', icon: LayoutDashboard },
@@ -94,6 +131,25 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
 
           <div className="flex items-center gap-2">
             {role === 'admin' && (
+              <select
+                aria-label="Seleccionar loja para gerir"
+                value={selectedStoreId}
+                disabled={storesLoading || activeStores.length === 0}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSelectedStoreId(value);
+                  if (value) sessionStorage.setItem('diamante_admin_store_scope', value);
+                  else sessionStorage.removeItem('diamante_admin_store_scope');
+                }}
+                className="max-w-[170px] sm:max-w-[240px] rounded-lg border border-[#D4AF37]/40 bg-gray-900 px-2 py-2 text-xs text-white"
+              >
+                <option value="">{storesLoading ? 'A carregar lojas…' : 'Seleccionar loja'}</option>
+                {activeStores.map((store) => (
+                  <option key={store.id} value={store.id}>{store.codigo_loja} · {store.nome}</option>
+                ))}
+              </select>
+            )}
+            {role === 'admin' && (
               <button
                 onClick={() => onNavigate('/dashboard-admin')}
                 className="px-3 py-1.5 bg-gray-800 hover:bg-[#D4AF37] text-gray-300 hover:text-gray-950 font-medium text-xs rounded-lg border border-gray-700 transition-colors flex items-center gap-1.5 cursor-pointer"
@@ -118,11 +174,19 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
       </header>
 
       {/* Main Viewport Content */}
-      <main className="flex-1 max-w-4xl w-full mx-auto px-4 pt-5 pb-28">
+      {role === 'admin' && !selectedStoreId && (
+        <div className="mx-auto mt-5 w-full max-w-4xl px-4">
+          <div className="rounded-xl border border-[#D4AF37]/30 bg-[#1F2937] p-4 text-sm text-gray-200">
+            Seleccione uma loja activa no selector acima para abrir o respectivo painel operacional.
+          </div>
+        </div>
+      )}
+      <main className={`flex-1 max-w-4xl w-full mx-auto px-4 pt-5 pb-28 ${role === 'admin' && !selectedStoreId ? 'hidden' : ''}`}>
         {activeTab === 0 && (
           <StoreDashboard
             onNavigateTab={(tab) => setActiveTab(tab)}
             onShowToast={addToast}
+            selectedStoreId={role === 'admin' ? selectedStoreId : undefined}
           />
         )}
 
@@ -132,15 +196,16 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
               setActiveTab(0); // Volta ao feed principal após registar
             }}
             onShowToast={addToast}
+            selectedStoreId={role === 'admin' ? selectedStoreId : undefined}
           />
         )}
 
         {activeTab === 2 && (
-          <InventoryList onShowToast={addToast} />
+          <InventoryList onShowToast={addToast} selectedStoreId={role === 'admin' ? selectedStoreId : undefined} />
         )}
 
         {activeTab === 3 && (
-          <ProtectedClients onShowToast={addToast} />
+          <ProtectedClients onShowToast={addToast} selectedStoreId={role === 'admin' ? selectedStoreId : undefined} />
         )}
 
         {activeTab === 4 && (

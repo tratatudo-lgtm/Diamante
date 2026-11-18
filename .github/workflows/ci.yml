@@ -5,9 +5,11 @@ on:
     branches:
       - main
       - rebuild/diamante-douro-secure
+      - feat/admin-store-operations-20261117
   pull_request:
     branches:
       - main
+      - fix/purchase-idempotent-replay-20261116
 
 permissions:
   contents: read

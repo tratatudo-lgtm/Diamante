@@ -27,6 +27,7 @@ export interface StoreDeclarationAccessLog {
 
 export interface StoreDeclarationRepository {
   getPurchase(id: string): Promise<{ data: StoreDeclarationPurchase | null; error?: unknown | null }>;
+  getActiveStore(id: string): Promise<{ data: boolean; error?: unknown | null }>;
   getEvidence(id: string): Promise<{ data: StoreDeclarationEvidence | null; error?: unknown | null }>;
   download(path: string): Promise<{ data: Uint8Array | null; error?: unknown | null }>;
   createSignedUrl(path: string, expiresInSeconds: number): Promise<{ data: { signedUrl?: string } | null; error?: unknown | null }>;
@@ -176,10 +177,26 @@ export function createStoreDeclarationRouter({
       return;
     }
 
+    const lojaId = typeof req.query.lojaId === 'string' ? req.query.lojaId : '';
+    if (!isUuid(lojaId)) {
+      res.status(400).json({ success: false, message: 'É necessário seleccionar uma loja válida.' });
+      return;
+    }
+
+    const { data: activeStore, error: storeError } = await repository.getActiveStore(lojaId);
+    if (storeError) {
+      res.status(503).json({ success: false, message: 'Não foi possível validar a loja seleccionada.' });
+      return;
+    }
+    if (!activeStore) {
+      res.status(404).json({ success: false, message: 'Loja não encontrada ou inactiva.' });
+      return;
+    }
+
     await deliverPurchaseDeclaration(req.params.id, {
       id: admin.id,
       role: 'admin',
-      lojaId: null,
+      lojaId,
     }, repository, res);
   });
 
