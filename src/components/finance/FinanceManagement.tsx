@@ -196,18 +196,28 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
       setPaymentEventsError(null);
       return;
     }
-    setPaymentEventsLoading(true);
-    setPaymentEventsError(null);
-    adminApiRequest(`/api/admin/finance/payments/${encodeURIComponent(selectedTx.id)}/events`)
-      .then((result) => {
-        if (active) setPaymentEvents(Array.isArray(result?.data) ? result.data : []);
-      })
-      .catch((error: any) => {
+    const loadPaymentEvents = async () => {
+      setPaymentEventsLoading(true);
+      setPaymentEventsError(null);
+      try {
+        const token = typeof window !== 'undefined' ? sessionStorage.getItem('diamante_jwt_token') : null;
+        if (!token) throw new Error('Sessão administrativa não encontrada.');
+        const response = await fetch(`/api/admin/finance/payments/${encodeURIComponent(selectedTx.id)}/events`, {
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        const result: { success?: boolean; data?: Array<Record<string, any>>; message?: string } = await response.json().catch(() => ({}));
+        if (!response.ok || result.success !== true) {
+          throw new Error(result.message || 'Não foi possível carregar o histórico.');
+        }
+        if (active) setPaymentEvents(Array.isArray(result.data) ? result.data : []);
+      } catch (error: any) {
         if (active) setPaymentEventsError(error?.message || 'Não foi possível carregar o histórico.');
-      })
-      .finally(() => {
+      } finally {
         if (active) setPaymentEventsLoading(false);
-      });
+      }
+    };
+    void loadPaymentEvents();
     return () => { active = false; };
   }, [selectedTx?.id]);
 
