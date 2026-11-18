@@ -160,7 +160,9 @@ BEGIN
   IF f.total_pago <> 12.34 OR f.total_rejeitado <> 11.33 OR f.quantidade_despesas <> 3 THEN
     RAISE EXCEPTION 'Snapshot financeiro incorrecto: %, %, %, %',f.total_pago,f.total_rejeitado,f.total_pendente,f.quantidade_despesas;
   END IF;
-  IF f.snapshot_categorias->>'energia_agua' <> '15.67' THEN
+  IF f.snapshot_categorias->'energia_agua'->>'paga' <> '12.34'
+     OR f.snapshot_categorias->'energia_agua'->>'rejeitada' <> '3.33'
+     OR f.snapshot_categorias->'energia_agua'->>'pendente' <> '0' THEN
     RAISE EXCEPTION 'Snapshot por categoria incorrecto: %',f.snapshot_categorias;
   END IF;
 END $$;
