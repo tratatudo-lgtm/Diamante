@@ -16,7 +16,7 @@ DECLARE
   v_point public.registos_ponto%ROWTYPE;
 BEGIN
   IF p_funcionario_id IS NULL OR p_loja_id IS NULL
-     OR p_tipo NOT IN ('entrada','saida') THEN
+     OR p_tipo IS NULL OR p_tipo NOT IN ('entrada','saida') THEN
     RAISE EXCEPTION 'Invalid time-clock input' USING ERRCODE='22023';
   END IF;
 
