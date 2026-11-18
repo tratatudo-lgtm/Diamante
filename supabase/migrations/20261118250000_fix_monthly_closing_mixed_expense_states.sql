@@ -51,13 +51,21 @@ BEGIN
     AND d.data_despesa >= p_periodo
     AND d.data_despesa < (p_periodo + interval '1 month');
 
+  -- Preserve the established API shape: each category contains totals by state.
+  -- The status sums are calculated per expense row, not from MAX(estado).
   SELECT COALESCE(
-    jsonb_object_agg(category_totals.categoria, category_totals.total_categoria),
+    jsonb_object_agg(category_totals.categoria, category_totals.totals),
     '{}'::jsonb
   )
   INTO v_categories
   FROM (
-    SELECT d.categoria, sum(d.valor)::numeric(16,2) AS total_categoria
+    SELECT
+      d.categoria,
+      jsonb_build_object(
+        'paga', COALESCE(sum(d.valor) FILTER (WHERE d.estado = 'paga'), 0),
+        'pendente', COALESCE(sum(d.valor) FILTER (WHERE d.estado IN ('pendente', 'aprovada')), 0),
+        'rejeitada', COALESCE(sum(d.valor) FILTER (WHERE d.estado = 'rejeitada'), 0)
+      ) AS totals
     FROM public.despesas_operacionais d
     WHERE d.loja_id = p_loja_id
       AND d.data_despesa >= p_periodo
