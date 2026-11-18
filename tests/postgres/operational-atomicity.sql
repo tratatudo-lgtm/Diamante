@@ -298,14 +298,6 @@ BEGIN
    RAISE EXCEPTION 'last_message_at não foi actualizado na mesma transacção';
  END IF;
 
- CREATE FUNCTION public.reject_test_conversation_activity()
- RETURNS trigger LANGUAGE plpgsql AS $$
- BEGIN
-  RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';
- END $$;
- CREATE TRIGGER fail_collab_activity BEFORE UPDATE ON public.collab_conversations
- FOR EACH ROW EXECUTE FUNCTION public.reject_test_conversation_activity();
-
  SELECT last_message_at INTO v_last FROM public.collab_conversations WHERE id=v_id;
  failed:=false;
  BEGIN
