@@ -1,4 +1,5 @@
 import { createStoreDeclarationRouter } from './store-declaration-router';
+import { dispatchStoreInventoryItem } from './store-inventory-dispatch';
 import { Router, Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import { decodeDeclarationFile } from './store-purchase-validation';
@@ -202,38 +203,35 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
   const itemId = typeof req.params.id === 'string' ? req.params.id : '';
   const lojaId = await resolveRequestedStore(employee, req.body?.lojaId, res);
   if (!lojaId || !employee) return;
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(itemId)) {
-    return res.status(400).json({ success: false, message: 'Identificador de inventário inválido.' });
+  const result = await dispatchStoreInventoryItem(
+    { itemId, storeId: lojaId, employeeId: employee.id },
+    {
+      async dispatch(input) {
+        const { data, error } = await supabaseAdmin
+          .from('inventario_fisico')
+          .update({ estado: 'enviado_sede', data_saida: input.dispatchedAt, expedido_por: input.employeeId })
+          .eq('id', input.itemId)
+          .eq('loja_atual_id', input.storeId)
+          .eq('estado', 'em_loja')
+          .select('id, codigo_unico, estado, data_saida, peso_gramas, transacao_origem_id')
+          .maybeSingle();
+        return { data, error };
+      },
+    },
+  );
+
+  if (result.status !== 200) {
+    if (result.status === 503) console.error('[STORE INVENTORY] Falha ao expedir peça.');
+    return res.status(result.status).json({ success: false, message: result.message });
   }
 
-  try {
-    const { data, error } = await supabaseAdmin
-      .from('inventario_fisico')
-      .update({ estado: 'enviado_sede', data_saida: new Date().toISOString(), expedido_por: employee.id })
-      .eq('id', itemId)
-      .eq('loja_atual_id', lojaId)
-      .eq('estado', 'em_loja')
-      .select('id, codigo_unico, estado, data_saida, peso_gramas, transacao_origem_id')
-      .maybeSingle();
-
-    if (error) {
-      console.error('[STORE INVENTORY] Falha ao expedir peça.');
-      return res.status(503).json({ success: false, message: 'Não foi possível registar a expedição do inventário.' });
-    }
-    if (!data) {
-      return res.status(409).json({ success: false, message: 'A peça já não está disponível nesta loja ou já foi expedida.' });
-    }
-
-    const io = (globalThis as any).io;
-    if (io) {
-      io.to('admin').emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: lojaId });
-      io.to('store:' + lojaId).emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: lojaId });
-    }
-    return res.json({ success: true, item: data });
-  } catch {
-    console.error('[STORE INVENTORY] Erro interno ao expedir peça.');
-    return res.status(500).json({ success: false, message: 'Erro interno ao registar a expedição.' });
+  const data = result.item;
+  const io = (globalThis as any).io;
+  if (io) {
+    io.to('admin').emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: lojaId });
+    io.to('store:' + lojaId).emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: lojaId });
   }
+  return res.json({ success: true, item: data });
 });
 
 storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
