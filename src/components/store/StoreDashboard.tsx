@@ -27,6 +27,7 @@ import { pt } from 'date-fns/locale';
 interface StoreDashboardProps {
   onNavigateTab: (tabIndex: number) => void;
   onShowToast: (type: 'success' | 'error' | 'info', message: string, title?: string) => void;
+  selectedStoreId?: string;
 }
 
 interface FeedActivity {
@@ -38,10 +39,10 @@ interface FeedActivity {
   funcionarioNome?: string;
 }
 
-export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, onShowToast }) => {
+export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, onShowToast, selectedStoreId }) => {
   const { userSession, funcionario } = useAuth();
-  const funcionarioId = userSession?.id || funcionario?.id || '';
-  const lojaId = userSession?.loja_id || funcionario?.loja_id || '';
+  const lojaId = selectedStoreId || userSession?.loja_id || funcionario?.loja_id || '';
+  const isAdmin = (userSession?.role || funcionario?.role) === 'admin';
 
   // Data states
   const [lojaInfo, setLojaInfo] = useState<Loja | null>(null);
@@ -83,7 +84,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
       const todayStr = format(now, 'yyyy-MM-dd');
       const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
       const yesterdayStr = format(yesterday, 'yyyy-MM-dd');
-      const response = await fetch('/api/store/dashboard?today=' + todayStr + '&yesterday=' + yesterdayStr, {
+      const response = await fetch('/api/store/dashboard?today=' + todayStr + '&yesterday=' + yesterdayStr + (selectedStoreId ? '&lojaId=' + encodeURIComponent(selectedStoreId) : ''), {
         headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
         signal: AbortSignal.timeout(10000),
       });
@@ -103,7 +104,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
       const points = Array.isArray(payload.pontos) ? payload.pontos as RegistoPonto[] : [];
       const lastPoint = points[0] || null;
       setUltimoPonto(lastPoint);
-      setIsClockedIn(lastPoint?.tipo === 'entrada');
+      setIsClockedIn(!isAdmin && lastPoint?.tipo === 'entrada');
 
       const transactions = Array.isArray(payload.transacoes) ? payload.transacoes as Transacao[] : [];
       const combined: FeedActivity[] = [];
@@ -122,7 +123,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
         }
         combined.push({ id: 'tx-' + tx.id, timestamp: tx.created_at, type, title, valor: tx.valor_final });
       });
-      points.slice(0, 3).forEach((point) => {
+      (isAdmin ? [] : points.slice(0, 3)).forEach((point) => {
         combined.push({
           id: 'pt-' + point.id,
           timestamp: point.timestamp,
@@ -138,7 +139,7 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
     } finally {
       setIsLoading(false);
     }
-  }, [onShowToast]);
+  }, [onShowToast, selectedStoreId, isAdmin]);
 
   useEffect(() => {
     void loadDashboardData();
@@ -258,51 +259,54 @@ export const StoreDashboard: React.FC<StoreDashboardProps> = ({ onNavigateTab, o
                 </span>
               </div>
 
-              {/* Indicador Status: Online / Offline */}
-              <div
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${
-                  isClockedIn
-                    ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-400'
-                    : 'bg-rose-950/60 border-rose-700/60 text-rose-400'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    isClockedIn ? 'bg-emerald-400' : 'bg-rose-500'
+              {!isAdmin && (
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-semibold ${
+                    isClockedIn
+                      ? 'bg-emerald-950/60 border-emerald-700/60 text-emerald-400'
+                      : 'bg-rose-950/60 border-rose-700/60 text-rose-400'
                   }`}
-                />
-                <span>{isClockedIn ? 'Turno Ativo (Online)' : 'Fora de Turno (Offline)'}</span>
-              </div>
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isClockedIn ? 'bg-emerald-400' : 'bg-rose-500'
+                    }`}
+                  />
+                  <span>{isClockedIn ? 'Turno Ativo (Online)' : 'Fora de Turno (Offline)'}</span>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Botão Clock In/Out com Geolocation (Hitbox 48px+) */}
-          <button
-            onClick={handleToggleClock}
-            disabled={isClocking}
-            className={`min-h-[48px] px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-98 disabled:opacity-50 shrink-0 ${
-              isClockedIn
-                ? 'bg-gray-800 hover:bg-rose-950 text-rose-300 border border-rose-800/60'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30'
-            }`}
-          >
-            {isClocking ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>A processar...</span>
-              </>
-            ) : isClockedIn ? (
-              <>
-                <LogOut className="w-4 h-4" />
-                <span>Efetuar Clock Out</span>
-              </>
-            ) : (
-              <>
-                <LogIn className="w-4 h-4" />
-                <span>Efetuar Clock In</span>
-              </>
-            )}
-          </button>
+          {!isAdmin && (
+  
+            <button
+              onClick={handleToggleClock}
+              disabled={isClocking}
+              className={`min-h-[48px] px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-98 disabled:opacity-50 shrink-0 ${
+                isClockedIn
+                  ? 'bg-gray-800 hover:bg-rose-950 text-rose-300 border border-rose-800/60'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30'
+              }`}
+            >
+              {isClocking ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>A processar...</span>
+                </>
+              ) : isClockedIn ? (
+                <>
+                  <LogOut className="w-4 h-4" />
+                  <span>Efetuar Clock Out</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-4 h-4" />
+                  <span>Efetuar Clock In</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
 
         {ultimoPonto && (
