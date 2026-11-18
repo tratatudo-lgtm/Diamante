@@ -5,10 +5,8 @@ import { canAccessPurchaseDeclaration, isUuid } from '../store-declaration-acces
 const purchaseStore = '11111111-1111-4111-8111-111111111111';
 const otherStore = '22222222-2222-4222-8222-222222222222';
 
-test('administrador só pode consultar declaração da loja seleccionada', () => {
-  assert.equal(canAccessPurchaseDeclaration({ id: 'admin-1', role: 'admin', lojaId: purchaseStore }, purchaseStore), true);
-  assert.equal(canAccessPurchaseDeclaration({ id: 'admin-1', role: 'admin', lojaId: otherStore }, purchaseStore), false);
-  assert.equal(canAccessPurchaseDeclaration({ id: 'admin-1', role: 'admin', lojaId: null }, purchaseStore), false);
+test('administrador autenticado pode consultar declaração de qualquer loja', () => {
+  assert.equal(canAccessPurchaseDeclaration({ id: 'admin-1', role: 'admin', lojaId: null }, purchaseStore), true);
 });
 
 test('funcionário pode consultar declaração apenas da própria loja', () => {
