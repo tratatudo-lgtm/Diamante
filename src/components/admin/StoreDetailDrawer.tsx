@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 
 import type { LojaComKpi, Transacao, Funcionario, KpiLojaDiaria } from '../../types/database';
-import { X, Building2, MapPin, Users, Receipt, Calendar, ArrowRight, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import { X, Building2, MapPin, Users, Receipt, Calendar, ArrowRight, ShieldCheck, CheckCircle2, FileText } from 'lucide-react';
 
 interface StoreDetailDrawerProps {
   loja: LojaComKpi | null;
@@ -21,6 +21,7 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
   const [historyKpis, setHistoryKpis] = useState<KpiLojaDiaria[]>([]);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isApproving, setIsApproving] = useState<string | null>(null);
+  const [isOpeningDeclaration, setIsOpeningDeclaration] = useState<string | null>(null);
   const [detailsError, setDetailsError] = useState<string | null>(null);
 
   const fetchStoreDetails = useCallback(async (lojaId: string) => {
@@ -124,6 +125,35 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
       console.warn('[War Room] Falha na aprovação da transação:', message);
     } finally {
       setIsApproving(null);
+    }
+  };
+
+  const handleViewDeclaration = async (txId: string) => {
+    const documentWindow = window.open('', '_blank');
+    if (!documentWindow) {
+      setDetailsError('O navegador bloqueou a abertura do documento. Permita pop-ups e tente novamente.');
+      return;
+    }
+    documentWindow.opener = null;
+    setIsOpeningDeclaration(txId);
+    setDetailsError(null);
+    try {
+      const token = sessionStorage.getItem('diamante_jwt_token');
+      if (!token) throw new Error('Sessão administrativa expirada. Volte a iniciar sessão.');
+      const response = await fetch(`/api/store/admin/purchases/${encodeURIComponent(txId)}/declaration?lojaId=${encodeURIComponent(loja!.id)}`, {
+        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success !== true || typeof payload.url !== 'string') {
+        throw new Error(payload?.message || 'Não foi possível validar ou abrir a declaração.');
+      }
+      documentWindow.location.href = payload.url;
+    } catch (err) {
+      documentWindow.close();
+      setDetailsError(err instanceof Error ? err.message : 'Erro inesperado ao abrir a declaração.');
+    } finally {
+      setIsOpeningDeclaration(null);
     }
   };
 
@@ -253,6 +283,17 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
                         {tx.estado}
                       </span>
 
+                      {(tx as Transacao & { declaracao_assinada_id?: string | null }).declaracao_assinada_id && (
+                        <button
+                          onClick={() => handleViewDeclaration(tx.id)}
+                          disabled={isOpeningDeclaration === tx.id}
+                          title="Abrir declaração assinada (acesso auditado)"
+                          className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-[10px] font-medium transition-colors flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <FileText className="w-3 h-3" />
+                          <span>{isOpeningDeclaration === tx.id ? 'A abrir...' : 'Declaração'}</span>
+                        </button>
+                      )}
                       {tx.estado === 'pendente_aprovacao' && (
                         <button
                           onClick={() => handleApproveTransaction(tx.id)}
