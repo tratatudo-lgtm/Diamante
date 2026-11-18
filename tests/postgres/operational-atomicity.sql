@@ -65,6 +65,8 @@ CREATE TABLE public.collab_report_events (
  new_values jsonb NOT NULL DEFAULT '{}'::jsonb, created_at timestamptz NOT NULL DEFAULT now()
 );
 
+INSERT INTO public.funcionarios(id,nome_completo,role,ativo,loja_id) VALUES
+ ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee','Funcionário inactivo','funcionario',false,'11111111-1111-4111-8111-111111111111');
 CREATE TABLE public.collab_conversations (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tipo text NOT NULL CHECK(tipo IN ('directa','grupo')),
  titulo text, criada_por uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
@@ -288,6 +290,15 @@ BEGIN
  EXCEPTION WHEN SQLSTATE '22023' THEN failed:=true;
  END;
  IF NOT failed THEN RAISE EXCEPTION 'Participantes duplicados não foram rejeitados'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_conversation_with_members(
+   'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee','directa',NULL,
+   ARRAY['eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'::uuid,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid]);
+ EXCEPTION WHEN SQLSTATE '42501' OR SQLSTATE '22023' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário inactivo conseguiu criar conversa'; END IF;
 
  v:=public.send_collab_message_with_activity(v_id,
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Mensagem transaccional');
