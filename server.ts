@@ -938,7 +938,7 @@ app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
     const [transactionsRes, employeesRes, historyKpisRes] = await Promise.all([
       supabaseAdmin
         .from('transacoes')
-        .select('id, valor_final, peso_gramas, created_at, estado')
+        .select('id, loja_id, valor_final, peso_gramas, created_at, estado, declaracao_assinada_id')
         .eq('loja_id', lojaId)
         .order('created_at', { ascending: false })
         .limit(10),
