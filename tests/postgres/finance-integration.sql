@@ -18,6 +18,7 @@ INSERT INTO public.despesas_operacionais(
 \ir ../../supabase/migrations/20261118220000_add_financial_payment_audit.sql
 \ir ../../supabase/migrations/20261118230000_add_operational_expense_audit.sql
 \ir ../../supabase/migrations/20261118240000_protect_financial_closing_snapshots.sql
+\ir ../../supabase/migrations/20261118250000_fix_monthly_closing_mixed_expense_states.sql
 
 DO $$
 DECLARE n integer;
