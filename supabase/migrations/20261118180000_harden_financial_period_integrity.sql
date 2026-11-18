@@ -23,7 +23,7 @@ BEGIN
 
   -- Deterministic ordering prevents deadlocks when an expense moves across stores/months.
   FOR v_key IN
-    SELECT DISTINCT item FROM unnest(v_keys) AS item ORDER BY item
+    SELECT DISTINCT lock_key FROM unnest(v_keys) AS keys(lock_key) ORDER BY lock_key
   LOOP
     PERFORM pg_advisory_xact_lock(hashtextextended(v_key, 0));
   END LOOP;
