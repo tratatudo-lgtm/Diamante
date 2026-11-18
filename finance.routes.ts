@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from './auth.service';
 import { verifyAdmin } from './middleware/verifyAdmin';
+import { summarizeExpenses } from './finance-expense-summary';
 
 const router = Router();
 router.use(verifyAdmin);
@@ -254,17 +255,13 @@ router.get('/expenses/summary', async (req: Request, res: Response) => {
       allRows.push(...(page || []));
       if (!page || page.length < pageSize) break;
     }
-    const stores = new Map<string, { loja_id: string; paid: number; pending: number; rejected: number; byCategory: Record<string, number> }>();
-    let paid = 0, pending = 0, rejected = 0;
-    for (const row of allRows) {
-      const value = Number(row.valor) || 0;
-      if (!stores.has(row.loja_id)) stores.set(row.loja_id, { loja_id: row.loja_id, paid: 0, pending: 0, rejected: 0, byCategory: {} });
-      const store = stores.get(row.loja_id)!;
-      if (row.estado === 'paga') { paid += value; store.paid += value; store.byCategory[row.categoria] = (store.byCategory[row.categoria] || 0) + value; }
-      else if (row.estado === 'pendente' || row.estado === 'aprovada') { pending += value; store.pending += value; }
-      else if (row.estado === 'rejeitada') { rejected += value; store.rejected += value; }
-    }
-    return res.json({ success: true, month, totals: { paid, pending, rejected }, stores: Array.from(stores.values()).sort((a,b) => b.paid - a.paid) });
+    const summary = summarizeExpenses(allRows);
+    return res.json({
+      success: true,
+      month,
+      totals: { paid: summary.paid, pending: summary.pending, rejected: summary.rejected },
+      stores: summary.stores,
+    });
   } catch {
     return res.status(500).json({ success: false, message: 'Erro interno ao calcular resumo financeiro.' });
   }
