@@ -22,6 +22,16 @@ INSERT INTO public.funcionarios(id,nome_completo,role,loja_id) VALUES
 INSERT INTO public.funcionarios(id,nome_completo,role,ativo,loja_id) VALUES
  ('dddddddd-dddd-4ddd-8ddd-dddddddddddd','Funcionário de teste de rollback','funcionario',true,'11111111-1111-4111-8111-111111111111');
 
+CREATE TABLE public.registos_ponto(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id),
+ loja_id uuid NOT NULL REFERENCES public.lojas(id),
+ tipo text NOT NULL CHECK(tipo IN ('entrada','saida')),
+ timestamp timestamptz NOT NULL DEFAULT clock_timestamp(),
+ localizacao jsonb
+);
+
+
 CREATE TABLE public.operational_tasks (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, description text NOT NULL DEFAULT '',
  status text NOT NULL DEFAULT 'por_fazer', priority text NOT NULL DEFAULT 'normal',
@@ -179,6 +189,7 @@ CREATE TABLE public.crm_expansion_site_events(
  old_values jsonb,new_values jsonb,created_at timestamptz NOT NULL DEFAULT now()
 );
 \ir ../../supabase/migrations/20261118220000_atomic_crm_opportunity_expansion_writes.sql
+\ir ../../supabase/migrations/20261118230000_atomic_employee_time_clock.sql
 DO $crm_rpc_permissions$
 BEGIN
  IF has_function_privilege('authenticated','public.create_crm_opportunity_with_event(uuid,jsonb)','EXECUTE')
@@ -666,3 +677,51 @@ BEGIN
  IF n<>0 THEN RAISE EXCEPTION 'Estudo parcial persistiu sem evento'; END IF;
 END $crm_atomic$;
 SELECT 'POSTGRES_CRM_OPPORTUNITY_EXPANSION_ATOMICITY_OK' AS result;
+
+DO $clock_atomic$
+DECLARE p public.registos_ponto; failed boolean;
+BEGIN
+ p:=public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  '11111111-1111-4111-8111-111111111111','entrada',NULL);
+ IF p.tipo<>'entrada' OR p.funcionario_id<>'cccccccc-cccc-4ccc-8ccc-cccccccccccc' THEN
+  RAISE EXCEPTION 'Entrada de ponto não foi registada correctamente';
+ END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+   '11111111-1111-4111-8111-111111111111','entrada',NULL);
+ EXCEPTION WHEN SQLSTATE '23505' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Entrada duplicada não foi bloqueada'; END IF;
+ p:=public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  '11111111-1111-4111-8111-111111111111','saida',NULL);
+ IF p.tipo<>'saida' THEN RAISE EXCEPTION 'Saída válida não foi registada'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+   '11111111-1111-4111-8111-111111111111','saida',NULL);
+ EXCEPTION WHEN SQLSTATE '23505' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Saída sem turno activo não foi bloqueada'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.register_employee_time_clock('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+   '11111111-1111-4111-8111-111111111111','entrada',NULL);
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário inactivo conseguiu registar ponto'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+   '99999999-9999-4999-8999-999999999999','entrada',NULL);
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário conseguiu registar ponto noutra loja'; END IF;
+ IF has_function_privilege('authenticated','public.register_employee_time_clock(uuid,uuid,text,jsonb)','EXECUTE') THEN
+  RAISE EXCEPTION 'authenticated não pode executar RPC SECURITY DEFINER';
+ END IF;
+ IF NOT has_function_privilege('service_role','public.register_employee_time_clock(uuid,uuid,text,jsonb)','EXECUTE') THEN
+  RAISE EXCEPTION 'service_role não tem EXECUTE na RPC';
+ END IF;
+END $clock_atomic$;
+SELECT 'POSTGRES_EMPLOYEE_TIME_CLOCK_ATOMICITY_OK' AS result;
