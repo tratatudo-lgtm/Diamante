@@ -61,22 +61,24 @@ router.get('/conversations', async (req: AuthenticatedRequest, res: Response) =>
   const ids = (memberships || []).map((item: any) => item.conversation_id);
   if (!ids.length) return res.json({ success: true, conversations: [] });
 
-  const [{ data: conversations, error }, { data: allMembers }] = await Promise.all([
+  const [{ data: conversations, error }, { data: allMembers, error: membersError }] = await Promise.all([
     supabaseAdmin.from('collab_conversations').select('id, tipo, titulo, loja_id, criada_por, created_at, updated_at, last_message_at')
       .in('id', ids).order('last_message_at', { ascending: false }),
     supabaseAdmin.from('collab_conversation_members')
       .select('conversation_id, funcionario_id, papel, last_read_at, funcionarios(nome_completo, role, loja_id)')
       .in('conversation_id', ids),
   ]);
-  if (error) return fail(res, 503, 'Não foi possível carregar as conversas.');
+  if (error || membersError) return fail(res, 503, 'Não foi possível carregar as conversas e os respectivos participantes.');
   const readAt = new Map((memberships || []).map((item: any) => [item.conversation_id, item.last_read_at]));
   const result = await Promise.all((conversations || []).map(async (conversation: any) => {
     const members = (allMembers || []).filter((item: any) => item.conversation_id === conversation.id);
     const lastRead = readAt.get(conversation.id) as string;
-    const { count } = await supabaseAdmin.from('collab_messages').select('id', { count: 'exact', head: true })
+    const { count, error: unreadError } = await supabaseAdmin.from('collab_messages').select('id', { count: 'exact', head: true })
       .eq('conversation_id', conversation.id).neq('sender_id', user.id).gt('created_at', lastRead || '1970-01-01T00:00:00Z');
+    if (unreadError) throw unreadError;
     return { ...conversation, members, unread_count: count || 0 };
-  }));
+  }).catch(() => null);
+  if (!result) return fail(res, 503, 'Não foi possível calcular as mensagens por ler.');
   return res.json({ success: true, conversations: result });
 });
 
