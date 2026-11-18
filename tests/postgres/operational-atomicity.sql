@@ -447,6 +447,18 @@ VALUES ('13131313-1313-4131-8131-131313131313','12121212-1212-4121-8121-12121212
  'cc','12345678','2030-01-01','12121212-1212-4121-8121-121212121212/old.pdf',
  'application/pdf',100,'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
 
+CREATE FUNCTION public.reject_test_client_document_insert()
+ RETURNS trigger LANGUAGE plpgsql AS $
+ BEGIN
+  IF current_setting('test.fail_client_document_insert',true)='on' THEN
+   RAISE EXCEPTION 'injected_client_document_failure' USING ERRCODE='P0001';
+  END IF;
+  RETURN NEW;
+ END $;
+ CREATE TRIGGER reject_client_document_insert BEFORE INSERT ON public.cliente_documentos
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_client_document_insert();
+
+
 DO $client_document$
 DECLARE v jsonb; n integer; failed boolean;
 BEGIN
@@ -465,17 +477,6 @@ BEGIN
    AND tipo_documento='passaporte' AND bi_cc='AB123456' AND data_validade_documento='2035-01-01') THEN
   RAISE EXCEPTION 'Os metadados do cliente não foram sincronizados';
  END IF;
-
- CREATE FUNCTION public.reject_test_client_document_insert()
- RETURNS trigger LANGUAGE plpgsql AS $$
- BEGIN
-  IF current_setting('test.fail_client_document_insert',true)='on' THEN
-   RAISE EXCEPTION 'injected_client_document_failure' USING ERRCODE='P0001';
-  END IF;
-  RETURN NEW;
- END $$;
- CREATE TRIGGER reject_client_document_insert BEFORE INSERT ON public.cliente_documentos
- FOR EACH ROW EXECUTE FUNCTION public.reject_test_client_document_insert();
 
  PERFORM set_config('test.fail_client_document_insert','on',true);
  failed:=false;
