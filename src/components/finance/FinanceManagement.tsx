@@ -1054,7 +1054,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                   <span className="font-medium">{selectedTx.lojaNome}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Código SEPA:</span>
+                  <span className="text-slate-500">Referência indicada:</span>
                   <span className="font-mono text-[10px]">
                     {selectedTx.comprovativoRef || 'Não fornecido'}
                   </span>
@@ -1062,8 +1062,8 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
               </div>
 
               <div className="text-[10px] text-slate-400 text-center leading-relaxed">
-                Este documento serve de comprovativo oficial da ordem de transferência irrevogável
-                para aquisição de artefactos em metais preciosos.
+                Este documento é apenas um registo interno dos dados introduzidos no sistema.
+                Não constitui comprovativo bancário, confirmação SEPA ou prova de liquidação.
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
