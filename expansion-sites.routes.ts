@@ -9,10 +9,6 @@ const statuses=new Set(['em_avaliacao','visita_pendente','em_negociacao','aprova
 const scoreFields=['footfall_score','visibility_score','accessibility_score','competition_score','security_score','parking_score','fit_score'] as const;
 const textLimits:Record<string,number>={name:180,address:300,city:120,district:120,notes:8000};
 
-async function event(siteId:string,actorId:string,action:string,oldValues:unknown,newValues:unknown){
- const {error}=await supabaseAdmin.from('crm_expansion_site_events').insert({site_id:siteId,actor_id:actorId,action,old_values:oldValues??null,new_values:newValues??null});
- return !error;
-}
 async function validateOpportunity(id:unknown){
  if(id===null||id===undefined||id==='')return {value:null,error:null};
  if(typeof id!=='string')return {value:null,error:'Oportunidade associada inválida.'};
