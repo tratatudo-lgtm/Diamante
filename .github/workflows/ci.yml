@@ -6,6 +6,7 @@ on:
       - main
       - rebuild/diamante-douro-secure
       - feat/admin-store-operations-20261117
+      - integration/pr8-pr10-pr5-20261118
   pull_request:
     branches:
       - main
