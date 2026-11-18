@@ -136,36 +136,26 @@ storeRouter.post('/clock', verifyAuth, async (req: AuthenticatedRequest, res: Re
   }
 
   try {
-    const { data: lastPoint, error: lastPointError } = await supabaseAdmin
-      .from('registos_ponto')
-      .select('tipo')
-      .eq('funcionario_id', employee.id)
-      .order('timestamp', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (lastPointError) {
-      console.error('[STORE CLOCK] Falha ao verificar o último registo.');
-      return res.status(503).json({ success: false, message: 'Não foi possível validar o último registo de ponto.' });
-    }
-    if (lastPoint?.tipo === tipo) {
-      return res.status(409).json({ success: false, message: tipo === 'entrada' ? 'Já existe um turno activo.' : 'Não existe um turno activo para terminar.' });
-    }
-
-    const { data, error } = await supabaseAdmin
-      .from('registos_ponto')
-      .insert({
-        funcionario_id: employee.id,
-        loja_id: employee.loja_id,
-        tipo,
-        timestamp: new Date().toISOString(),
-        localizacao,
-      })
-      .select('id, funcionario_id, loja_id, tipo, timestamp, localizacao')
-      .single();
+    const { data, error } = await supabaseAdmin.rpc('register_employee_time_clock', {
+      p_funcionario_id: employee.id,
+      p_loja_id: employee.loja_id,
+      p_tipo: tipo,
+      p_localizacao: localizacao,
+    });
 
     if (error || !data) {
-      console.error('[STORE CLOCK] Falha ao guardar o registo de ponto.');
+      if (error?.code === '23505') {
+        return res.status(409).json({
+          success: false,
+          message: tipo === 'entrada'
+            ? 'Já existe um turno activo.'
+            : 'Não existe um turno activo para terminar.',
+        });
+      }
+      if (error?.code === '42501') {
+        return res.status(403).json({ success: false, message: 'A sua conta ou loja já não está autorizada a registar ponto.' });
+      }
+      console.error('[STORE CLOCK] Falha ao registar ponto através da operação atómica.');
       return res.status(503).json({ success: false, message: 'Não foi possível guardar o registo de ponto.' });
     }
     return res.status(201).json({ success: true, ponto: data });
