@@ -5,14 +5,53 @@ import { decodeDeclarationFile } from './store-purchase-validation';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { supabaseAdmin } from './auth.service';
 import { verifyAdmin } from './middleware/verifyAdmin';
+import { resolveStoreScope } from './store-scope';
 
 const storeRouter = Router();
 
+async function resolveRequestedStore(
+  employee: AuthenticatedRequest['authenticatedUser'],
+  requestedStoreId: unknown,
+  res: Response,
+): Promise<string | null> {
+  const scope = resolveStoreScope(employee, requestedStoreId);
+  if (!scope.ok) {
+    res.status(scope.status).json({ success: false, message: scope.message });
+    return null;
+  }
+  const { data: store, error } = await supabaseAdmin.from('lojas')
+    .select('id').eq('id', scope.lojaId).eq('ativo', true).maybeSingle();
+  if (error) {
+    console.error('[STORE SCOPE] Falha ao validar loja activa.');
+    res.status(503).json({ success: false, message: 'Não foi possível validar a loja seleccionada.' });
+    return null;
+  }
+  if (!store) {
+    res.status(404).json({ success: false, message: 'Loja não encontrada ou inactiva.' });
+    return null;
+  }
+  return scope.lojaId;
+}
+
+storeRouter.get('/stores', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const actor = req.authenticatedUser;
+  if (!actor?.ativo || actor.role !== 'admin') {
+    return res.status(403).json({ success: false, message: 'A lista de lojas está reservada à administração.' });
+  }
+  const { data, error } = await supabaseAdmin.from('lojas')
+    .select('id, nome, codigo_loja, morada').eq('ativo', true).order('nome', { ascending: true });
+  if (error) {
+    console.error('[STORE SCOPE] Falha ao listar lojas activas.');
+    return res.status(503).json({ success: false, message: 'Não foi possível carregar as lojas.' });
+  }
+  return res.json({ success: true, lojas: data || [] });
+});
+
+
 storeRouter.get('/dashboard', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
-    return res.status(403).json({ success: false, message: 'A sua conta não tem acesso ao painel desta loja.' });
-  }
+  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res);
+  if (!lojaId) return;
 
   const today = typeof req.query.today === 'string' ? req.query.today : '';
   const yesterday = typeof req.query.yesterday === 'string' ? req.query.yesterday : '';
@@ -29,21 +68,23 @@ storeRouter.get('/dashboard', verifyAuth, async (req: AuthenticatedRequest, res:
     const [storeRes, pointsRes, todayKpiRes, yesterdayKpiRes, stockRes, transactionsRes] = await Promise.all([
       supabaseAdmin.from('lojas')
         .select('id, nome, codigo_loja, morada, telefone, latitude, longitude, ativo')
-        .eq('id', employee.loja_id).eq('ativo', true).maybeSingle(),
-      supabaseAdmin.from('registos_ponto')
-        .select('id, funcionario_id, loja_id, tipo, timestamp, localizacao')
-        .eq('funcionario_id', employee.id)
-        .order('timestamp', { ascending: false }).limit(10),
+        .eq('id', lojaId).eq('ativo', true).maybeSingle(),
+      employee?.role === 'funcionario'
+        ? supabaseAdmin.from('registos_ponto')
+            .select('id, funcionario_id, loja_id, tipo, timestamp, localizacao')
+            .eq('funcionario_id', employee.id)
+            .order('timestamp', { ascending: false }).limit(10)
+        : Promise.resolve({ data: [], error: null }),
       supabaseAdmin.from('kpi_loja_diaria').select('*')
-        .eq('loja_id', employee.loja_id).eq('data', today).maybeSingle(),
+        .eq('loja_id', lojaId).eq('data', today).maybeSingle(),
       supabaseAdmin.from('kpi_loja_diaria').select('*')
-        .eq('loja_id', employee.loja_id).eq('data', yesterday).maybeSingle(),
+        .eq('loja_id', lojaId).eq('data', yesterday).maybeSingle(),
       supabaseAdmin.from('inventario_fisico').select('id, peso_gramas, estado')
-        .eq('loja_atual_id', employee.loja_id)
+        .eq('loja_atual_id', lojaId)
         .in('estado', ['em_loja', 'pendente_aprovacao']),
       supabaseAdmin.from('transacoes')
         .select('id, loja_id, estado, valor_final, peso_gramas, created_at')
-        .eq('loja_id', employee.loja_id)
+        .eq('loja_id', lojaId)
         .order('created_at', { ascending: false }).limit(5),
     ]);
 
@@ -135,15 +176,14 @@ storeRouter.post('/clock', verifyAuth, async (req: AuthenticatedRequest, res: Re
 
 storeRouter.get('/inventory', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
-    return res.status(403).json({ success: false, message: 'A sua conta não tem acesso ao inventário desta loja.' });
-  }
+  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res);
+  if (!lojaId) return;
 
   try {
     const { data, error } = await supabaseAdmin
       .from('inventario_fisico')
       .select('*')
-      .eq('loja_atual_id', employee.loja_id)
+      .eq('loja_atual_id', lojaId)
       .order('data_entrada', { ascending: false });
 
     if (error) {
@@ -160,9 +200,8 @@ storeRouter.get('/inventory', verifyAuth, async (req: AuthenticatedRequest, res:
 storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   const itemId = typeof req.params.id === 'string' ? req.params.id : '';
-  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
-    return res.status(403).json({ success: false, message: 'A sua conta não pode expedir inventário.' });
-  }
+  const lojaId = await resolveRequestedStore(employee, req.body?.lojaId, res);
+  if (!lojaId || !employee) return;
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(itemId)) {
     return res.status(400).json({ success: false, message: 'Identificador de inventário inválido.' });
   }
@@ -172,7 +211,7 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
       .from('inventario_fisico')
       .update({ estado: 'enviado_sede', data_saida: new Date().toISOString(), expedido_por: employee.id })
       .eq('id', itemId)
-      .eq('loja_atual_id', employee.loja_id)
+      .eq('loja_atual_id', lojaId)
       .eq('estado', 'em_loja')
       .select('id, codigo_unico, estado, data_saida, peso_gramas, transacao_origem_id')
       .maybeSingle();
@@ -187,8 +226,8 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
 
     const io = (globalThis as any).io;
     if (io) {
-      io.to('admin').emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: employee.loja_id });
-      io.to('store:' + employee.loja_id).emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: employee.loja_id });
+      io.to('admin').emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: lojaId });
+      io.to('store:' + lojaId).emit('inventory:dispatched', { id: data.id, codigo_unico: data.codigo_unico, peso_gramas: data.peso_gramas, transacao_origem_id: data.transacao_origem_id, data_saida: data.data_saida, loja_id: lojaId });
     }
     return res.json({ success: true, item: data });
   } catch {
@@ -199,9 +238,8 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
 
 storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
-    return res.status(403).json({ success: false, message: 'A sua conta não tem acesso aos parâmetros de compra desta loja.' });
-  }
+  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res);
+  if (!lojaId) return;
 
   try {
     const { data, error } = await supabaseAdmin
@@ -222,7 +260,7 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
     const todayLisbon = lisbonDate(new Date());
     const active = all.filter((item: any) =>
       item && item.ativo === true &&
-      (item.loja_id == null || item.loja_id === employee.loja_id) &&
+      (item.loja_id == null || item.loja_id === lojaId) &&
       Number.isInteger(item.toque_millesimos) && item.toque_millesimos > 0 && item.toque_millesimos <= 1000 &&
       Number.isFinite(item.cotacao_referencia_g) && item.cotacao_referencia_g > 0 &&
       Number.isFinite(item.margem_percentagem) && item.margem_percentagem >= 0 && item.margem_percentagem <= 100 &&
@@ -237,12 +275,12 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
     for (const item of active) {
       const key = 'toque-' + String(item.toque_millesimos);
       const existing = byMetal.get(key);
-      if (!existing || (item.loja_id === employee.loja_id && existing.loja_id == null)) byMetal.set(key, item);
+      if (!existing || (item.loja_id === lojaId && existing.loja_id == null)) byMetal.set(key, item);
     }
 
     return res.json({
       success: true,
-      lojaId: employee.loja_id,
+      lojaId: lojaId,
       margens: Array.from(byMetal.values()).map((item: any) => ({
         metal_tipo: item.metal_tipo,
         toque_millesimos: item.toque_millesimos,
@@ -266,9 +304,8 @@ storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedReque
 // quando a resposta HTTP se perde antes de a compra ser submetida.
 storeRouter.post('/purchases/declaration', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  if (!employee?.ativo || !employee.loja_id || employee.role !== 'funcionario') {
-    return res.status(403).json({ success: false, message: 'A sua conta não pode anexar declarações de compra.' });
-  }
+  const lojaId = await resolveRequestedStore(employee, req.body?.lojaId, res);
+  if (!lojaId || !employee) return;
 
   const body = req.body || {};
   const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : '';
@@ -295,13 +332,14 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
   try {
     const { data: existing, error: existingError } = await supabaseAdmin
       .from('store_purchase_consent_evidence')
-      .select('id,funcionario_id,loja_id,cliente_nome,cliente_documento,sha256')
+      .select('id,funcionario_id,actor_role,loja_id,cliente_nome,cliente_documento,sha256')
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
     if (existingError) throw existingError;
     if (existing) {
       const sameEvidence = existing.funcionario_id === employee.id &&
-        existing.loja_id === employee.loja_id &&
+        existing.actor_role === employee.role &&
+        existing.loja_id === lojaId &&
         existing.cliente_nome === clienteNome &&
         existing.cliente_documento === clienteDocumento &&
         existing.sha256 === sha256;
@@ -309,7 +347,7 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
       return res.status(200).json({ success: true, declarationEvidenceId: existing.id, replay: true });
     }
 
-    const path = `${employee.loja_id}/${idempotencyKey}/${randomUUID()}.${extByMime[mimeType]}`;
+    const path = `${lojaId}/${idempotencyKey}/${randomUUID()}.${extByMime[mimeType]}`;
     uploadedPath = path;
     const { error: uploadError } = await supabaseAdmin.storage.from('declaracoes-compras')
       .upload(path, fileBuffer, { contentType: mimeType, upsert: false });
@@ -320,7 +358,8 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
       .insert({
         idempotency_key: idempotencyKey,
         funcionario_id: employee.id,
-        loja_id: employee.loja_id,
+        actor_role: employee.role,
+        loja_id: lojaId,
         cliente_nome: clienteNome,
         cliente_documento: clienteDocumento,
         storage_path: path,
@@ -335,7 +374,7 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
       if (insertError?.code === '23505') {
         const { data: concurrent, error: concurrentLookupError } = await supabaseAdmin
           .from('store_purchase_consent_evidence')
-          .select('id,funcionario_id,loja_id,cliente_nome,cliente_documento,sha256')
+          .select('id,funcionario_id,actor_role,loja_id,cliente_nome,cliente_documento,sha256')
           .eq('idempotency_key', idempotencyKey)
           .maybeSingle();
 
@@ -348,7 +387,8 @@ storeRouter.post('/purchases/declaration', verifyAuth, async (req: Authenticated
 
         await supabaseAdmin.storage.from('declaracoes-compras').remove([path]);
         if (concurrent.funcionario_id === employee.id &&
-            concurrent.loja_id === employee.loja_id && concurrent.cliente_nome === clienteNome &&
+            concurrent.actor_role === employee.role &&
+            concurrent.loja_id === lojaId && concurrent.cliente_nome === clienteNome &&
             concurrent.cliente_documento === clienteDocumento && concurrent.sha256 === sha256) {
           return res.status(200).json({ success: true, declarationEvidenceId: concurrent.id, replay: true });
         }
@@ -387,6 +427,11 @@ storeRouter.use(createStoreDeclarationRouter({
   verifyAuth,
   verifyAdmin,
   repository: {
+    async getActiveStore(id) {
+      const { data, error } = await supabaseAdmin.from('lojas')
+        .select('id').eq('id', id).eq('ativo', true).maybeSingle();
+      return { data: Boolean(data), error };
+    },
     async getPurchase(id) {
       const { data, error } = await supabaseAdmin.from('transacoes')
         .select('id, loja_id, declaracao_assinada_id').eq('id', id).maybeSingle();
@@ -416,10 +461,8 @@ storeRouter.use(createStoreDeclarationRouter({
 
 storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  if (!employee || !employee.ativo || !employee.loja_id ||
-      employee.role !== 'funcionario') {
-    return res.status(403).json({ success: false, message: 'A sua conta não tem permissões para registar compras nesta loja.' });
-  }
+  const lojaId = await resolveRequestedStore(employee, req.body?.lojaId, res);
+  if (!lojaId || !employee) return;
 
   const body = req.body || {};
   const idempotencyKey = typeof body.idempotencyKey === 'string' ? body.idempotencyKey : '';
@@ -449,7 +492,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
   try {
     const { data: existingPurchase, error: existingPurchaseError } = await supabaseAdmin
       .from('transacoes')
-      .select('id, idempotency_key, declaracao_assinada_id, funcionario_id, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, valor_sugerido, cotacao_spot_dia, margem_aplicada, cotacao_origem, cotacao_moeda, cotacao_unidade, cotacao_observada_em, descricao, estado, created_at')
+      .select('id, idempotency_key, declaracao_assinada_id, funcionario_id, registado_por_role, loja_id, cliente_nome, cliente_cc, cliente_contacto, tipo_peca, metal, peso_gramas, valor_final, valor_sugerido, cotacao_spot_dia, margem_aplicada, cotacao_origem, cotacao_moeda, cotacao_unidade, cotacao_observada_em, descricao, estado, created_at')
       .eq('idempotency_key', idempotencyKey)
       .maybeSingle();
 
@@ -463,7 +506,8 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       const sameRequest =
         existingPurchase.declaracao_assinada_id === declarationEvidenceId &&
         existingPurchase.funcionario_id === employee.id &&
-        existingPurchase.loja_id === employee.loja_id &&
+        existingPurchase.registado_por_role === employee.role &&
+        existingPurchase.loja_id === lojaId &&
         existingPurchase.cliente_nome === clienteNome &&
         existingPurchase.cliente_cc === clienteCc &&
         (existingPurchase.cliente_contacto || '') === (clienteTelemovel || '') &&
@@ -515,7 +559,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     const todayLisbon = lisbonDate(new Date());
     const matching = configs.filter((item: any) =>
       item && item.ativo === true && Number(item.toque_millesimos) === toqueSolicitado &&
-      (item.loja_id == null || item.loja_id === employee.loja_id) &&
+      (item.loja_id == null || item.loja_id === lojaId) &&
       ['referencia_manual_sede', 'xaus.com'].includes(item.cotacao_origem) &&
       item.cotacao_moeda === 'EUR' &&
       item.cotacao_unidade === 'EUR/g_ouro_fino' &&
@@ -523,7 +567,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
       !Number.isNaN(Date.parse(item.cotacao_observada_em)) &&
       lisbonDate(item.cotacao_observada_em) === todayLisbon
     );
-    metalConfig = matching.find((item: any) => item.loja_id === employee.loja_id) ||
+    metalConfig = matching.find((item: any) => item.loja_id === lojaId) ||
       matching.find((item: any) => item.loja_id == null);
     if (!metalConfig || !Number.isInteger(metalConfig.toque_millesimos) ||
         metalConfig.toque_millesimos <= 0 || metalConfig.toque_millesimos > 1000 ||
@@ -559,7 +603,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
     const { data: transaction, error: purchaseError } = await supabaseAdmin.rpc('create_store_purchase', {
       p_idempotency_key: idempotencyKey,
       p_funcionario_id: employee.id,
-      p_loja_id: employee.loja_id,
+      p_loja_id: lojaId,
       p_cliente_nome: clienteNome,
       p_cliente_cc: clienteCc,
       p_cliente_contacto: clienteTelemovel || null,
@@ -595,7 +639,7 @@ storeRouter.post('/purchases', verifyAuth, async (req: AuthenticatedRequest, res
         estado: transaction.estado,
         created_at: transaction.created_at,
       });
-      io.to(`store:${employee.loja_id}`).emit('transaction:created', {
+      io.to(`store:${lojaId}`).emit('transaction:created', {
         id: transaction.id,
         estado: transaction.estado,
         created_at: transaction.created_at,
