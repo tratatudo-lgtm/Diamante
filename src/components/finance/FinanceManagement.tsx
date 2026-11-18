@@ -77,6 +77,10 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
   const [loadingRows,setLoadingRows]=useState(true);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
+  const [selectedExpenseId,setSelectedExpenseId]=useState<string|null>(null);
+  const [expenseEvents,setExpenseEvents]=useState<Array<Record<string,any>>>([]);
+  const [expenseEventsLoading,setExpenseEventsLoading]=useState(false);
+  const [expenseEventsError,setExpenseEventsError]=useState('');
   const [form,setForm]=useState({loja_id:'',categoria:'renda',descricao:'',fornecedor:'',valor:'',data_despesa:new Date().toISOString().slice(0,10)});
   const token=typeof window!=='undefined'?sessionStorage.getItem('diamante_jwt_token'):null;
   const request=async(path:string,init:RequestInit={})=>{
@@ -111,6 +115,12 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
     catch(e:any){setError(e?.message||'Falha ao actualizar despesa.');}
     finally{setBusy(false);}
   };
+  const loadExpenseEvents=async(id:string)=>{
+    setSelectedExpenseId(id);setExpenseEvents([]);setExpenseEventsLoading(true);setExpenseEventsError('');
+    try{const result=await request(`/api/admin/finance/expenses/${encodeURIComponent(id)}/events`);setExpenseEvents(Array.isArray(result.data)?result.data:[]);}
+    catch(e:any){setExpenseEventsError(e?.message||'Não foi possível carregar o histórico.');}
+    finally{setExpenseEventsLoading(false);}
+  };
   const closeMonth=async(lojaId:string)=>{
     if(!window.confirm('Fechar definitivamente o mês '+selectedMonth+' para esta loja? As despesas deste período ficam bloqueadas.'))return;
     setBusy(true);setError('');
@@ -127,8 +137,8 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
     finally{setBusy(false);}
   };
   const money=(n:number)=>new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(Number(n)||0);
-  const pending=rows.filter(r=>r.estado==='pendente').reduce((s,r)=>s+Number(r.valor),0);
-  const paid=rows.filter(r=>r.estado==='paga').reduce((s,r)=>s+Number(r.valor),0);
+  const pending=rows.filter(r=>r.estado==='pendente').reduce((s,r)=>s+Math.round(Number(r.valor)*100),0)/100;
+  const paid=rows.filter(r=>r.estado==='paga').reduce((s,r)=>s+Math.round(Number(r.valor)*100),0)/100;
   return <section aria-label="Despesas operacionais por loja" className="rounded-2xl border border-slate-800 bg-[#151b2b] p-4 sm:p-6 space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Despesas Operacionais</h2><p className="text-xs text-slate-400">Registo, aprovação e liquidação de despesas por loja</p></div><button type="button" onClick={()=>void load()} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">Actualizar</button></div>
     {error&&<p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
@@ -158,7 +168,16 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
       <div><h3 className="text-sm font-semibold text-white">Fecho mensal por loja</h3><p className="text-xs text-slate-500">O fecho congela os valores do período e bloqueia alterações às despesas dessa loja.</p></div>
       <div className="space-y-2">{stores.map(store=>{const closing=closings.find(x=>x.loja_id===store.id);return <div key={store.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-900/60 p-3"><div><p className="text-sm font-medium text-slate-200">{store.nome}</p><p className="text-xs text-slate-500">{closing?closing.estado==='fechado'?'Fechado em '+new Date(closing.fechado_em).toLocaleString('pt-PT'):'Reaberto':'Ainda sem fecho para '+selectedMonth}</p></div><div>{closing?.estado==='fechado'?<button type="button" disabled={busy} onClick={()=>void reopenMonth(closing.id)} className="rounded-lg border border-amber-500/30 px-3 py-2 text-xs text-amber-300 disabled:opacity-50">Reabrir com motivo</button>:<button type="button" disabled={busy} onClick={()=>void closeMonth(store.id)} className="rounded-lg bg-[#D4AF37] px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">Fechar mês</button>}</div></div>;})}</div>
     </div>
-    <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="text-[11px] uppercase text-slate-500"><tr><th className="p-3">Data / Loja</th><th className="p-3">Categoria / Descrição</th><th className="p-3">Valor</th><th className="p-3">Estado</th><th className="p-3">Acções</th></tr></thead><tbody className="divide-y divide-slate-800">{rows.map(row=><tr key={row.id}><td className="p-3 text-slate-300">{new Date(row.data_despesa+'T12:00:00').toLocaleDateString('pt-PT')}<span className="block text-xs text-slate-500">{stores.find(s=>s.id===row.loja_id)?.nome||'Loja'}</span></td><td className="p-3 text-slate-300">{expenseCategories.find(([v])=>v===row.categoria)?.[1]||row.categoria}<span className="block max-w-xs truncate text-xs text-slate-500">{row.descricao}{row.fornecedor?' · '+row.fornecedor:''}</span></td><td className="p-3 font-semibold text-white">{money(row.valor)}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${row.estado==='paga'?'bg-emerald-500/10 text-emerald-300':row.estado==='rejeitada'?'bg-rose-500/10 text-rose-300':row.estado==='aprovada'?'bg-sky-500/10 text-sky-300':'bg-amber-500/10 text-amber-300'}`}>{row.estado}</span></td><td className="p-3"><div className="flex flex-wrap gap-1">{row.estado==='pendente'&&<><button disabled={busy} onClick={()=>void changeStatus(row.id,'aprovada')} className="rounded bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">Aprovar</button><button disabled={busy} onClick={()=>void changeStatus(row.id,'rejeitada')} className="rounded bg-rose-500/10 px-2 py-1 text-xs text-rose-300">Rejeitar</button></>}{row.estado==='aprovada'&&<button disabled={busy} onClick={()=>void changeStatus(row.id,'paga')} className="rounded bg-sky-500/10 px-2 py-1 text-xs text-sky-300">Marcar paga</button>}</div></td></tr>)}</tbody></table>{!loadingRows&&rows.length===0&&<p className="p-6 text-center text-sm text-slate-500">Ainda não existem despesas registadas.</p>}{loadingRows&&<p className="p-6 text-center text-sm text-slate-500">A carregar despesas…</p>}</div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="text-[11px] uppercase text-slate-500"><tr><th className="p-3">Data / Loja</th><th className="p-3">Categoria / Descrição</th><th className="p-3">Valor</th><th className="p-3">Estado</th><th className="p-3">Acções</th></tr></thead><tbody className="divide-y divide-slate-800">{rows.map(row=><tr key={row.id}><td className="p-3 text-slate-300">{new Date(row.data_despesa+'T12:00:00').toLocaleDateString('pt-PT')}<span className="block text-xs text-slate-500">{stores.find(s=>s.id===row.loja_id)?.nome||'Loja'}</span></td><td className="p-3 text-slate-300">{expenseCategories.find(([v])=>v===row.categoria)?.[1]||row.categoria}<span className="block max-w-xs truncate text-xs text-slate-500">{row.descricao}{row.fornecedor?' · '+row.fornecedor:''}</span></td><td className="p-3 font-semibold text-white">{money(row.valor)}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${row.estado==='paga'?'bg-emerald-500/10 text-emerald-300':row.estado==='rejeitada'?'bg-rose-500/10 text-rose-300':row.estado==='aprovada'?'bg-sky-500/10 text-sky-300':'bg-amber-500/10 text-amber-300'}`}>{row.estado}</span></td><td className="p-3"><div className="flex flex-wrap gap-1">{row.estado==='pendente'&&<><button disabled={busy} onClick={()=>void changeStatus(row.id,'aprovada')} className="rounded bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">Aprovar</button><button disabled={busy} onClick={()=>void changeStatus(row.id,'rejeitada')} className="rounded bg-rose-500/10 px-2 py-1 text-xs text-rose-300">Rejeitar</button></>}{row.estado==='aprovada'&&<button disabled={busy} onClick={()=>void changeStatus(row.id,'paga')} className="rounded bg-sky-500/10 px-2 py-1 text-xs text-sky-300">Marcar paga</button>}<button type="button" onClick={()=>void loadExpenseEvents(row.id)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">Histórico</button></div></td></tr>)}</tbody></table>{!loadingRows&&rows.length===0&&<p className="p-6 text-center text-sm text-slate-500">Ainda não existem despesas registadas.</p>}{loadingRows&&<p className="p-6 text-center text-sm text-slate-500">A carregar despesas…</p>}</div>
+    {selectedExpenseId&&<div className="rounded-xl border border-slate-800 bg-[#0b0f19] p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-white">Histórico de auditoria da despesa</h3><button type="button" onClick={()=>setSelectedExpenseId(null)} className="text-xs text-slate-400">Fechar</button></div>
+      {expenseEventsLoading?<p className="text-xs text-slate-400">A carregar histórico…</p>:expenseEventsError?<p role="alert" className="text-xs text-rose-300">{expenseEventsError}</p>:expenseEvents.length===0?<p className="text-xs text-slate-400">Sem eventos disponíveis.</p>:<ol className="space-y-2">{expenseEvents.map(event=><li key={event.id} className="border-l-2 border-amber-500/40 pl-3">
+        <p className="text-xs font-semibold text-slate-200">{event.acao==='legacy_import'?'Registo histórico importado':event.acao==='criada'?'Despesa registada':event.acao==='aprovada'?'Despesa aprovada':event.acao==='rejeitada'?'Despesa rejeitada':'Despesa paga'}</p>
+        <p className="text-[10px] text-slate-400">{event.created_at?new Date(event.created_at).toLocaleString('pt-PT'):'Data não disponível'}{event.actor_id?' · Responsável: '+event.actor_id:' · Responsável não registado'}</p>
+        {event.motivo&&<p className="mt-1 text-[10px] text-slate-400">{event.motivo}</p>}
+        {event.snapshot?.legacy_import===true&&<p className="mt-1 text-[10px] text-amber-300">Estado existente na migração; não representa a data comprovada da transição original.</p>}
+      </li>)}</ol>}
+    </div>}
   </section>;
 }
 
