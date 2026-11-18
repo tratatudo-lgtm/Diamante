@@ -112,20 +112,24 @@ router.post('/conversations', async (req: AuthenticatedRequest, res: Response) =
     }
   }
 
-  const { data: conversation, error } = await supabaseAdmin.from('collab_conversations').insert({
-    tipo: type, titulo: type === 'grupo' ? title : null, criada_por: user.id, loja_id: user.loja_id,
-  }).select('id').single();
-  if (error || !conversation) return fail(res, 503, 'Não foi possível criar a conversa.');
-  const { error: membershipError } = await supabaseAdmin.from('collab_conversation_members').insert(
-    participants.map((id: string) => ({ conversation_id: conversation.id, funcionario_id: id, papel: id === user.id ? 'criador' : 'membro' }))
-  );
-  if (membershipError) {
-    await supabaseAdmin.from('collab_conversations').delete().eq('id', conversation.id);
-    return fail(res, 503, 'Não foi possível adicionar os participantes.');
+  const { data: created, error } = await supabaseAdmin.rpc('create_collab_conversation_with_members', {
+    p_actor_id: user.id,
+    p_tipo: type,
+    p_titulo: type === 'grupo' ? title : null,
+    p_member_ids: participants,
+  });
+  if (error || !created?.id) {
+    if (error?.code === '42501') return fail(res, 403, 'A conta já não está autorizada a criar conversas.');
+    if (error?.code === '22023') return fail(res, 400, 'Os participantes ou os dados da conversa são inválidos.');
+    return fail(res, 503, 'Não foi possível criar a conversa e adicionar todos os participantes.');
   }
   const io = (globalThis as any).io;
-  for (const id of participants) io?.to(id).emit('chat:conversation', { conversationId: conversation.id });
-  return res.status(201).json({ success: true, conversationId: conversation.id });
+  if (!created.existing) {
+    for (const id of participants) io?.to(id).emit('chat:conversation', { conversationId: created.id });
+  }
+  return res.status(created.existing ? 200 : 201).json({
+    success: true, conversationId: created.id, existing: Boolean(created.existing),
+  });
 });
 
 router.get('/conversations/:id/messages', async (req: AuthenticatedRequest, res: Response) => {
@@ -147,11 +151,21 @@ router.post('/conversations/:id/messages', async (req: AuthenticatedRequest, res
   const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
   if (!body || body.length > 4000) return fail(res, 400, 'A mensagem deve ter entre 1 e 4.000 caracteres.');
   if (!(await isConversationMember(id, employee(req).id))) return fail(res, 404, 'Conversa não encontrada.');
-  const { data, error } = await supabaseAdmin.from('collab_messages').insert({
-    conversation_id: id, sender_id: employee(req).id, body,
-  }).select('id, conversation_id, sender_id, body, created_at, funcionarios(nome_completo, role)').single();
-  if (error || !data) return fail(res, 503, 'Não foi possível enviar a mensagem.');
-  await supabaseAdmin.from('collab_conversations').update({ last_message_at: data.created_at, updated_at: data.created_at }).eq('id', id);
+  const { data: messageData, error } = await supabaseAdmin.rpc('send_collab_message_with_activity', {
+    p_conversation_id: id,
+    p_sender_id: employee(req).id,
+    p_body: body,
+  });
+  if (error || !messageData?.id) {
+    if (error?.code === '42501') return fail(res, 404, 'Conversa não encontrada.');
+    if (error?.code === '22023') return fail(res, 400, 'A mensagem é inválida.');
+    if (error?.code === 'P0002') return fail(res, 404, 'Conversa não encontrada.');
+    return fail(res, 503, 'Não foi possível enviar a mensagem.');
+  }
+  const { data, error: senderError } = await supabaseAdmin.from('collab_messages')
+    .select('id, conversation_id, sender_id, body, created_at, funcionarios(nome_completo, role)')
+    .eq('id', messageData.id).single();
+  if (senderError || !data) return fail(res, 503, 'A mensagem foi registada, mas não foi possível carregar os seus detalhes.');
   const { data: recipients } = await supabaseAdmin.from('collab_conversation_members')
     .select('funcionario_id').eq('conversation_id', id);
   const io = (globalThis as any).io;
