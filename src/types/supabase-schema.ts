@@ -87,6 +87,12 @@ export interface DatabaseTransacaoFinanceira {
   hora?: string | null;
   created_at?: string;
   updated_at?: string;
+  criado_por?: string | null;
+  pago_por?: string | null;
+  paid_at?: string | null;
+  rejeitado_por?: string | null;
+  rejected_at?: string | null;
+  motivo_rejeicao?: string | null;
 }
 
 export interface DatabaseConfiguracaoSistema {
