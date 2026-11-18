@@ -89,6 +89,7 @@ router.post('/payments', async (req: Request, res: Response) => {
         data: text(body.data, 32) || null,
         hora: text(body.hora, 16) || null,
         comprovativo_ref: text(body.comprovativo_ref, 500) || null,
+        criado_por: (req as any).adminUser?.id || null,
       })
       .select('*, lojas(nome)')
       .single();
@@ -106,6 +107,24 @@ router.post('/payments', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/payments/:id/events', async (req: Request, res: Response) => {
+  try {
+    const id = text(req.params.id, 64);
+    if (!UUID_RE.test(id)) return res.status(400).json({ success: false, message: 'Identificador de pagamento inválido.' });
+    const { data, error } = await supabaseAdmin
+      .from('transacoes_financeiras_eventos')
+      .select('id, transacao_id, acao, estado_anterior, estado_novo, actor_id, motivo, snapshot, created_at')
+      .eq('transacao_id', id)
+      .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
+      .limit(200);
+    if (error) return res.status(503).json({ success: false, message: 'Não foi possível consultar o histórico do pagamento.' });
+    return res.json({ success: true, data: data || [] });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro interno ao consultar o histórico do pagamento.' });
+  }
+});
+
 router.patch('/payments/:id/status', async (req: Request, res: Response) => {
   try {
     const id = text(req.params.id, 64);
@@ -114,11 +133,34 @@ router.patch('/payments/:id/status', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Estado de pagamento inválido.' });
     }
 
+    const actorId = (req as any).adminUser?.id;
+    if (!actorId || !UUID_RE.test(actorId)) {
+      return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
+    }
+    const motivo = text(req.body?.motivo, 500);
+    if (estado === 'rejeitado' && motivo.length < 5) {
+      return res.status(400).json({ success: false, message: 'Indique um motivo de rejeição com pelo menos 5 caracteres.' });
+    }
+
+    const update: Record<string, unknown> = {
+      estado,
+      updated_at: new Date().toISOString(),
+    };
+    if (estado === 'pago') {
+      update.pago_por = actorId;
+      update.paid_at = new Date().toISOString();
+    } else {
+      update.rejeitado_por = actorId;
+      update.rejected_at = new Date().toISOString();
+      update.motivo_rejeicao = motivo;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('transacoes_financeiras')
-      .update({ estado, updated_at: new Date().toISOString() })      .eq('id', id)
+      .update(update)
+      .eq('id', id)
       .eq('estado', 'pendente')
-      .select('id, estado')
+      .select('id, estado, pago_por, paid_at, rejeitado_por, rejected_at, motivo_rejeicao')
       .maybeSingle();
 
     if (error) {
