@@ -51,7 +51,10 @@ router.post('/',async(req:AdminRequest,res:Response)=>{
 router.patch('/:id',async(req:AdminRequest,res:Response)=>{
  const {data:current,error:readError}=await supabaseAdmin.from('crm_expansion_sites').select('*').eq('id',req.params.id).maybeSingle();
  if(readError)return fail(res,503,'Não foi possível carregar o estudo.');if(!current)return fail(res,404,'Estudo de localização não encontrado.');
- const b=req.body||{};const update:Record<string,unknown>={};
+ const b=req.body||{};
+ const expectedUpdatedAt=b.expected_updated_at;
+ if(typeof expectedUpdatedAt!=='string'||Number.isNaN(Date.parse(expectedUpdatedAt)))return fail(res,400,'Versão do estudo em falta ou inválida. Actualize a lista.');
+ const update:Record<string,unknown>={};
  for(const f of ['name','address','city','district','notes'] as const)if(f in b){if(b[f]!==null&&typeof b[f]!=='string')return fail(res,400,'Campo de texto inválido.');const v=typeof b[f]==='string'?b[f].trim():null;if(v!==null&&v.length>(textLimits[f]??300))return fail(res,400,'Um dos campos excede o limite permitido.');if(['name','address','city'].includes(f)&&(!v||v.length<(f==='name'?3:2)))return fail(res,400,'Nome, morada e cidade são obrigatórios.');update[f]=v??(f==='notes'?'':null);}
  for(const f of ['latitude','longitude','area_sqm','monthly_rent','estimated_setup_cost','estimated_monthly_revenue','estimated_monthly_other_costs','estimated_initial_stock','estimated_monthly_staff_cost','estimated_monthly_utilities_cost'] as const)if(f in b){const range=f==='latitude'?[-90,90]:f==='longitude'?[-180,180]:[0,1000000000];const v=numeric(b[f],range[0],range[1]);if(v===undefined)return fail(res,400,'Um dos valores numéricos é inválido.');update[f]=v;}
  for(const f of scoreFields)if(f in b){const v=Number(b[f]);if(!Number.isInteger(v)||v<1||v>5)return fail(res,400,'As classificações devem estar entre 1 e 5.');update[f]=v;}
@@ -61,7 +64,7 @@ router.patch('/:id',async(req:AdminRequest,res:Response)=>{
  const {data,error}=await supabaseAdmin.rpc('update_crm_expansion_site_with_event',{
   p_id:current.id,
   p_actor_id:actor(req).id,
-  p_expected_updated_at:current.updated_at,
+  p_expected_updated_at:expectedUpdatedAt,
   p_payload:update,
  });
  if(error||!data){
