@@ -66,6 +66,7 @@ CREATE TABLE public.collab_report_events (
 );
 
 \ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
+\ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
 
 DO $audit$
 BEGIN
@@ -149,5 +150,69 @@ BEGIN
  SELECT count(*) INTO n FROM public.collab_reports WHERE reporter_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
  IF n<>0 THEN RAISE EXCEPTION 'Ocorrência parcial persistiu após falha de auditoria'; END IF;
 END $$;
+
+
+-- Atomic task update and audit; injected event failures must roll back the row update.
+DO $
+DECLARE v jsonb; v_id uuid; v_stamp timestamptz; n integer; failed boolean;
+BEGIN
+ v:=public.create_operational_task_with_event('Tarefa update','Antes',
+  'cccccccc-cccc-4ccc-8ccc-cccccccccccc','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  '11111111-1111-4111-8111-111111111111','normal',NULL);
+ v_id:=(v->>'id')::uuid;
+ v_stamp:=(v->>'updated_at')::timestamptz;
+ v:=public.update_operational_task_with_event(v_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',v_stamp,
+  '{"title":"Tarefa actualizada"}'::jsonb);
+ IF v->>'title'<>'Tarefa actualizada' THEN RAISE EXCEPTION 'Actualização atómica da tarefa falhou'; END IF;
+ SELECT count(*) INTO n FROM public.operational_task_events WHERE task_id=v_id;
+ IF n<>2 THEN RAISE EXCEPTION 'Histórico da tarefa não contém criação e actualização'; END IF;
+
+ v_stamp:=(v->>'updated_at')::timestamptz;
+ failed:=false;
+ BEGIN
+  PERFORM public.update_operational_task_with_event(v_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',v_stamp,
+   '{"title":"Não deve persistir"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha de auditoria da actualização da tarefa não foi injectada'; END IF;
+ SELECT count(*) INTO n FROM public.operational_tasks WHERE id=v_id AND title='Tarefa actualizada';
+ IF n<>1 THEN RAISE EXCEPTION 'Actualização parcial da tarefa persistiu após falha de auditoria'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.update_operational_task_with_event(v_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   '2000-01-01'::timestamptz,'{"title":"Conflito"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '40001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Actualização stale de tarefa não foi bloqueada'; END IF;
+END $;
+
+-- Atomic goal update and audit.
+DO $
+DECLARE v jsonb; v_id uuid; v_stamp timestamptz; n integer; failed boolean;
+BEGIN
+ v:=public.create_operational_goal_with_event('Objectivo update','Antes','loja',
+  'transacoes_aprovadas',10,'11111111-1111-4111-8111-111111111111',NULL,
+  '2026-11-01','2026-11-30','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+ v_id:=(v->>'id')::uuid;
+ v_stamp:=(v->>'updated_at')::timestamptz;
+ v:=public.update_operational_goal_with_event(v_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',v_stamp,
+  '{"title":"Objectivo actualizado","target_value":20}'::jsonb);
+ IF v->>'title'<>'Objectivo actualizado' OR (v->>'target_value')::numeric<>20
+ THEN RAISE EXCEPTION 'Actualização atómica do objectivo falhou'; END IF;
+ SELECT count(*) INTO n FROM public.operational_goal_events WHERE goal_id=v_id;
+ IF n<>2 THEN RAISE EXCEPTION 'Histórico do objectivo não contém criação e actualização'; END IF;
+
+ v_stamp:=(v->>'updated_at')::timestamptz;
+ failed:=false;
+ BEGIN
+  PERFORM public.update_operational_goal_with_event(v_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',v_stamp,
+   '{"title":"Não deve persistir"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha de auditoria da actualização do objectivo não foi injectada'; END IF;
+ SELECT count(*) INTO n FROM public.operational_goals WHERE id=v_id AND title='Objectivo actualizado';
+ IF n<>1 THEN RAISE EXCEPTION 'Actualização parcial do objectivo persistiu após falha de auditoria'; END IF;
+END $;
 
 SELECT 'POSTGRES_OPERATIONAL_ATOMICITY_OK' AS result;
