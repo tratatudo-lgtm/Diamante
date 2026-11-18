@@ -1401,12 +1401,14 @@ async function setupViteOrStatic() {
 
 // Iniciar servidor HTTP com WebSocket (substitui app.listen tradicional)
 setupViteOrStatic().then(() => {
-  const PORT = process.env.PORT || 3000;
-  httpServer.listen(PORT, () => {
+  const PORT = parseInt(process.env.PORT || '3000', 10);
+  const HOST = '127.0.0.1'; // APIs and WebSocket stay behind Nginx; never bind publicly.
+  httpServer.listen(PORT, HOST, () => {
     startBirthdayWhatsAppWorker();
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
     console.log(`Porta: ${PORT}`);
+    console.log(`Host: ${HOST}`);
     console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
     console.log(`WebSocket: Ativo (Socket.IO)`);
     console.log(`=========================================`);
