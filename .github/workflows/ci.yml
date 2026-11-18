@@ -16,6 +16,18 @@ permissions:
   contents: read
 
 jobs:
+  migration-filename-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Detect duplicate or invalid migration versions
+        run: node scripts/audit-migration-filenames.mjs
+
   validate:
     runs-on: ubuntu-latest
     steps:
