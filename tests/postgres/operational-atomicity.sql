@@ -65,7 +65,30 @@ CREATE TABLE public.collab_report_events (
  new_values jsonb NOT NULL DEFAULT '{}'::jsonb, created_at timestamptz NOT NULL DEFAULT now()
 );
 
-\ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
+CREATE TABLE public.collab_conversations (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tipo text NOT NULL CHECK(tipo IN ('directa','grupo')),
+ titulo text, criada_por uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ loja_id uuid REFERENCES public.lojas(id) ON DELETE SET NULL,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ last_message_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT collab_group_title_required CHECK(tipo<>'grupo' OR (titulo IS NOT NULL AND length(trim(titulo)) BETWEEN 2 AND 100))
+);
+CREATE TABLE public.collab_conversation_members (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ conversation_id uuid NOT NULL REFERENCES public.collab_conversations(id) ON DELETE CASCADE,
+ funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE CASCADE,
+ papel text NOT NULL DEFAULT 'membro' CHECK(papel IN ('criador','membro')),
+ joined_at timestamptz NOT NULL DEFAULT now(), last_read_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(conversation_id,funcionario_id)
+);
+CREATE TABLE public.collab_messages (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ conversation_id uuid NOT NULL REFERENCES public.collab_conversations(id) ON DELETE CASCADE,
+ sender_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ body text NOT NULL CHECK(length(trim(body)) BETWEEN 1 AND 4000),
+ created_at timestamptz NOT NULL DEFAULT now(), edited_at timestamptz, deleted_at timestamptz
+);
+\n\ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql\n\ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
 \ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
 
 DO $audit$
@@ -216,3 +239,95 @@ BEGIN
 END $$;
 
 SELECT 'POSTGRES_OPERATIONAL_ATOMICITY_OK' AS result;
+
+-- Atomic employee conversation creation and message activity.
+CREATE FUNCTION public.reject_test_membership_for_employee()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.funcionario_id='dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid THEN
+   RAISE EXCEPTION 'injected_membership_failure' USING ERRCODE='P0001';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER fail_collab_membership BEFORE INSERT ON public.collab_conversation_members
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_membership_for_employee();
+
+DO $collab$
+DECLARE v jsonb; v_id uuid; n integer; failed boolean; v_last timestamptz;
+BEGIN
+ v:=public.create_collab_conversation_with_members(
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','directa',NULL,
+  ARRAY['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid]);
+ v_id:=(v->>'id')::uuid;
+ SELECT count(*) INTO n FROM public.collab_conversation_members WHERE conversation_id=v_id;
+ IF n<>2 OR (v->>'existing')::boolean THEN RAISE EXCEPTION 'Conversa directa ou participantes não foram criados'; END IF;
+
+ v:=public.create_collab_conversation_with_members(
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','directa',NULL,
+  ARRAY['bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid]);
+ IF (v->>'id')::uuid<>v_id OR NOT (v->>'existing')::boolean THEN
+   RAISE EXCEPTION 'Conversa directa existente não foi reutilizada';
+ END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_conversation_with_members(
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','grupo','Grupo rollback',
+   ARRAY['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid]);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada de participante não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.collab_conversations WHERE titulo='Grupo rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Conversa parcial persistiu após falha de participante'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_conversation_with_members(
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','directa',NULL,
+   ARRAY['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid]);
+ EXCEPTION WHEN SQLSTATE '22023' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Participantes duplicados não foram rejeitados'; END IF;
+
+ v:=public.send_collab_message_with_activity(v_id,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Mensagem transaccional');
+ SELECT count(*) INTO n FROM public.collab_messages WHERE id=(v->>'id')::uuid;
+ IF n<>1 THEN RAISE EXCEPTION 'Mensagem não foi criada'; END IF;
+ SELECT last_message_at INTO v_last FROM public.collab_conversations WHERE id=v_id;
+ IF v_last IS DISTINCT FROM (v->>'created_at')::timestamptz THEN
+   RAISE EXCEPTION 'last_message_at não foi actualizado na mesma transacção';
+ END IF;
+
+ CREATE FUNCTION public.reject_test_conversation_activity()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+ BEGIN
+  RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';
+ END $$;
+ CREATE TRIGGER fail_collab_activity BEFORE UPDATE ON public.collab_conversations
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_conversation_activity();
+
+ SELECT last_message_at INTO v_last FROM public.collab_conversations WHERE id=v_id;
+ failed:=false;
+ BEGIN
+  PERFORM public.send_collab_message_with_activity(v_id,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Esta mensagem deve sofrer rollback');
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada da actividade não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.collab_messages
+ WHERE conversation_id=v_id AND body='Esta mensagem deve sofrer rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Mensagem parcial persistiu após falha de last_message_at'; END IF;
+ IF (SELECT last_message_at FROM public.collab_conversations WHERE id=v_id) IS DISTINCT FROM v_last THEN
+   RAISE EXCEPTION 'last_message_at mudou apesar do rollback';
+ END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.send_collab_message_with_activity(v_id,
+   'cccccccc-cccc-4ccc-8ccc-cccccccccccc','Remetente não membro');
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Remetente fora da conversa não foi rejeitado'; END IF;
+END $collab$;
+
+SELECT 'POSTGRES_COLLAB_MESSAGING_ATOMICITY_OK' AS result;
