@@ -448,13 +448,13 @@ VALUES ('13131313-1313-4131-8131-131313131313','12121212-1212-4121-8121-12121212
  'application/pdf',100,'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
 
 CREATE FUNCTION public.reject_test_client_document_insert()
- RETURNS trigger LANGUAGE plpgsql AS $
+ RETURNS trigger LANGUAGE plpgsql AS $client_trigger$
  BEGIN
   IF current_setting('test.fail_client_document_insert',true)='on' THEN
    RAISE EXCEPTION 'injected_client_document_failure' USING ERRCODE='P0001';
   END IF;
   RETURN NEW;
- END $;
+ END $client_trigger$;
  CREATE TRIGGER reject_client_document_insert BEFORE INSERT ON public.cliente_documentos
  FOR EACH ROW EXECUTE FUNCTION public.reject_test_client_document_insert();
 
