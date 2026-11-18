@@ -142,11 +142,15 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
     task_id: current.id, actor_id: actor.id, action, old_values: current, new_values: updated,
   });
   if (eventError) {
-    await supabaseAdmin.from('operational_tasks').update({
+    const { data: rolledBack, error: rollbackError } = await supabaseAdmin.from('operational_tasks').update({
       title: current.title, description: current.description, status: current.status, priority: current.priority,
       assigned_to: current.assigned_to, loja_id: current.loja_id, due_at: current.due_at,
       completed_at: current.completed_at, updated_at: current.updated_at,
-    }).eq('id', current.id).eq('updated_at', updated.updated_at);
+    }).eq('id', current.id).eq('updated_at', updated.updated_at).select('id').maybeSingle();
+    if (rollbackError || !rolledBack) {
+      console.error('[Tasks] Falha ao confirmar rollback após erro de auditoria.');
+      return fail(res, 503, 'A auditoria falhou e não foi possível confirmar a reversão. Actualize a tarefa antes de tentar novamente.');
+    }
     return fail(res, 503, 'Não foi possível guardar o histórico. A alteração foi revertida; tente novamente.');
   }
   if (updated.assigned_to !== current.assigned_to) {
