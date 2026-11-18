@@ -176,18 +176,14 @@ router.post('/reports', async (req: AuthenticatedRequest, res: Response) => {
   if (title.length < 5 || title.length > 140 || description.length < 10 || description.length > 8000) {
     return fail(res, 400, 'Indique um título (5–140 caracteres) e uma descrição (10–8.000 caracteres).');
   }
-  const { data, error } = await supabaseAdmin.from('collab_reports').insert({
-    titulo: title, descricao: description, categoria: category, prioridade: priority,
-    reporter_id: user.id, loja_id: user.loja_id,
-  }).select('id, reference, titulo, descricao, categoria, prioridade, estado, reporter_id, loja_id, assigned_to, created_at, updated_at').single();
-  if (error || !data) return fail(res, 503, 'Não foi possível registar a ocorrência.');
-  const { error: eventError } = await supabaseAdmin.from('collab_report_events').insert({
-    report_id: data.id, actor_id: user.id, action: 'created', old_values: {},
-    new_values: { titulo: data.titulo, categoria: data.categoria, prioridade: data.prioridade, estado: data.estado },
+  const { data: reportData, error } = await supabaseAdmin.rpc('create_collab_report_with_event', {
+    p_title: title, p_description: description, p_category: category,
+    p_priority: priority, p_reporter_id: user.id,
   });
-  if (eventError) {
-    await supabaseAdmin.from('collab_reports').delete().eq('id', data.id);
-    return fail(res, 503, 'Não foi possível registar a auditoria da ocorrência.');
+  const data = reportData as any;
+  if (error || !data?.id) {
+    if (error?.code === '42501') return fail(res, 403, 'A conta já não está autorizada a registar ocorrências.');
+    return fail(res, 503, 'Não foi possível registar a ocorrência e a respectiva auditoria.');
   }
   const io = (globalThis as any).io;
   io?.to('admin').emit('report:created', { id: data.id, reference: data.reference, prioridade: data.prioridade });
