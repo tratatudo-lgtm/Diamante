@@ -286,38 +286,28 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
     if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
     if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
 
-    const { data: previous, error: previousError } = await supabaseAdmin.from('cliente_documentos')
-      .select('id').eq('cliente_id', clientId).is('substituido_em', null).maybeSingle();
-    if (previousError) throw previousError;
-    previousId = previous?.id || null;
-
-    const safeName = fileName.replace(/[^\p{L}\p{N}._-]/gu, '_');
+    const safeName = fileName.replace(/[^\\p{L}\\p{N}._-]/gu, '_');
     storagePath = `${clientId}/${crypto.randomUUID()}.${extByMime[mimeType]}`;
     const { error: uploadError } = await supabaseAdmin.storage.from('documentos-clientes')
       .upload(storagePath, fileBuffer, { contentType: mimeType, upsert: false, metadata: { originalName: safeName } });
     if (uploadError) throw uploadError;
 
-    if (previousId) {
-      const { error } = await supabaseAdmin.from('cliente_documentos')
-        .update({ substituido_em: new Date().toISOString(), substituido_por: employee.id })
-        .eq('id', previousId).is('substituido_em', null);
-      if (error) throw error;
-    }
-
-    const { data: inserted, error: insertError } = await supabaseAdmin.from('cliente_documentos').insert({
-      cliente_id: clientId, tipo_documento: tipoDocumento, numero_documento: numeroDocumento,
-      data_emissao: dataEmissao, data_validade: dataValidade, storage_path: storagePath,
-      mime_type: mimeType, tamanho_bytes: fileBuffer.length, uploaded_by: employee.id,
-    }).select('id').single();
-    if (insertError || !inserted) throw insertError || new Error('Falha ao registar documento.');
-
-    const { error: updateError } = await supabaseAdmin.from('clientes').update({
-      tipo_documento: tipoDocumento, bi_cc: numeroDocumento,
-      data_emissao_documento: dataEmissao, data_validade_documento: dataValidade,
-    }).eq('id', clientId);
-    if (updateError) {
-      await supabaseAdmin.from('cliente_documentos').delete().eq('id', inserted.id);
-      throw updateError;
+    const { data: replaced, error: replaceError } = await supabaseAdmin.rpc('replace_client_identity_document', {
+      p_client_id: clientId,
+      p_actor_id: employee.id,
+      p_tipo_documento: tipoDocumento,
+      p_numero_documento: numeroDocumento,
+      p_data_emissao: dataEmissao,
+      p_data_validade: dataValidade,
+      p_storage_path: storagePath,
+      p_mime_type: mimeType,
+      p_tamanho_bytes: fileBuffer.length,
+    });
+    if (replaceError || !replaced?.documento_id) {
+      if (replaceError?.code === '42501') return res.status(403).json({ success: false, message: 'Não tem autorização para actualizar documentos deste cliente.' });
+      if (replaceError?.code === 'P0002') return res.status(404).json({ success: false, message: 'Cliente não encontrado.' });
+      if (replaceError?.code === '22023') return res.status(400).json({ success: false, message: 'Os dados do documento são inválidos.' });
+      throw replaceError || new Error('Falha ao substituir documento.');
     }
     return res.status(201).json({ success: true, documento_id: inserted.id, message: 'Documento actualizado e versão anterior arquivada.' });
   } catch {
