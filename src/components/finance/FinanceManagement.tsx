@@ -1012,7 +1012,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                       className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-lg shadow-[#D4AF37]/25 transition-all cursor-pointer"
                     >
                       <Check className="w-4 h-4 stroke-[3]" />
-                      <span>Confirmar Pagamento Imediato</span>
+                      <span>Marcar como pago (confirmação manual)</span>
                     </button>
                   </>
                 ) : (
