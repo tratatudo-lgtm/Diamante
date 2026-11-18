@@ -106,10 +106,16 @@ router.post('/', async (req: AuthenticatedRequest,res: Response) => {
     funcionarioId = data.id; notifyId = data.id;
   }
   const insert = { title,description,scope,metric,target_value:target,loja_id:lojaId,funcionario_id:funcionarioId,starts_on:starts,ends_on:ends,created_by:actor(req).id };
-  const { data:goal,error } = await supabaseAdmin.from('operational_goals').insert(insert).select('*').single();
-  if (error || !goal) return fail(res,503,'Não foi possível criar o objectivo.');
-  const { error:eventError } = await supabaseAdmin.from('operational_goal_events').insert({goal_id:goal.id,actor_id:actor(req).id,action:'created',new_values:goal});
-  if (eventError) { await supabaseAdmin.from('operational_goals').delete().eq('id',goal.id); return fail(res,503,'Não foi possível registar o histórico do objectivo.'); }
+  const { data:goalData,error } = await supabaseAdmin.rpc('create_operational_goal_with_event',{
+    p_title:title,p_description:description,p_scope:scope,p_metric:metric,p_target_value:target,
+    p_loja_id:lojaId,p_funcionario_id:funcionarioId,p_starts_on:starts,p_ends_on:ends,p_created_by:actor(req).id,
+  });
+  const goal = goalData as any;
+  if(error || !goal?.id){
+    if(error?.code==='42501')return fail(res,403,'Não está autorizado a criar este objectivo.');
+    if(error?.code==='22023')return fail(res,400,'O destino do objectivo já não é válido.');
+    return fail(res,503,'Não foi possível criar o objectivo e registar o histórico.');
+  }
   if (notifyId) await notify(notifyId,goal.id,'goal_assigned','Novo objectivo atribuído',title);
   if (lojaId) {
     const {data:team} = await supabaseAdmin.from('funcionarios').select('id').eq('loja_id',lojaId).eq('ativo',true);
