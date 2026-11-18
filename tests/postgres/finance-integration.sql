@@ -77,6 +77,16 @@ SET estado='rejeitada',rejeitado_por='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     rejected_at=now(),motivo_rejeicao='Documento inválido',updated_at=now()
 WHERE id='20000000-0000-4000-8000-000000000002';
 
+-- Same category with different states must be split into correct state totals.
+INSERT INTO public.despesas_operacionais(
+  id,loja_id,categoria,descricao,valor,data_despesa,estado,criado_por
+) VALUES (
+  '20000000-0000-4000-8000-000000000003',
+  '11111111-1111-4111-8111-111111111111',
+  'energia_agua','Ajuste energia rejeitado',3.33,'2026-11-07','rejeitada',
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+);
+
 -- Payment audit and valid state transition.
 INSERT INTO public.transacoes_financeiras(
   id,referencia,loja_id,loja_nome,beneficiario_nome,valor,metodo,descricao,estado,criado_por
@@ -142,10 +152,10 @@ DECLARE f public.fechos_financeiros_loja%ROWTYPE;
 BEGIN
   SELECT * INTO f FROM public.fechos_financeiros_loja
   WHERE loja_id='11111111-1111-4111-8111-111111111111' AND periodo='2026-11-01';
-  IF f.total_pago <> 12.34 OR f.total_rejeitado <> 8.00 OR f.quantidade_despesas <> 2 THEN
+  IF f.total_pago <> 12.34 OR f.total_rejeitado <> 11.33 OR f.quantidade_despesas <> 3 THEN
     RAISE EXCEPTION 'Snapshot financeiro incorrecto: %, %, %, %',f.total_pago,f.total_rejeitado,f.total_pendente,f.quantidade_despesas;
   END IF;
-  IF f.snapshot_categorias->'energia_agua'->>'paga' <> '12.34' THEN
+  IF f.snapshot_categorias->>'energia_agua' <> '15.67' THEN
     RAISE EXCEPTION 'Snapshot por categoria incorrecto: %',f.snapshot_categorias;
   END IF;
 END $$;
@@ -168,7 +178,7 @@ DECLARE f public.fechos_financeiros_loja%ROWTYPE;
 BEGIN
   SELECT * INTO f FROM public.fechos_financeiros_loja
   WHERE loja_id='11111111-1111-4111-8111-111111111111' AND periodo='2026-11-01';
-  IF f.total_pago <> 12.34 OR f.total_rejeitado <> 8.00 OR f.estado <> 'reaberto' THEN
+  IF f.total_pago <> 12.34 OR f.total_rejeitado <> 11.33 OR f.estado <> 'reaberto' THEN
     RAISE EXCEPTION 'Reabertura alterou o snapshot original';
   END IF;
 END $$;
