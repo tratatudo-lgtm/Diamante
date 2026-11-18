@@ -185,6 +185,31 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
   const [selectedTx, setSelectedTx] = useState<FinancialTransaction | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [paymentEvents, setPaymentEvents] = useState<Array<Record<string, any>>>([]);
+  const [paymentEventsLoading, setPaymentEventsLoading] = useState(false);
+  const [paymentEventsError, setPaymentEventsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedTx?.id) {
+      setPaymentEvents([]);
+      setPaymentEventsError(null);
+      return;
+    }
+    setPaymentEventsLoading(true);
+    setPaymentEventsError(null);
+    adminApiRequest(`/api/admin/finance/payments/${encodeURIComponent(selectedTx.id)}/events`)
+      .then((result) => {
+        if (active) setPaymentEvents(Array.isArray(result?.data) ? result.data : []);
+      })
+      .catch((error: any) => {
+        if (active) setPaymentEventsError(error?.message || 'Não foi possível carregar o histórico.');
+      })
+      .finally(() => {
+        if (active) setPaymentEventsLoading(false);
+      });
+    return () => { active = false; };
+  }, [selectedTx?.id]);
 
   // Form State para Novo Pagamento
   const [newPayment, setNewPayment] = useState({
@@ -912,6 +937,40 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                       "{selectedTx.descricao}"
                     </p>
                   </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-[#0b0f19] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-bold text-white">Histórico de auditoria</h4>
+                    <span className="text-[10px] text-slate-500">Registos imutáveis</span>
+                  </div>
+                  {paymentEventsLoading ? (
+                    <p className="text-xs text-slate-400">A carregar histórico…</p>
+                  ) : paymentEventsError ? (
+                    <p className="text-xs text-rose-300">{paymentEventsError}</p>
+                  ) : paymentEvents.length === 0 ? (
+                    <p className="text-xs text-slate-400">Sem eventos de auditoria disponíveis.</p>
+                  ) : (
+                    <ol className="space-y-2">
+                      {paymentEvents.map((event) => (
+                        <li key={event.id} className="border-l-2 border-amber-500/40 pl-3">
+                          <p className="text-xs font-semibold text-slate-200">
+                            {event.acao === 'legacy_import' ? 'Registo histórico importado' :
+                             event.acao === 'marcado_pago' ? 'Marcado como pago' :
+                             event.acao === 'rejeitado' ? 'Pagamento rejeitado' : 'Pagamento registado'}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {event.created_at ? new Date(event.created_at).toLocaleString('pt-PT') : 'Data não disponível'}
+                            {event.actor_id ? ` · Administrador: ${event.actor_id}` : ' · Responsável não registado'}
+                          </p>
+                          {event.motivo && <p className="text-[10px] text-slate-400 mt-1">{event.motivo}</p>}
+                          {event.snapshot?.legacy_import === true && (
+                            <p className="text-[10px] text-amber-300 mt-1">Estado existente na migração; não representa a data comprovada da transição original.</p>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
                 </div>
 
                 {/* Referência documental fornecida no registo; não comprova liquidação bancária. */}
