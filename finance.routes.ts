@@ -220,11 +220,13 @@ router.patch('/expenses/:id/status', async (req: Request, res: Response) => {
     const allowed=(current.estado==='pendente'&&['aprovada','rejeitada'].includes(nextStatus))||(current.estado==='aprovada'&&nextStatus==='paga');
     if(!allowed)return res.status(409).json({success:false,message:'A despesa já foi processada ou a transição não é permitida.'});
     if(nextStatus==='rejeitada'&&reason.length<3)return res.status(400).json({success:false,message:'Indique o motivo da rejeição.'});
-    const actor=(req as any).adminUser?.id||null, now=new Date().toISOString(), update:Record<string,unknown>={estado:nextStatus,updated_at:now};
+    const actor=(req as any).adminUser?.id||null;
+    if(!actor||!UUID_RE.test(actor))return res.status(401).json({success:false,message:'Sessão administrativa inválida.'});
+    const now=new Date().toISOString(), update:Record<string,unknown>={estado:nextStatus,updated_at:now};
     if(nextStatus==='aprovada'){update.aprovado_por=actor;update.approved_at=now;}
-    if(nextStatus==='rejeitada')update.motivo_rejeicao=reason;
+    if(nextStatus==='rejeitada'){update.rejeitado_por=actor;update.rejected_at=now;update.motivo_rejeicao=reason;}
     if(nextStatus==='paga'){update.pago_por=actor;update.paid_at=now;}
-    const {data,error}=await supabaseAdmin.from('despesas_operacionais').update(update).eq('id',id).eq('estado',current.estado).select('id,estado,approved_at,paid_at').maybeSingle();
+    const {data,error}=await supabaseAdmin.from('despesas_operacionais').update(update).eq('id',id).eq('estado',current.estado).select('id,estado,aprovado_por,approved_at,rejeitado_por,rejected_at,pago_por,paid_at,motivo_rejeicao').maybeSingle();
     if(error)return res.status(503).json({success:false,message:'Não foi possível actualizar a despesa.'});
     if(!data)return res.status(409).json({success:false,message:'A despesa foi alterada por outro administrador. Actualize a lista.'});
     return res.json({success:true,data});
@@ -280,6 +282,18 @@ router.get('/closings', async (req: Request, res: Response) => {
     if(error)return res.status(503).json({success:false,message:'Não foi possível consultar os fechos.'});
     return res.json({success:true,data:data||[]});
   } catch { return res.status(500).json({success:false,message:'Erro interno ao consultar fechos.'}); }
+});
+
+router.get('/expenses/:id/events', async (req: Request, res: Response) => {
+  try {
+    const id=text(req.params.id,64);
+    if(!UUID_RE.test(id))return res.status(400).json({success:false,message:'Identificador de despesa inválido.'});
+    const {data,error}=await supabaseAdmin.from('despesas_operacionais_eventos')
+      .select('id,despesa_id,acao,estado_anterior,estado_novo,actor_id,motivo,snapshot,created_at')
+      .eq('despesa_id',id).order('created_at',{ascending:true}).order('id',{ascending:true}).limit(200);
+    if(error)return res.status(503).json({success:false,message:'Não foi possível consultar o histórico da despesa.'});
+    return res.json({success:true,data:data||[]});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao consultar histórico da despesa.'}); }
 });
 
 router.get('/closings/:id/events', async (req: Request, res: Response) => {
