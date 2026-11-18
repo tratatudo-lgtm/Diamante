@@ -67,6 +67,20 @@ CREATE TABLE public.collab_report_events (
 
 \ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
 
+DO $
+BEGIN
+ IF has_function_privilege('authenticated','public.create_operational_task_with_event(text,text,uuid,uuid,uuid,text,timestamptz)','EXECUTE')
+ OR has_function_privilege('authenticated','public.create_operational_goal_with_event(text,text,text,text,numeric,uuid,uuid,date,date,uuid)','EXECUTE')
+ OR has_function_privilege('authenticated','public.create_collab_report_with_event(text,text,text,text,uuid)','EXECUTE') THEN
+   RAISE EXCEPTION 'authenticated não pode executar as RPCs SECURITY DEFINER';
+ END IF;
+ IF NOT has_function_privilege('service_role','public.create_operational_task_with_event(text,text,uuid,uuid,uuid,text,timestamptz)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.create_operational_goal_with_event(text,text,text,text,numeric,uuid,uuid,date,date,uuid)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.create_collab_report_with_event(text,text,text,text,uuid)','EXECUTE') THEN
+   RAISE EXCEPTION 'service_role não tem EXECUTE nas RPCs operacionais';
+ END IF;
+END $;
+
 CREATE FUNCTION public.reject_test_audit_for_admin_b()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
