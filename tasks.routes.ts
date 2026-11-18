@@ -62,17 +62,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   if (!assignee) return fail(res, 400, 'O responsável não existe ou não está activo.');
   const lojaId = req.body?.loja_id ?? assignee.loja_id;
   if (lojaId && assignee.loja_id && lojaId !== assignee.loja_id) return fail(res, 400, 'A loja da tarefa tem de corresponder à loja do responsável.');
-  const { data: task, error } = await supabaseAdmin.from('operational_tasks').insert({
-    title, description, assigned_to: assignedTo, created_by: user(req).id,
-    loja_id: lojaId || null, priority, due_at: dueAt?.toISOString() || null,
-  }).select('id,title,description,status,priority,assigned_to,created_by,loja_id,due_at,completed_at,created_at,updated_at').single();
-  if (error || !task) return fail(res, 503, 'Não foi possível criar a tarefa.');
-  const { error: eventError } = await supabaseAdmin.from('operational_task_events').insert({
-    task_id: task.id, actor_id: user(req).id, action: 'created', new_values: task,
+  const { data: taskData, error } = await supabaseAdmin.rpc('create_operational_task_with_event', {
+    p_title: title, p_description: description, p_assigned_to: assignedTo,
+    p_created_by: user(req).id, p_loja_id: lojaId || null,
+    p_priority: priority, p_due_at: dueAt?.toISOString() || null,
   });
-  if (eventError) {
-    await supabaseAdmin.from('operational_tasks').delete().eq('id', task.id);
-    return fail(res, 503, 'Não foi possível registar o histórico da tarefa.');
+  const task = taskData as any;
+  if (error || !task?.id) {
+    if (error?.code === '42501') return fail(res, 403, 'Não está autorizado a criar esta tarefa.');
+    if (error?.code === '22023') return fail(res, 400, 'O responsável ou a loja da tarefa já não são válidos.');
+    return fail(res, 503, 'Não foi possível criar a tarefa e registar o histórico.');
   }
   await notify(assignedTo, task.id, 'task_assigned', 'Nova tarefa atribuída', title);
   (globalThis as any).io?.to('admin').emit('task:created', { id: task.id, loja_id: task.loja_id });
