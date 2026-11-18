@@ -11,13 +11,6 @@ const types = new Set(['parceria','investidor','nova_loja','fornecedor','outro']
 const priorities = new Set(['baixa','normal','alta','urgente']);
 const allowedFields = ['title','opportunity_type','stage','priority','expected_value','location','contact_name','contact_email','contact_phone','assigned_to','next_action','next_action_at','notes'] as const;
 
-async function recordEvent(id: string, action: string, oldValues: unknown, newValues: unknown, actorId: string) {
-  const { error } = await supabaseAdmin.from('crm_opportunity_events').insert({
-    opportunity_id:id, actor_id:actorId, action, old_values:oldValues ?? null, new_values:newValues ?? null,
-  });
-  return !error;
-}
-
 async function notify(employeeId: string, id: string, kind: 'opportunity_assigned'|'opportunity_updated', title: string, body: string) {
   const { error } = await supabaseAdmin.from('collab_notifications').insert({ funcionario_id:employeeId,kind,entity_id:id,title,body });
   if (!error) (globalThis as any).io?.to(employeeId).emit('notification:new',{kind,entity_id:id,title,body});
