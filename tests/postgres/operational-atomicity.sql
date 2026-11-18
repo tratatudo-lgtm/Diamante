@@ -101,7 +101,32 @@ CREATE TABLE public.collab_messages (
  created_at timestamptz NOT NULL DEFAULT now(), edited_at timestamptz, deleted_at timestamptz
 );
 
-\ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql
+CREATE TABLE public.clientes (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ loja_registo_id uuid REFERENCES public.lojas(id),
+ tipo_documento text,
+ bi_cc text,
+ data_emissao_documento date,
+ data_validade_documento date
+);
+CREATE TABLE public.cliente_documentos (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ cliente_id uuid NOT NULL REFERENCES public.clientes(id) ON DELETE RESTRICT,
+ tipo_documento text NOT NULL CHECK(tipo_documento IN ('cc','passaporte','cartao_residente','outro')),
+ numero_documento text NOT NULL,
+ data_emissao date,
+ data_validade date NOT NULL,
+ storage_path text NOT NULL UNIQUE,
+ mime_type text NOT NULL CHECK(mime_type IN ('application/pdf','image/jpeg','image/png','image/webp')),
+ tamanho_bytes bigint NOT NULL CHECK(tamanho_bytes BETWEEN 1 AND 6291456),
+ uploaded_by uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL,
+ uploaded_at timestamptz NOT NULL DEFAULT now(),
+ substituido_em timestamptz,
+ substituido_por uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX cliente_documentos_um_documento_ativo_por_cliente_uidx
+ ON public.cliente_documentos(cliente_id) WHERE substituido_em IS NULL;
+\ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql\n\\ir ../../supabase/migrations/20261118213000_atomic_client_document_replacement.sql
 \ir ../../supabase/migrations/20261118210000_atomic_collab_comment_audit.sql
 \ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
 \ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
@@ -412,3 +437,62 @@ BEGIN
 END $comment_audit$;
 
 SELECT 'POSTGRES_COLLAB_COMMENT_AUDIT_ATOMICITY_OK' AS result;
+
+-- Client identity document replacement must preserve a single active version atomically.
+INSERT INTO public.clientes(id,loja_registo_id,tipo_documento,bi_cc,data_validade_documento)
+VALUES ('12121212-1212-4121-8121-121212121212','11111111-1111-4111-8111-111111111111','cc','12345678',
+ '2030-01-01');
+INSERT INTO public.cliente_documentos(id,cliente_id,tipo_documento,numero_documento,data_validade,storage_path,mime_type,tamanho_bytes,uploaded_by)
+VALUES ('13131313-1313-4131-8131-131313131313','12121212-1212-4121-8121-121212121212',
+ 'cc','12345678','2030-01-01','12121212-1212-4121-8121-121212121212/old.pdf',
+ 'application/pdf',100,'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+
+DO $client_document$
+DECLARE v jsonb; n integer; failed boolean;
+BEGIN
+ v:=public.replace_client_identity_document(
+  '12121212-1212-4121-8121-121212121212','dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  'passaporte','AB123456','2025-01-01','2035-01-01',
+  '12121212-1212-4121-8121-121212121212/new.pdf','application/pdf',200
+ );
+ IF v->>'documento_id' IS NULL OR v->>'previous_documento_id'<>'13131313-1313-4131-8131-131313131313' THEN
+  RAISE EXCEPTION 'RPC de substituição não devolveu os IDs esperados';
+ END IF;
+ SELECT count(*) INTO n FROM public.cliente_documentos
+ WHERE cliente_id='12121212-1212-4121-8121-121212121212' AND substituido_em IS NULL;
+ IF n<>1 THEN RAISE EXCEPTION 'A substituição não manteve exactamente um documento activo'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.clientes WHERE id='12121212-1212-4121-8121-121212121212'
+   AND tipo_documento='passaporte' AND bi_cc='AB123456' AND data_validade_documento='2035-01-01') THEN
+  RAISE EXCEPTION 'Os metadados do cliente não foram sincronizados';
+ END IF;
+
+ CREATE FUNCTION public.reject_test_client_document_insert()
+ RETURNS trigger LANGUAGE plpgsql AS $$
+ BEGIN
+  IF current_setting('test.fail_client_document_insert',true)='on' THEN
+   RAISE EXCEPTION 'injected_client_document_failure' USING ERRCODE='P0001';
+  END IF;
+  RETURN NEW;
+ END $$;
+ CREATE TRIGGER reject_client_document_insert BEFORE INSERT ON public.cliente_documentos
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_client_document_insert();
+
+ PERFORM set_config('test.fail_client_document_insert','on',true);
+ failed:=false;
+ BEGIN
+  PERFORM public.replace_client_identity_document(
+   '12121212-1212-4121-8121-121212121212','dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+   'cc','98765432','2025-01-01','2036-01-01',
+   '12121212-1212-4121-8121-121212121212/fail.pdf','application/pdf',200
+  );
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'A falha injectada na substituição não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.cliente_documentos
+ WHERE cliente_id='12121212-1212-4121-8121-121212121212' AND substituido_em IS NULL;
+ IF n<>1 OR NOT EXISTS(SELECT 1 FROM public.clientes WHERE id='12121212-1212-4121-8121-121212121212'
+   AND tipo_documento='passaporte' AND bi_cc='AB123456' AND data_validade_documento='2035-01-01') THEN
+  RAISE EXCEPTION 'Falha de inserção deixou estado documental parcialmente alterado';
+ END IF;
+END $client_document$;
+SELECT 'POSTGRES_CLIENT_DOCUMENT_REPLACEMENT_ATOMICITY_OK' AS result;
