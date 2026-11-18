@@ -19,6 +19,8 @@ INSERT INTO public.funcionarios(id,nome_completo,role,loja_id) VALUES
  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Admin A','admin','11111111-1111-4111-8111-111111111111'),
  ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Admin B','admin','11111111-1111-4111-8111-111111111111'),
  ('cccccccc-cccc-4ccc-8ccc-cccccccccccc','Funcionário','funcionario','11111111-1111-4111-8111-111111111111');
+INSERT INTO public.funcionarios(id,nome_completo,role,ativo,loja_id) VALUES
+ ('dddddddd-dddd-4ddd-8ddd-dddddddddddd','Funcionário de teste de rollback','funcionario',true,'11111111-1111-4111-8111-111111111111');
 
 CREATE TABLE public.operational_tasks (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, description text NOT NULL DEFAULT '',
