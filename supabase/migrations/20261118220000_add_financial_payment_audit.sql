@@ -19,6 +19,50 @@ CREATE TABLE IF NOT EXISTS public.transacoes_financeiras_eventos (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+-- Older payments predate actor/timestamp audit fields. Preserve their current
+-- state as an explicitly imported legacy snapshot; never fabricate an actor
+-- or claim that the original transition timestamp is known.
+ALTER TABLE public.transacoes_financeiras_eventos
+  ALTER COLUMN actor_id DROP NOT NULL;
+ALTER TABLE public.transacoes_financeiras_eventos
+  DROP CONSTRAINT IF EXISTS transacoes_financeiras_eventos_acao_check;
+ALTER TABLE public.transacoes_financeiras_eventos
+  ADD CONSTRAINT transacoes_financeiras_eventos_acao_check
+  CHECK (acao IN ('criado', 'marcado_pago', 'rejeitado', 'legacy_import'));
+
+INSERT INTO public.transacoes_financeiras_eventos (
+  transacao_id, acao, estado_anterior, estado_novo,
+  actor_id, motivo, snapshot, created_at
+)
+SELECT
+  payment.id,
+  'legacy_import',
+  NULL,
+  payment.estado,
+  NULL,
+  CASE WHEN payment.motivo_rejeicao IS NOT NULL
+       THEN payment.motivo_rejeicao
+       ELSE 'Registo anterior à activação do histórico de auditoria.'
+  END,
+  jsonb_build_object(
+    'legacy_import', true,
+    'actor_not_recorded', true,
+    'transition_timestamp_not_available', true,
+    'referencia', payment.referencia,
+    'loja_id', payment.loja_id,
+    'valor', payment.valor,
+    'metodo', payment.metodo,
+    'estado_actual_na_migracao', payment.estado,
+    'created_at_original', payment.created_at
+  ),
+  payment.created_at
+FROM public.transacoes_financeiras AS payment
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.transacoes_financeiras_eventos AS event
+  WHERE event.transacao_id = payment.id
+);
+
 CREATE INDEX IF NOT EXISTS transacoes_financeiras_eventos_payment_idx
   ON public.transacoes_financeiras_eventos(transacao_id, created_at, id);
 
