@@ -44,9 +44,11 @@ router.post('/',async(req:AdminRequest,res:Response)=>{
  for(const f of scoreFields){const v=Number(b[f]??3);if(!Number.isInteger(v)||v<1||v>5)return fail(res,400,'As classificações devem estar entre 1 e 5.');row[f]=v;}
  const status=b.status??'em_avaliacao';if(!statuses.has(status))return fail(res,400,'Estado do estudo inválido.');row.status=status;
  const link=await validateOpportunity(b.opportunity_id);if(link.error)return fail(res,400,link.error);row.opportunity_id=link.value;row.created_by=actor(req).id;
- const {data,error}=await supabaseAdmin.from('crm_expansion_sites').insert(row).select('*').single();
- if(error||!data)return fail(res,503,'Não foi possível registar o estudo.');
- if(!await event(data.id,actor(req).id,'created',null,data)){await supabaseAdmin.from('crm_expansion_sites').delete().eq('id',data.id);return fail(res,503,'Não foi possível registar o histórico; o estudo foi revertido.');}
+ const {data,error}=await supabaseAdmin.rpc('create_crm_expansion_site_with_event',{
+  p_actor_id:actor(req).id,
+  p_payload:row,
+ });
+ if(error||!data)return fail(res,error?.code==='42501'?403:400,'Não foi possível registar o estudo e o respectivo histórico.');
  (globalThis as any).io?.to('admin').emit('expansion-site:created',{id:data.id});
  return res.status(201).json({success:true,site:data});
 });
@@ -60,10 +62,17 @@ router.patch('/:id',async(req:AdminRequest,res:Response)=>{
  if('status'in b){if(!statuses.has(b.status))return fail(res,400,'Estado do estudo inválido.');update.status=b.status;}
  if('opportunity_id'in b){const link=await validateOpportunity(b.opportunity_id);if(link.error)return fail(res,400,link.error);update.opportunity_id=link.value;}
  if(!Object.keys(update).length)return fail(res,400,'Não foram fornecidas alterações.');
- const {data,error}=await supabaseAdmin.from('crm_expansion_sites').update(update).eq('id',current.id).select('*').single();
- if(error||!data)return fail(res,503,'Não foi possível actualizar o estudo.');
- const action='status'in update&&update.status!==current.status?'status_changed':'updated';
- if(!await event(current.id,actor(req).id,action,current,data)){const rollback:Record<string,unknown>={};for(const key of Object.keys(update))rollback[key]=(current as any)[key];await supabaseAdmin.from('crm_expansion_sites').update(rollback).eq('id',current.id);return fail(res,503,'Não foi possível registar o histórico; as alterações foram revertidas.');}
+ const {data,error}=await supabaseAdmin.rpc('update_crm_expansion_site_with_event',{
+  p_id:current.id,
+  p_actor_id:actor(req).id,
+  p_expected_updated_at:current.updated_at,
+  p_payload:update,
+ });
+ if(error||!data){
+  if(error?.code==='40001')return fail(res,409,'O estudo foi alterado por outro utilizador. Actualize os dados e tente novamente.');
+  if(error?.code==='P0002')return fail(res,404,'Estudo de localização não encontrado.');
+  return fail(res,error?.code==='42501'?403:400,'Não foi possível actualizar o estudo e o respectivo histórico.');
+ }
  (globalThis as any).io?.to('admin').emit('expansion-site:updated',{id:current.id});
  return res.json({success:true,site:data});
 });
