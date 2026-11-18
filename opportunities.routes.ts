@@ -80,7 +80,10 @@ router.patch('/:id', async (req: AdminRequest,res: Response) => {
   const {data:current,error:readError}=await supabaseAdmin.from('crm_opportunities').select('*').eq('id',req.params.id).maybeSingle();
   if(readError)return fail(res,503,'Não foi possível carregar a oportunidade.');
   if(!current)return fail(res,404,'Oportunidade não encontrada.');
-  const body=req.body||{};const update:Record<string,unknown>={};
+  const body=req.body||{};
+  const expectedUpdatedAt=body.expected_updated_at;
+  if(typeof expectedUpdatedAt!=='string'||Number.isNaN(Date.parse(expectedUpdatedAt)))return fail(res,400,'Versão da oportunidade em falta ou inválida. Actualize a lista.');
+  const update:Record<string,unknown>={};
   for(const field of allowedFields){
     if(!(field in body))continue;
     const value=body[field];
@@ -99,7 +102,7 @@ router.patch('/:id', async (req: AdminRequest,res: Response) => {
   const {data:updated,error}=await supabaseAdmin.rpc('update_crm_opportunity_with_event',{
     p_id:current.id,
     p_actor_id:actor(req).id,
-    p_expected_updated_at:current.updated_at,
+    p_expected_updated_at:expectedUpdatedAt,
     p_payload:update,
   });
   if(error||!updated){
