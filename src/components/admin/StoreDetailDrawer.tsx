@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 
 import type { LojaComKpi, Transacao, Funcionario, KpiLojaDiaria } from '../../types/database';
+import { requestStoreDeclarationUrl } from '../../../store-declaration-client';
 import { X, Building2, MapPin, Users, Receipt, Calendar, ArrowRight, ShieldCheck, CheckCircle2, FileText } from 'lucide-react';
 
 interface StoreDetailDrawerProps {
@@ -138,17 +139,13 @@ export const StoreDetailDrawer: React.FC<StoreDetailDrawerProps> = ({
     setIsOpeningDeclaration(txId);
     setDetailsError(null);
     try {
-      const token = sessionStorage.getItem('diamante_jwt_token');
-      if (!token) throw new Error('Sessão administrativa expirada. Volte a iniciar sessão.');
-      const response = await fetch(`/api/store/admin/purchases/${encodeURIComponent(txId)}/declaration?lojaId=${encodeURIComponent(loja!.id)}`, {
-        headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(10000),
+      const token = sessionStorage.getItem('diamante_jwt_token') || '';
+      const url = await requestStoreDeclarationUrl({
+        transactionId: txId,
+        storeId: loja.id,
+        token,
       });
-      const payload = await response.json().catch(() => null);
-      if (!response.ok || payload?.success !== true || typeof payload.url !== 'string') {
-        throw new Error(payload?.message || 'Não foi possível validar ou abrir a declaração.');
-      }
-      documentWindow.location.href = payload.url;
+      documentWindow.location.href = url;
     } catch (err) {
       documentWindow.close();
       setDetailsError(err instanceof Error ? err.message : 'Erro inesperado ao abrir a declaração.');
