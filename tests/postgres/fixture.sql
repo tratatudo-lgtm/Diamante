@@ -23,6 +23,27 @@ CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean LANGUAGE sql STABLE
 AS $$ SELECT true $$;
 
+CREATE TABLE public.despesas_operacionais (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  loja_id uuid NOT NULL REFERENCES public.lojas(id) ON DELETE RESTRICT,
+  categoria text NOT NULL CHECK (categoria IN ('renda','pessoal','energia_agua','comunicacoes','seguros','manutencao','material','marketing','servicos','impostos_taxas','transporte','outros')),
+  descricao text NOT NULL CHECK (length(trim(descricao)) BETWEEN 3 AND 1000),
+  fornecedor text,
+  referencia_documento text,
+  valor numeric(14,2) NOT NULL CHECK (valor > 0),
+  data_despesa date NOT NULL,
+  estado text NOT NULL DEFAULT 'pendente' CHECK (estado IN ('pendente','aprovada','rejeitada','paga')),
+  comprovativo_ref text,
+  criado_por uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL,
+  aprovado_por uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL,
+  pago_por uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL,
+  motivo_rejeicao text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  approved_at timestamptz,
+  paid_at timestamptz
+);
+
 CREATE TABLE public.transacoes_financeiras (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   referencia text NOT NULL,
