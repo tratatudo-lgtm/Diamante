@@ -77,7 +77,7 @@ router.get('/conversations', async (req: AuthenticatedRequest, res: Response) =>
       .eq('conversation_id', conversation.id).neq('sender_id', user.id).gt('created_at', lastRead || '1970-01-01T00:00:00Z');
     if (unreadError) throw unreadError;
     return { ...conversation, members, unread_count: count || 0 };
-  }).catch(() => null);
+  })).catch(() => null);
   if (!result) return fail(res, 503, 'Não foi possível calcular as mensagens por ler.');
   return res.json({ success: true, conversations: result });
 });
