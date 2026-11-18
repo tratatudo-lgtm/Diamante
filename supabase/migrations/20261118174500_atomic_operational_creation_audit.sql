@@ -91,8 +91,9 @@ CREATE OR REPLACE FUNCTION public.create_collab_report_with_event(
 LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
 AS $$
-DECLARE v_report public.collab_reports%ROWTYPE;
-DECLARE v_store_id uuid;
+DECLARE
+  v_report public.collab_reports%ROWTYPE;
+  v_store_id uuid;
 BEGIN
   SELECT f.loja_id INTO v_store_id FROM public.funcionarios f
   WHERE f.id=p_reporter_id AND f.ativo=true;
