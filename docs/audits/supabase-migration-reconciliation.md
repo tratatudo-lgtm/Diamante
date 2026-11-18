@@ -62,3 +62,16 @@ Many local filenames have timestamps different from the remote version for the s
 - No migration history was repaired or changed.
 - No VPS or Evolution API action was performed.
 - No merge or deployment was performed.
+
+## Production schema cross-check (read-only)
+
+A separate verbose `list_tables` inspection returned 54 public tables. This is an important qualification: absence from the migration ledger by filename does not imply that the feature's schema is absent. The following objects/columns were observed in the live schema:
+
+- Present: `whatsapp_otp_challenges` (including consumed/rate-limit fields).
+- Present: `crm_opportunities`, `crm_expansion_sites`, `operational_tasks`, `operational_goals`, `collab_conversations`, `collab_reports`, `registos_ponto`.
+- Present: `fechos_financeiros_loja` and `fechos_financeiros_eventos`, with reopen metadata and event snapshot columns.
+- Present: `despesas_operacionais` with approval/payment actor and timestamp columns.
+- `transacoes` includes `idempotency_key`, but the inspected columns do not include the newer signed-declaration evidence linkage.
+- Not present in the public schema snapshot: `store_purchase_consent_evidence` and `store_purchase_declaration_access_logs`.
+
+This schema snapshot is not proof that a particular local migration was applied: objects may predate the local files, be created by a differently named migration, or have been changed manually. The two absent evidence tables remain candidates for unapplied schema work, subject to dependency and SQL review. The earlier list of 37 filename slugs without a ledger-name match must therefore be treated as an investigation queue, not an "unapplied migrations" list.
