@@ -31,7 +31,7 @@ export async function requestStoreDeclarationUrl(
   } catch {
     throw new Error('O servidor devolveu um endereço de documento inválido.');
   }
-  if (signedUrl.protocol !== 'https:' || signedUrl.username || signedUrl.password) {
+  if (signedUrl.protocol !== 'https:' || signedUrl.hostname !== 'ytpetuvvxbmlafsisfaf.supabase.co' || signedUrl.username || signedUrl.password || !signedUrl.pathname.startsWith('/storage/v1/object/sign/')) {
     throw new Error('O endereço temporário do documento não é seguro.');
   }
   return signedUrl.toString();
