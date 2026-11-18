@@ -30,8 +30,8 @@ BEGIN
     END IF;
   END IF;
   IF EXISTS (
-    SELECT 1 FROM jsonb_object_keys(p_changes) k
-    WHERE k NOT IN ('title','description','priority','assigned_to','due_at','status')
+    SELECT 1 FROM jsonb_object_keys(p_changes) AS keys(key)
+    WHERE key NOT IN ('title','description','priority','assigned_to','due_at','status')
   ) THEN RAISE EXCEPTION 'invalid_changes' USING ERRCODE='22023'; END IF;
   IF p_changes ? 'title' AND char_length(trim(p_changes->>'title')) NOT BETWEEN 5 AND 160
     THEN RAISE EXCEPTION 'invalid_title' USING ERRCODE='22023'; END IF;
