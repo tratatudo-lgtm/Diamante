@@ -262,6 +262,7 @@ BEGIN
  IF current_setting('test.fail_collab_activity',true)='on' THEN
   RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';
  END IF;
+ RETURN NEW;
 END $;
 CREATE TRIGGER fail_collab_activity BEFORE UPDATE ON public.collab_conversations
  FOR EACH ROW EXECUTE FUNCTION public.reject_test_conversation_activity();
