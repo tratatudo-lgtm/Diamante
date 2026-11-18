@@ -95,6 +95,29 @@ export interface DatabaseTransacaoFinanceira {
   motivo_rejeicao?: string | null;
 }
 
+export interface DatabaseDespesaOperacional {
+  id: string;
+  loja_id: string;
+  categoria: string;
+  descricao: string;
+  fornecedor?: string | null;
+  referencia_documento?: string | null;
+  valor: number;
+  data_despesa: string;
+  estado: 'pendente' | 'aprovada' | 'rejeitada' | 'paga';
+  comprovativo_ref?: string | null;
+  criado_por?: string | null;
+  aprovado_por?: string | null;
+  approved_at?: string | null;
+  rejeitado_por?: string | null;
+  rejected_at?: string | null;
+  pago_por?: string | null;
+  paid_at?: string | null;
+  motivo_rejeicao?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface DatabaseConfiguracaoSistema {
   chave: string;
   valor: Record<string, unknown>;
@@ -123,6 +146,11 @@ export interface SupabaseDatabaseSchema {
         Row: DatabaseTransacaoFinanceira;
         Insert: Partial<DatabaseTransacaoFinanceira> & Pick<DatabaseTransacaoFinanceira, 'referencia' | 'loja_id' | 'valor'>;
         Update: Partial<DatabaseTransacaoFinanceira>;
+      };
+      despesas_operacionais: {
+        Row: DatabaseDespesaOperacional;
+        Insert: Partial<DatabaseDespesaOperacional> & Pick<DatabaseDespesaOperacional, 'loja_id' | 'categoria' | 'descricao' | 'valor' | 'data_despesa'>;
+        Update: Partial<DatabaseDespesaOperacional>;
       };
       configuracoes_sistema: {
         Row: DatabaseConfiguracaoSistema;
