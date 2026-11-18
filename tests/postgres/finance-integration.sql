@@ -92,6 +92,23 @@ SET estado='rejeitada',rejeitado_por='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     rejected_at=now(),motivo_rejeicao='Comprovativo insuficiente',updated_at=now()
 WHERE id='20000000-0000-4000-8000-000000000003';
 
+-- Direct insertion in a terminal state must be rejected by the database trigger.
+DO $
+BEGIN
+  BEGIN
+    INSERT INTO public.transacoes_financeiras(
+      id,referencia,loja_id,loja_nome,beneficiario_nome,valor,metodo,descricao,estado,criado_por,pago_por,paid_at
+    ) VALUES (
+      '30000000-0000-4000-8000-000000000009','TEST-BYPASS',
+      '11111111-1111-4111-8111-111111111111','Loja teste','Fornecedor',
+      10.00,'Transferência SEPA','Tentativa de bypass','pago',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',now()
+    );
+    RAISE EXCEPTION 'Inserção directa de pagamento já pago devia falhar';
+  EXCEPTION WHEN SQLSTATE '23514' THEN NULL; END;
+END $;
+
 -- Payment audit and valid state transition.
 INSERT INTO public.transacoes_financeiras(
   id,referencia,loja_id,loja_nome,beneficiario_nome,valor,metodo,descricao,estado,criado_por
