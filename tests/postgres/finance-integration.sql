@@ -93,7 +93,7 @@ SET estado='rejeitada',rejeitado_por='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
 WHERE id='20000000-0000-4000-8000-000000000003';
 
 -- Direct insertion in a terminal state must be rejected by the database trigger.
-DO $
+DO $$
 BEGIN
   BEGIN
     INSERT INTO public.transacoes_financeiras(
@@ -107,7 +107,7 @@ BEGIN
     );
     RAISE EXCEPTION 'Inserção directa de pagamento já pago devia falhar';
   EXCEPTION WHEN SQLSTATE '23514' THEN NULL; END;
-END $;
+END $$;
 
 -- Payment audit and valid state transition.
 INSERT INTO public.transacoes_financeiras(
