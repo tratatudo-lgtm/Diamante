@@ -128,6 +128,57 @@ CREATE UNIQUE INDEX cliente_documentos_um_documento_ativo_por_cliente_uidx
  ON public.cliente_documentos(cliente_id) WHERE substituido_em IS NULL;
 \ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql
 \ir ../../supabase/migrations/20261118213000_atomic_client_document_replacement.sql
+
+CREATE TABLE public.collab_notifications(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id),
+ kind text NOT NULL, entity_id uuid, title text NOT NULL, body text NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT collab_notifications_kind_check CHECK(kind IN ('report_created','report_updated','report_comment','chat_message','task_assigned','task_updated','goal_assigned','goal_updated'))
+);
+CREATE TABLE public.crm_opportunities(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ title text NOT NULL CHECK(char_length(trim(title)) BETWEEN 3 AND 180),
+ opportunity_type text NOT NULL CHECK(opportunity_type IN ('parceria','investidor','nova_loja','fornecedor','outro')),
+ stage text NOT NULL DEFAULT 'lead' CHECK(stage IN ('lead','contactado','qualificacao','proposta','negociacao','ganha','perdida')),
+ priority text NOT NULL DEFAULT 'normal' CHECK(priority IN ('baixa','normal','alta','urgente')),
+ expected_value numeric(14,2) CHECK(expected_value IS NULL OR expected_value>=0),
+ location text,contact_name text,contact_email text,contact_phone text,
+ assigned_to uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL,
+ next_action text,next_action_at timestamptz,notes text NOT NULL DEFAULT '',
+ created_by uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),closed_at timestamptz
+);
+CREATE TABLE public.crm_opportunity_events(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),opportunity_id uuid NOT NULL REFERENCES public.crm_opportunities(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,action text NOT NULL,
+ old_values jsonb,new_values jsonb,created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.crm_expansion_sites(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ opportunity_id uuid REFERENCES public.crm_opportunities(id) ON DELETE SET NULL,
+ name text NOT NULL CHECK(char_length(trim(name)) BETWEEN 3 AND 180),
+ address text NOT NULL CHECK(char_length(trim(address)) BETWEEN 5 AND 300),
+ city text NOT NULL CHECK(char_length(trim(city)) BETWEEN 2 AND 120),
+ district text,latitude numeric(9,6),longitude numeric(9,6),area_sqm numeric(10,2),
+ monthly_rent numeric(14,2),estimated_setup_cost numeric(14,2),estimated_monthly_revenue numeric(14,2),
+ estimated_monthly_other_costs numeric(14,2) NOT NULL DEFAULT 0,estimated_initial_stock numeric(14,2) NOT NULL DEFAULT 0,
+ estimated_monthly_staff_cost numeric(14,2) NOT NULL DEFAULT 0,estimated_monthly_utilities_cost numeric(14,2) NOT NULL DEFAULT 0,
+ footfall_score smallint NOT NULL DEFAULT 3,visibility_score smallint NOT NULL DEFAULT 3,
+ accessibility_score smallint NOT NULL DEFAULT 3,competition_score smallint NOT NULL DEFAULT 3,
+ security_score smallint NOT NULL DEFAULT 3,parking_score smallint NOT NULL DEFAULT 3,fit_score smallint NOT NULL DEFAULT 3,
+ status text NOT NULL DEFAULT 'em_avaliacao',notes text NOT NULL DEFAULT '',
+ created_by uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),
+ weighted_score numeric(5,2) GENERATED ALWAYS AS (
+ round(((footfall_score*25+visibility_score*20+accessibility_score*15+competition_score*10+security_score*10+parking_score*5+fit_score*15)::numeric/5),2)
+ ) STORED,CONSTRAINT crm_expansion_sites_opportunity_unique UNIQUE(opportunity_id,name)
+);
+CREATE TABLE public.crm_expansion_site_events(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),site_id uuid NOT NULL REFERENCES public.crm_expansion_sites(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,action text NOT NULL,
+ old_values jsonb,new_values jsonb,created_at timestamptz NOT NULL DEFAULT now()
+);
+\\ir ../../supabase/migrations/20261118220000_atomic_crm_opportunity_expansion_writes.sql
 \ir ../../supabase/migrations/20261118210000_atomic_collab_comment_audit.sql
 \ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
 \ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
@@ -498,3 +549,87 @@ BEGIN
  END IF;
 END $client_document$;
 SELECT 'POSTGRES_CLIENT_DOCUMENT_REPLACEMENT_ATOMICITY_OK' AS result;
+
+-- CRM opportunity and expansion-site data plus audit must commit atomically.
+CREATE FUNCTION public.reject_test_crm_audit()
+RETURNS trigger LANGUAGE plpgsql AS $crm_audit$
+BEGIN
+ IF current_setting('test.fail_crm_audit',true)='on' THEN
+  RAISE EXCEPTION 'injected_crm_audit_failure' USING ERRCODE='P0001';
+ END IF;
+ RETURN NEW;
+END $crm_audit$;
+CREATE TRIGGER fail_opportunity_audit BEFORE INSERT ON public.crm_opportunity_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_crm_audit();
+CREATE TRIGGER fail_expansion_audit BEFORE INSERT ON public.crm_expansion_site_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_crm_audit();
+
+DO $crm_atomic$
+DECLARE v jsonb; v_id uuid; n integer; failed boolean; stamp timestamptz; site_id uuid;
+BEGIN
+ v:=public.create_crm_opportunity_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  '{"title":"Oportunidade teste","opportunity_type":"parceria","stage":"lead","priority":"normal","expected_value":1000,"notes":"teste"}'::jsonb);
+ v_id:=(v->>'id')::uuid;
+ SELECT count(*) INTO n FROM public.crm_opportunity_events WHERE opportunity_id=v_id;
+ IF n<>1 THEN RAISE EXCEPTION 'Oportunidade criada sem evento'; END IF;
+ stamp:=(v->>'updated_at')::timestamptz;
+ v:=public.update_crm_opportunity_with_event(v_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',stamp,
+  '{"stage":"proposta","expected_value":1500}'::jsonb);
+ IF v->>'stage'<>'proposta' OR (v->>'expected_value')::numeric<>1500 THEN
+  RAISE EXCEPTION 'Actualização da oportunidade falhou';
+ END IF;
+ SELECT count(*) INTO n FROM public.crm_opportunity_events WHERE opportunity_id=v_id;
+ IF n<>2 THEN RAISE EXCEPTION 'Actualização da oportunidade sem evento'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.update_crm_opportunity_with_event(v_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   stamp,'{"title":"actualização obsoleta"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '40001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Actualização obsoleta da oportunidade não foi bloqueada'; END IF;
+
+ PERFORM set_config('test.fail_crm_audit','on',true);
+ failed:=false;
+ BEGIN
+  PERFORM public.create_crm_opportunity_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   '{"title":"Oportunidade rollback","opportunity_type":"parceria"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada do histórico da oportunidade não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.crm_opportunities WHERE title='Oportunidade rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Oportunidade parcial persistiu sem evento'; END IF;
+ PERFORM set_config('test.fail_crm_audit','off',true);
+
+ v:=public.create_crm_expansion_site_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  '{"name":"Local teste","address":"Rua de teste, 10","city":"Porto","status":"em_avaliacao","footfall_score":4}'::jsonb);
+ site_id:=(v->>'id')::uuid;
+ SELECT count(*) INTO n FROM public.crm_expansion_site_events WHERE site_id=site_id;
+ IF n<>1 THEN RAISE EXCEPTION 'Estudo de expansão criado sem evento'; END IF;
+ stamp:=(v->>'updated_at')::timestamptz;
+ v:=public.update_crm_expansion_site_with_event(site_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  stamp,'{"status":"visita_pendente","monthly_rent":1200}'::jsonb);
+ IF v->>'status'<>'visita_pendente' OR (v->>'monthly_rent')::numeric<>1200 THEN
+  RAISE EXCEPTION 'Actualização do estudo de expansão falhou';
+ END IF;
+ SELECT count(*) INTO n FROM public.crm_expansion_site_events WHERE site_id=site_id;
+ IF n<>2 THEN RAISE EXCEPTION 'Actualização do estudo sem evento'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.update_crm_expansion_site_with_event(site_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   stamp,'{"name":"actualização obsoleta"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '40001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Actualização obsoleta do estudo não foi bloqueada'; END IF;
+
+ PERFORM set_config('test.fail_crm_audit','on',true);
+ failed:=false;
+ BEGIN
+  PERFORM public.create_crm_expansion_site_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   '{"name":"Local rollback","address":"Rua de teste, 20","city":"Porto"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada do histórico do estudo não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.crm_expansion_sites WHERE name='Local rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Estudo parcial persistiu sem evento'; END IF;
+END $crm_atomic$;
+SELECT 'POSTGRES_CRM_OPPORTUNITY_EXPANSION_ATOMICITY_OK' AS result;
