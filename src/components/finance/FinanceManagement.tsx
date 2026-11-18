@@ -173,7 +173,7 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
       <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-white">Histórico de auditoria da despesa</h3><button type="button" onClick={()=>setSelectedExpenseId(null)} className="text-xs text-slate-400">Fechar</button></div>
       {expenseEventsLoading?<p className="text-xs text-slate-400">A carregar histórico…</p>:expenseEventsError?<p role="alert" className="text-xs text-rose-300">{expenseEventsError}</p>:expenseEvents.length===0?<p className="text-xs text-slate-400">Sem eventos disponíveis.</p>:<ol className="space-y-2">{expenseEvents.map(event=><li key={event.id} className="border-l-2 border-amber-500/40 pl-3">
         <p className="text-xs font-semibold text-slate-200">{event.acao==='legacy_import'?'Registo histórico importado':event.acao==='criada'?'Despesa registada':event.acao==='aprovada'?'Despesa aprovada':event.acao==='rejeitada'?'Despesa rejeitada':'Despesa paga'}</p>
-        <p className="text-[10px] text-slate-400">{event.created_at?new Date(event.created_at).toLocaleString('pt-PT'):'Data não disponível'}{event.actor_id?' · Responsável: '+event.actor_id:' · Responsável não registado'}</p>
+        <p className="text-[10px] text-slate-400">{event.snapshot?.legacy_import===true?'Importado na activação da auditoria':event.created_at?new Date(event.created_at).toLocaleString('pt-PT'):'Data não disponível'}{event.actor_id?' · Responsável: '+event.actor_id:' · Responsável não registado'}</p>
         {event.motivo&&<p className="mt-1 text-[10px] text-slate-400">{event.motivo}</p>}
         {event.snapshot?.legacy_import===true&&<p className="mt-1 text-[10px] text-amber-300">Estado existente na migração; não representa a data comprovada da transição original.</p>}
       </li>)}</ol>}
@@ -989,7 +989,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                              event.acao === 'rejeitado' ? 'Pagamento rejeitado' : 'Pagamento registado'}
                           </p>
                           <p className="text-[10px] text-slate-400">
-                            {event.created_at ? new Date(event.created_at).toLocaleString('pt-PT') : 'Data não disponível'}
+                            {event.snapshot?.legacy_import === true ? 'Importado na activação da auditoria' : event.created_at ? new Date(event.created_at).toLocaleString('pt-PT') : 'Data não disponível'}
                             {event.actor_id ? ` · Administrador: ${event.actor_id}` : ' · Responsável não registado'}
                           </p>
                           {event.motivo && <p className="text-[10px] text-slate-400 mt-1">{event.motivo}</p>}
