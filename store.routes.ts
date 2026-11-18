@@ -387,11 +387,6 @@ storeRouter.use(createStoreDeclarationRouter({
   verifyAuth,
   verifyAdmin,
   repository: {
-    async getActiveStore(id) {
-      const { data, error } = await supabaseAdmin.from('lojas')
-        .select('id').eq('id', id).eq('ativo', true).maybeSingle();
-      return { data: Boolean(data), error };
-    },
     async getPurchase(id) {
       const { data, error } = await supabaseAdmin.from('transacoes')
         .select('id, loja_id, declaracao_assinada_id').eq('id', id).maybeSingle();
