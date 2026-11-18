@@ -254,6 +254,14 @@ END $$;
 CREATE TRIGGER fail_collab_membership BEFORE INSERT ON public.collab_conversation_members
  FOR EACH ROW EXECUTE FUNCTION public.reject_test_membership_for_employee();
 
+CREATE FUNCTION public.reject_test_conversation_activity()
+RETURNS trigger LANGUAGE plpgsql AS $
+BEGIN
+ RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';
+END $;
+CREATE TRIGGER fail_collab_activity BEFORE UPDATE ON public.collab_conversations
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_conversation_activity();
+
 DO $collab$
 DECLARE v jsonb; v_id uuid; n integer; failed boolean; v_last timestamptz;
 BEGIN
