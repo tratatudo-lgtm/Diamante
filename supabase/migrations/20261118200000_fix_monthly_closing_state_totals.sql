@@ -60,7 +60,13 @@ BEGIN
   )
   INTO v_categories
   FROM (
-    SELECT categoria, sum(valor)::numeric(16,2) AS total_categoria
+    SELECT
+      categoria,
+      jsonb_build_object(
+        'paga', coalesce(sum(valor) FILTER (WHERE estado = 'paga'), 0),
+        'pendente', coalesce(sum(valor) FILTER (WHERE estado IN ('pendente', 'aprovada')), 0),
+        'rejeitada', coalesce(sum(valor) FILTER (WHERE estado = 'rejeitada'), 0)
+      ) AS total_categoria
     FROM public.despesas_operacionais
     WHERE loja_id = p_loja_id
       AND data_despesa >= p_periodo
