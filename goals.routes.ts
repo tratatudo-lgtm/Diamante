@@ -42,8 +42,8 @@ async function visibleGoal(goalId: string, req: AuthenticatedRequest) {
 router.get('/directory', async (req: AuthenticatedRequest, res: Response) => {
   if (!admin(req)) return fail(res,403,'Apenas administradores podem consultar os destinos dos objectivos.');
   const [{data:stores,error:storeError},{data:employees,error:employeeError}] = await Promise.all([
-    supabaseAdmin.from('lojas').select('id,nome').eq('ativo',true).order('nome'),
-    supabaseAdmin.from('funcionarios').select('id,nome_completo,loja_id,lojas(nome)').eq('ativo',true).order('nome_completo').limit(500),
+    supabaseAdmin.from('lojas').select('id,nome,ativo').order('nome'),
+    supabaseAdmin.from('funcionarios').select('id,nome_completo,loja_id,ativo,lojas(nome)').order('nome_completo'),
   ]);
   if(storeError||employeeError)return fail(res,503,'Não foi possível carregar lojas e funcionários.');
   return res.json({success:true,stores:stores||[],employees:employees||[]});
