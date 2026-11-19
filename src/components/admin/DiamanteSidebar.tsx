@@ -126,22 +126,6 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
         <button type="button" onClick={() => setIsMobileOpen(false)} aria-label="Fechar menu" className="lg:hidden fixed inset-0 z-40 bg-[#02050b]/75 backdrop-blur-sm" />
       )}
       <aside
-        aria-label={isMobileOpen ? 'Fechar menu administrativo' : 'Abrir menu administrativo'}
-        aria-expanded={isMobileOpen}
-      >
-        {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
-
-      {isMobileOpen && (
-        <button
-          type="button"
-          onClick={() => setIsMobileOpen(false)}
-          aria-label="Fechar menu"
-          className="lg:hidden fixed inset-0 z-40 bg-[#02050b]/75 backdrop-blur-sm"
-        />
-      )}
-
-      <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-hidden border-r border-white/[0.07] bg-[#080f1c]/95 text-slate-200 shadow-[18px_0_60px_rgba(0,0,0,.28)] backdrop-blur-2xl transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)] lg:translate-x-0 ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
