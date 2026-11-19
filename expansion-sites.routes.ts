@@ -18,19 +18,29 @@ async function validateOpportunity(id:unknown){
 function numeric(value:unknown,min:number,max:number){if(value===null||value===''||value===undefined)return null;const n=Number(value);return Number.isFinite(n)&&n>=min&&n<=max?n:undefined;}
 
 router.get('/',async(_req:AdminRequest,res:Response)=>{
- const {data,error}=await supabaseAdmin.from('crm_expansion_sites')
- .select('*,opportunity:crm_opportunities!crm_expansion_sites_opportunity_id_fkey(id,title,stage,expected_value),creator:funcionarios!crm_expansion_sites_created_by_fkey(id,nome_completo)')
- .order('weighted_score',{ascending:false}).limit(1000);
- if(error)return fail(res,503,'Não foi possível carregar os estudos de localização.');
- return res.json({success:true,sites:data||[]});
+ const sites:any[]=[];
+ for(let offset=0;;offset+=500){
+  const {data,error}=await supabaseAdmin.from('crm_expansion_sites')
+   .select('*,opportunity:crm_opportunities!crm_expansion_sites_opportunity_id_fkey(id,title,stage,expected_value),creator:funcionarios!crm_expansion_sites_created_by_fkey(id,nome_completo)')
+   .order('weighted_score',{ascending:false}).range(offset,offset+499);
+  if(error)return fail(res,503,'Não foi possível carregar todos os estudos de localização.');
+  sites.push(...(data||[]));
+  if(!data||data.length<500)break;
+ }
+ return res.json({success:true,sites});
 });
 router.get('/:id/events',async(req:AdminRequest,res:Response)=>{
  const {data:site,error:siteError}=await supabaseAdmin.from('crm_expansion_sites').select('id').eq('id',req.params.id).maybeSingle();
  if(siteError)return fail(res,503,'Não foi possível validar a localização.');
  if(!site)return fail(res,404,'Estudo de localização não encontrado.');
- const {data,error}=await supabaseAdmin.from('crm_expansion_site_events').select('id,action,old_values,new_values,created_at,actor:funcionarios!crm_expansion_site_events_actor_id_fkey(nome_completo)').eq('site_id',req.params.id).order('created_at',{ascending:false}).limit(150);
- if(error)return fail(res,503,'Não foi possível carregar o histórico.');
- return res.json({success:true,events:data||[]});
+ const events:any[]=[];
+ for(let offset=0;;offset+=500){
+  const {data,error}=await supabaseAdmin.from('crm_expansion_site_events').select('id,action,old_values,new_values,created_at,actor:funcionarios!crm_expansion_site_events_actor_id_fkey(nome_completo)').eq('site_id',req.params.id).order('created_at',{ascending:false}).range(offset,offset+499);
+  if(error)return fail(res,503,'Não foi possível carregar todo o histórico.');
+  events.push(...(data||[]));
+  if(!data||data.length<500)break;
+ }
+ return res.json({success:true,events});
 });
 router.post('/',async(req:AdminRequest,res:Response)=>{
  const b=req.body||{};const row:Record<string,unknown>={};
