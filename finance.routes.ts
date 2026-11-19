@@ -112,15 +112,20 @@ router.get('/payments/:id/events', async (req: Request, res: Response) => {
   try {
     const id = text(req.params.id, 64);
     if (!UUID_RE.test(id)) return res.status(400).json({ success: false, message: 'Identificador de pagamento inválido.' });
-    const { data, error } = await supabaseAdmin
-      .from('transacoes_financeiras_eventos')
-      .select('id, transacao_id, acao, estado_anterior, estado_novo, actor_id, motivo, snapshot, created_at')
-      .eq('transacao_id', id)
-      .order('created_at', { ascending: true })
-      .order('id', { ascending: true })
-      .limit(200);
-    if (error) return res.status(503).json({ success: false, message: 'Não foi possível consultar o histórico do pagamento.' });
-    return res.json({ success: true, data: data || [] });
+    const data: Array<Record<string, unknown>> = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data: page, error } = await supabaseAdmin
+        .from('transacoes_financeiras_eventos')
+        .select('id, transacao_id, acao, estado_anterior, estado_novo, actor_id, motivo, snapshot, created_at')
+        .eq('transacao_id', id)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + 499);
+      if (error) return res.status(503).json({ success: false, message: 'Não foi possível consultar o histórico do pagamento.' });
+      data.push(...(page || []));
+      if (!page || page.length < 500) break;
+    }
+    return res.json({ success: true, data });
   } catch {
     return res.status(500).json({ success: false, message: 'Erro interno ao consultar o histórico do pagamento.' });
   }
@@ -274,13 +279,18 @@ router.get('/closings', async (req: Request, res: Response) => {
   try {
     const month=text(req.query.month,7);
     if(month&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))return res.status(400).json({success:false,message:'Mês inválido. Use AAAA-MM.'});
-    let query=supabaseAdmin.from('fechos_financeiros_loja')
-      .select('id,loja_id,periodo,estado,total_pago,total_pendente,total_rejeitado,quantidade_despesas,snapshot_categorias,fechado_por,fechado_em,reaberto_por,reaberto_em,motivo_reabertura,lojas(nome)')
-      .order('periodo',{ascending:false}).limit(500);
-    if(month)query=query.eq('periodo',month+'-01');
-    const {data,error}=await query;
-    if(error)return res.status(503).json({success:false,message:'Não foi possível consultar os fechos.'});
-    return res.json({success:true,data:data||[]});
+    const data: Array<Record<string, unknown>> = [];
+    for (let offset = 0; ; offset += 500) {
+      let query=supabaseAdmin.from('fechos_financeiros_loja')
+        .select('id,loja_id,periodo,estado,total_pago,total_pendente,total_rejeitado,quantidade_despesas,snapshot_categorias,fechado_por,fechado_em,reaberto_por,reaberto_em,motivo_reabertura,lojas(nome)')
+        .order('periodo',{ascending:false}).range(offset,offset+499);
+      if(month)query=query.eq('periodo',month+'-01');
+      const {data:page,error}=await query;
+      if(error)return res.status(503).json({success:false,message:'Não foi possível consultar os fechos.'});
+      data.push(...(page||[]));
+      if(!page||page.length<500)break;
+    }
+    return res.json({success:true,data});
   } catch { return res.status(500).json({success:false,message:'Erro interno ao consultar fechos.'}); }
 });
 
