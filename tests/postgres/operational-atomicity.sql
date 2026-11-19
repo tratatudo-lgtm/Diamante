@@ -188,8 +188,8 @@ CREATE TABLE public.crm_expansion_site_events(
  actor_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,action text NOT NULL,
  old_values jsonb,new_values jsonb,created_at timestamptz NOT NULL DEFAULT now()
 );
-\ir ../../supabase/migrations/20261118220000_atomic_crm_opportunity_expansion_writes.sql
-\ir ../../supabase/migrations/20261118230000_atomic_employee_time_clock.sql
+\ir ../../supabase/migrations/20261118220001_atomic_crm_opportunity_expansion_writes.sql
+\ir ../../supabase/migrations/20261118230001_atomic_employee_time_clock.sql
 DO $crm_rpc_permissions$
 BEGIN
  IF has_function_privilege('authenticated','public.create_crm_opportunity_with_event(uuid,jsonb)','EXECUTE')
