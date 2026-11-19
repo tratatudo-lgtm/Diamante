@@ -1273,7 +1273,8 @@ async function processBirthdayWhatsAppQueue(): Promise<void> {
   try {
     const { data: birthdays, error } = await supabaseAdmin.rpc('claim_birthday_whatsapp_messages');
     if (error) {
-      console.error('[Birthday WhatsApp] Não foi possível reclamar a fila.');
+      // Diagnóstico limitado a campos técnicos; não registar payloads, dados de clientes ou credenciais.
+      console.error('[Birthday WhatsApp] RPC claim falhou:', { code: error.code || 'unknown', status: error.status || null });
       return;
     }
     for (const birthday of birthdays || []) {
