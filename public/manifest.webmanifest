@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Diamante OS — Gestão de Compra de Ouro",
+  "short_name": "Diamante OS",
+  "description": "Plataforma de gestão Diamante D'Ouro",
+  "lang": "pt-PT",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#070d18",
+  "theme_color": "#070d18",
+  "icons": [{ "src": "/icons/diamante-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
