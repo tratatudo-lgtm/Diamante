@@ -10,7 +10,8 @@ export function canAccessPurchaseDeclaration(
 ): boolean {
   if (!actor.id || !purchaseStoreId) return false;
   if (actor.role === 'admin') return true;
-  return actor.role === 'funcionario' && Boolean(actor.lojaId) && actor.lojaId === purchaseStoreId;
+  return actor.role === 'funcionario' &&
+    Boolean(actor.lojaId) && actor.lojaId === purchaseStoreId;
 }
 
 export function isUuid(value: string): boolean {

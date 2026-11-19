@@ -73,4 +73,4 @@ GRANT EXECUTE ON FUNCTION public.get_performance_goal_progress(uuid) TO service_
 
 ALTER TABLE public.collab_notifications DROP CONSTRAINT IF EXISTS collab_notifications_kind_check;
 ALTER TABLE public.collab_notifications ADD CONSTRAINT collab_notifications_kind_check
-  CHECK (kind IN ('report_created','report_updated','report_comment','chat_message','task_assigned','task_updated','goal_assigned','goal_updated'));
+  CHECK (kind IN ('report_created','report_updated','report_comment','chat_message','task_assigned','task_updated','goal_assigned','goal_updated','opportunity_assigned','opportunity_updated'));

@@ -16,6 +16,25 @@ function canReadClients(role: string): boolean {
   return role === 'admin' || role === 'funcionario';
 }
 
+async function findClientInStore(
+  employee: NonNullable<AuthenticatedRequest['authenticatedUser']>,
+  clientId: string,
+  requestedStoreId?: unknown,
+) {
+  // A administração tem âmbito global e consulta também clientes históricos
+  // de lojas inactivas. A loja do cliente é obtida da própria relação na BD.
+  if (employee.role === 'admin') {
+    const { data: client, error } = await supabaseAdmin.from('clientes')
+      .select('id,loja_registo_id').eq('id', clientId).maybeSingle();
+    return { client, error, invalidScope: false };
+  }
+  const storeId = employee.loja_id;
+  if (!storeId) return { client: null, error: null, invalidScope: true };
+  const { data: client, error } = await supabaseAdmin.from('clientes')
+    .select('id,loja_registo_id').eq('id', clientId).eq('loja_registo_id', storeId).maybeSingle();
+  return { client, error, invalidScope: false };
+}
+
 clientsRouter.get('/', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
   if (!employee || !canReadClients(employee.role) || (employee.role !== 'admin' && !employee.loja_id)) {
@@ -175,10 +194,9 @@ clientsRouter.get('/:id/documents', verifyAuth, async (req: AuthenticatedRequest
   const clientId = String(req.params.id || '');
   if (!employee || !canReadClients(employee.role) || (employee.role !== 'admin' && !employee.loja_id)) return res.status(403).json({ success: false, message: 'Acesso não autorizado.' });
   try {
-    let clientQuery = supabaseAdmin.from('clientes').select('id,loja_registo_id').eq('id', clientId);
-    if (employee.role !== 'admin') clientQuery = clientQuery.eq('loja_registo_id', employee.loja_id as string);
-    const { data: client, error: clientError } = await clientQuery.maybeSingle();
-    if (clientError || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
+    const { client, error: clientError, invalidScope } = await findClientInStore(employee, clientId, req.query.lojaId);
+    if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
+    if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
     const { data, error } = await supabaseAdmin.from('cliente_documentos')
       .select('id,tipo_documento,numero_documento,data_emissao,data_validade,mime_type,tamanho_bytes,uploaded_at,substituido_em,storage_path')
       .eq('cliente_id', clientId).order('uploaded_at', { ascending: false }).limit(50);
@@ -259,18 +277,10 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
   }
 
   let storagePath = '';
-  let previousId: string | null = null;
   try {
-    let clientQuery = supabaseAdmin.from('clientes').select('id,loja_registo_id')
-      .eq('id', clientId);
-    if (employee.role !== 'admin') clientQuery = clientQuery.eq('loja_registo_id', employee.loja_id as string);
-    const { data: client, error: clientError } = await clientQuery.maybeSingle();
-    if (clientError || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
-
-    const { data: previous, error: previousError } = await supabaseAdmin.from('cliente_documentos')
-      .select('id').eq('cliente_id', clientId).is('substituido_em', null).maybeSingle();
-    if (previousError) throw previousError;
-    previousId = previous?.id || null;
+    const { client, error: clientError, invalidScope } = await findClientInStore(employee, clientId, body.lojaId);
+    if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
+    if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
 
     const safeName = fileName.replace(/[^\p{L}\p{N}._-]/gu, '_');
     storagePath = `${clientId}/${crypto.randomUUID()}.${extByMime[mimeType]}`;
@@ -278,33 +288,28 @@ clientsRouter.post('/:id/documents', verifyAuth, async (req: AuthenticatedReques
       .upload(storagePath, fileBuffer, { contentType: mimeType, upsert: false, metadata: { originalName: safeName } });
     if (uploadError) throw uploadError;
 
-    if (previousId) {
-      const { error } = await supabaseAdmin.from('cliente_documentos')
-        .update({ substituido_em: new Date().toISOString(), substituido_por: employee.id })
-        .eq('id', previousId).is('substituido_em', null);
-      if (error) throw error;
+    const { data: replaced, error: replaceError } = await supabaseAdmin.rpc('replace_client_identity_document', {
+      p_client_id: clientId,
+      p_actor_id: employee.id,
+      p_tipo_documento: tipoDocumento,
+      p_numero_documento: numeroDocumento,
+      p_data_emissao: dataEmissao,
+      p_data_validade: dataValidade,
+      p_storage_path: storagePath,
+      p_mime_type: mimeType,
+      p_tamanho_bytes: fileBuffer.length,
+    });
+    if (replaceError || !replaced?.documento_id) {
+      await supabaseAdmin.storage.from('documentos-clientes').remove([storagePath]);
+      storagePath = '';
+      if (replaceError?.code === '42501') return res.status(403).json({ success: false, message: 'Não tem autorização para actualizar documentos deste cliente.' });
+      if (replaceError?.code === 'P0002') return res.status(404).json({ success: false, message: 'Cliente não encontrado.' });
+      if (replaceError?.code === '22023') return res.status(400).json({ success: false, message: 'Os dados do documento são inválidos.' });
+      throw replaceError || new Error('Falha ao substituir documento.');
     }
-
-    const { data: inserted, error: insertError } = await supabaseAdmin.from('cliente_documentos').insert({
-      cliente_id: clientId, tipo_documento: tipoDocumento, numero_documento: numeroDocumento,
-      data_emissao: dataEmissao, data_validade: dataValidade, storage_path: storagePath,
-      mime_type: mimeType, tamanho_bytes: fileBuffer.length, uploaded_by: employee.id,
-    }).select('id').single();
-    if (insertError || !inserted) throw insertError || new Error('Falha ao registar documento.');
-
-    const { error: updateError } = await supabaseAdmin.from('clientes').update({
-      tipo_documento: tipoDocumento, bi_cc: numeroDocumento,
-      data_emissao_documento: dataEmissao, data_validade_documento: dataValidade,
-    }).eq('id', clientId);
-    if (updateError) {
-      await supabaseAdmin.from('cliente_documentos').delete().eq('id', inserted.id);
-      throw updateError;
-    }
-    return res.status(201).json({ success: true, documento_id: inserted.id, message: 'Documento actualizado e versão anterior arquivada.' });
+    return res.status(201).json({ success: true, documento_id: replaced.documento_id, message: 'Documento actualizado e versão anterior arquivada.' });
   } catch {
     if (storagePath) await supabaseAdmin.storage.from('documentos-clientes').remove([storagePath]);
-    if (previousId) await supabaseAdmin.from('cliente_documentos')
-      .update({ substituido_em: null, substituido_por: null }).eq('id', previousId);
     return res.status(503).json({ success: false, message: 'Não foi possível guardar o novo documento. A versão anterior foi preservada.' });
   }
 });
@@ -320,6 +325,9 @@ clientsRouter.patch('/:id/birthday-consent', verifyAuth, async (req: Authenticat
     return res.status(400).json({ success: false, message: 'Indique o consentimento de forma explícita.' });
   }
   try {
+    const { client, error: clientError, invalidScope } = await findClientInStore(employee, String(req.params.id || ''), req.body?.lojaId);
+    if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
+    if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
     const { data, error } = await supabaseAdmin.rpc('set_client_birthday_whatsapp_consent', {
       p_client_id: req.params.id,
       p_consent: consent,
@@ -344,10 +352,14 @@ clientsRouter.patch('/:id/status', verifyAuth, async (req: AuthenticatedRequest,
     return res.status(400).json({ success: false, message: 'Classificação de cliente inválida.' });
   }
 
+  const { client, error: clientError, invalidScope } = await findClientInStore(employee, String(req.params.id || ''), req.body?.lojaId);
+  if (clientError) return res.status(503).json({ success: false, message: 'Não foi possível validar o acesso ao cliente.' });
+  if (invalidScope || !client) return res.status(404).json({ success: false, message: 'Cliente não encontrado nesta loja.' });
   const { data, error } = await supabaseAdmin
     .from('clientes')
     .update({ status })
     .eq('id', req.params.id)
+    .eq('loja_registo_id', client.loja_registo_id)
     .select('id,status')
     .maybeSingle();
   if (error) return res.status(503).json({ success: false, message: 'Não foi possível atualizar o cliente.' });
@@ -361,6 +373,8 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
     return res.status(403).json({ success: false, message: 'Não tem autorização para consultar clientes.' });
   }
   const search = typeof req.query.search === 'string' ? req.query.search.trim().slice(0, 100) : '';
+  const lojaId = employee.role === 'admin' ? null : employee.loja_id;
+  if (employee.role !== 'admin' && !lojaId) return res.status(403).json({ success: false, message: 'A conta não tem loja atribuída.' });
   try {
     const base = () => {
       let query = supabaseAdmin
@@ -368,7 +382,7 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
         .select('id,nome,bi_cc,nif,telemovel,loja_registo_id,created_at,tipo_documento,data_validade_documento,consentimento_whatsapp_aniversario')
         .order('created_at', { ascending: false })
         .limit(200);
-      if (employee.role !== 'admin') query = query.eq('loja_registo_id', employee.loja_id as string);
+      if (employee.role !== 'admin') query = query.eq('loja_registo_id', lojaId as string);
       return query;
     };
 
@@ -397,8 +411,8 @@ clientsRouter.get('/protected', verifyAuth, async (req: AuthenticatedRequest, re
         .from('transacoes')
         .select('cliente_cc')
         .in('cliente_cc', ids);
-      // Funcionários não podem inferir actividade de compras de outras lojas.
-      if (employee.role !== 'admin') transactionsQuery = transactionsQuery.eq('loja_id', employee.loja_id as string);
+      // Administração consulta o histórico completo, incluindo compras noutras lojas.
+      if (employee.role !== 'admin') transactionsQuery = transactionsQuery.eq('loja_id', lojaId as string);
       const { data: txRows, error } = await transactionsQuery;
       if (error) throw error;
       for (const tx of txRows || []) counts.set(tx.cliente_cc, (counts.get(tx.cliente_cc) || 0) + 1);

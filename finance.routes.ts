@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { supabaseAdmin } from './auth.service';
 import { verifyAdmin } from './middleware/verifyAdmin';
+import { summarizeExpenses } from './finance-expense-summary';
 
 const router = Router();
 router.use(verifyAdmin);
@@ -89,6 +90,7 @@ router.post('/payments', async (req: Request, res: Response) => {
         data: text(body.data, 32) || null,
         hora: text(body.hora, 16) || null,
         comprovativo_ref: text(body.comprovativo_ref, 500) || null,
+        criado_por: (req as any).adminUser?.id || null,
       })
       .select('*, lojas(nome)')
       .single();
@@ -106,19 +108,65 @@ router.post('/payments', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/payments/:id/events', async (req: Request, res: Response) => {
+  try {
+    const id = text(req.params.id, 64);
+    if (!UUID_RE.test(id)) return res.status(400).json({ success: false, message: 'Identificador de pagamento inválido.' });
+    const data: Array<Record<string, unknown>> = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data: page, error } = await supabaseAdmin
+        .from('transacoes_financeiras_eventos')
+        .select('id, transacao_id, acao, estado_anterior, estado_novo, actor_id, motivo, snapshot, created_at')
+        .eq('transacao_id', id)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(offset, offset + 499);
+      if (error) return res.status(503).json({ success: false, message: 'Não foi possível consultar o histórico do pagamento.' });
+      data.push(...(page || []));
+      if (!page || page.length < 500) break;
+    }
+    return res.json({ success: true, data });
+  } catch {
+    return res.status(500).json({ success: false, message: 'Erro interno ao consultar o histórico do pagamento.' });
+  }
+});
+
 router.patch('/payments/:id/status', async (req: Request, res: Response) => {
   try {
     const id = text(req.params.id, 64);
     const estado = text(req.body?.estado, 16);
-    if (!id || !['pago', 'rejeitado'].includes(estado)) {
+    if (!UUID_RE.test(id) || !['pago', 'rejeitado'].includes(estado)) {
       return res.status(400).json({ success: false, message: 'Estado de pagamento inválido.' });
+    }
+
+    const actorId = (req as any).adminUser?.id;
+    if (!actorId || !UUID_RE.test(actorId)) {
+      return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
+    }
+    const motivo = text(req.body?.motivo, 500);
+    if (estado === 'rejeitado' && motivo.length < 5) {
+      return res.status(400).json({ success: false, message: 'Indique um motivo de rejeição com pelo menos 5 caracteres.' });
+    }
+
+    const update: Record<string, unknown> = {
+      estado,
+      updated_at: new Date().toISOString(),
+    };
+    if (estado === 'pago') {
+      update.pago_por = actorId;
+      update.paid_at = new Date().toISOString();
+    } else {
+      update.rejeitado_por = actorId;
+      update.rejected_at = new Date().toISOString();
+      update.motivo_rejeicao = motivo;
     }
 
     const { data, error } = await supabaseAdmin
       .from('transacoes_financeiras')
-      .update({ estado, updated_at: new Date().toISOString() })      .eq('id', id)
+      .update(update)
+      .eq('id', id)
       .eq('estado', 'pendente')
-      .select('id, estado')
+      .select('id, estado, pago_por, paid_at, rejeitado_por, rejected_at, motivo_rejeicao')
       .maybeSingle();
 
     if (error) {
@@ -177,11 +225,13 @@ router.patch('/expenses/:id/status', async (req: Request, res: Response) => {
     const allowed=(current.estado==='pendente'&&['aprovada','rejeitada'].includes(nextStatus))||(current.estado==='aprovada'&&nextStatus==='paga');
     if(!allowed)return res.status(409).json({success:false,message:'A despesa já foi processada ou a transição não é permitida.'});
     if(nextStatus==='rejeitada'&&reason.length<3)return res.status(400).json({success:false,message:'Indique o motivo da rejeição.'});
-    const actor=(req as any).adminUser?.id||null, now=new Date().toISOString(), update:Record<string,unknown>={estado:nextStatus,updated_at:now};
+    const actor=(req as any).adminUser?.id||null;
+    if(!actor||!UUID_RE.test(actor))return res.status(401).json({success:false,message:'Sessão administrativa inválida.'});
+    const now=new Date().toISOString(), update:Record<string,unknown>={estado:nextStatus,updated_at:now};
     if(nextStatus==='aprovada'){update.aprovado_por=actor;update.approved_at=now;}
-    if(nextStatus==='rejeitada')update.motivo_rejeicao=reason;
+    if(nextStatus==='rejeitada'){update.rejeitado_por=actor;update.rejected_at=now;update.motivo_rejeicao=reason;}
     if(nextStatus==='paga'){update.pago_por=actor;update.paid_at=now;}
-    const {data,error}=await supabaseAdmin.from('despesas_operacionais').update(update).eq('id',id).eq('estado',current.estado).select('id,estado,approved_at,paid_at').maybeSingle();
+    const {data,error}=await supabaseAdmin.from('despesas_operacionais').update(update).eq('id',id).eq('estado',current.estado).select('id,estado,aprovado_por,approved_at,rejeitado_por,rejected_at,pago_por,paid_at,motivo_rejeicao').maybeSingle();
     if(error)return res.status(503).json({success:false,message:'Não foi possível actualizar a despesa.'});
     if(!data)return res.status(409).json({success:false,message:'A despesa foi alterada por outro administrador. Actualize a lista.'});
     return res.json({success:true,data});
@@ -212,17 +262,13 @@ router.get('/expenses/summary', async (req: Request, res: Response) => {
       allRows.push(...(page || []));
       if (!page || page.length < pageSize) break;
     }
-    const stores = new Map<string, { loja_id: string; paid: number; pending: number; rejected: number; byCategory: Record<string, number> }>();
-    let paid = 0, pending = 0, rejected = 0;
-    for (const row of allRows) {
-      const value = Number(row.valor) || 0;
-      if (!stores.has(row.loja_id)) stores.set(row.loja_id, { loja_id: row.loja_id, paid: 0, pending: 0, rejected: 0, byCategory: {} });
-      const store = stores.get(row.loja_id)!;
-      if (row.estado === 'paga') { paid += value; store.paid += value; store.byCategory[row.categoria] = (store.byCategory[row.categoria] || 0) + value; }
-      else if (row.estado === 'pendente' || row.estado === 'aprovada') { pending += value; store.pending += value; }
-      else if (row.estado === 'rejeitada') { rejected += value; store.rejected += value; }
-    }
-    return res.json({ success: true, month, totals: { paid, pending, rejected }, stores: Array.from(stores.values()).sort((a,b) => b.paid - a.paid) });
+    const summary = summarizeExpenses(allRows);
+    return res.json({
+      success: true,
+      month,
+      totals: { paid: summary.paid, pending: summary.pending, rejected: summary.rejected },
+      stores: summary.stores,
+    });
   } catch {
     return res.status(500).json({ success: false, message: 'Erro interno ao calcular resumo financeiro.' });
   }
@@ -233,14 +279,31 @@ router.get('/closings', async (req: Request, res: Response) => {
   try {
     const month=text(req.query.month,7);
     if(month&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))return res.status(400).json({success:false,message:'Mês inválido. Use AAAA-MM.'});
-    let query=supabaseAdmin.from('fechos_financeiros_loja')
-      .select('id,loja_id,periodo,estado,total_pago,total_pendente,total_rejeitado,quantidade_despesas,snapshot_categorias,fechado_por,fechado_em,reaberto_por,reaberto_em,motivo_reabertura,lojas(nome)')
-      .order('periodo',{ascending:false}).limit(500);
-    if(month)query=query.eq('periodo',month+'-01');
-    const {data,error}=await query;
-    if(error)return res.status(503).json({success:false,message:'Não foi possível consultar os fechos.'});
-    return res.json({success:true,data:data||[]});
+    const data: Array<Record<string, unknown>> = [];
+    for (let offset = 0; ; offset += 500) {
+      let query=supabaseAdmin.from('fechos_financeiros_loja')
+        .select('id,loja_id,periodo,estado,total_pago,total_pendente,total_rejeitado,quantidade_despesas,snapshot_categorias,fechado_por,fechado_em,reaberto_por,reaberto_em,motivo_reabertura,lojas(nome)')
+        .order('periodo',{ascending:false}).range(offset,offset+499);
+      if(month)query=query.eq('periodo',month+'-01');
+      const {data:page,error}=await query;
+      if(error)return res.status(503).json({success:false,message:'Não foi possível consultar os fechos.'});
+      data.push(...(page||[]));
+      if(!page||page.length<500)break;
+    }
+    return res.json({success:true,data});
   } catch { return res.status(500).json({success:false,message:'Erro interno ao consultar fechos.'}); }
+});
+
+router.get('/expenses/:id/events', async (req: Request, res: Response) => {
+  try {
+    const id=text(req.params.id,64);
+    if(!UUID_RE.test(id))return res.status(400).json({success:false,message:'Identificador de despesa inválido.'});
+    const {data,error}=await supabaseAdmin.from('despesas_operacionais_eventos')
+      .select('id,despesa_id,acao,estado_anterior,estado_novo,actor_id,motivo,snapshot,created_at')
+      .eq('despesa_id',id).order('created_at',{ascending:true}).order('id',{ascending:true}).limit(200);
+    if(error)return res.status(503).json({success:false,message:'Não foi possível consultar o histórico da despesa.'});
+    return res.json({success:true,data:data||[]});
+  } catch { return res.status(500).json({success:false,message:'Erro interno ao consultar histórico da despesa.'}); }
 });
 
 router.get('/closings/:id/events', async (req: Request, res: Response) => {

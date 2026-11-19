@@ -1,0 +1,727 @@
+\set ON_ERROR_STOP on
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='service_role') THEN CREATE ROLE service_role NOLOGIN BYPASSRLS; END IF;
+END $$;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+CREATE TABLE public.lojas (
+  id uuid PRIMARY KEY, nome text NOT NULL, ativo boolean NOT NULL DEFAULT true
+);
+CREATE TABLE public.funcionarios (
+  id uuid PRIMARY KEY, nome_completo text NOT NULL, role text NOT NULL,
+  ativo boolean NOT NULL DEFAULT true, loja_id uuid REFERENCES public.lojas(id)
+);
+INSERT INTO public.lojas(id,nome) VALUES ('11111111-1111-4111-8111-111111111111','Loja teste');
+INSERT INTO public.funcionarios(id,nome_completo,role,loja_id) VALUES
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Admin A','admin','11111111-1111-4111-8111-111111111111'),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Admin B','admin','11111111-1111-4111-8111-111111111111'),
+ ('cccccccc-cccc-4ccc-8ccc-cccccccccccc','Funcionário','funcionario','11111111-1111-4111-8111-111111111111');
+INSERT INTO public.funcionarios(id,nome_completo,role,ativo,loja_id) VALUES
+ ('dddddddd-dddd-4ddd-8ddd-dddddddddddd','Funcionário de teste de rollback','funcionario',true,'11111111-1111-4111-8111-111111111111');
+
+CREATE TABLE public.registos_ponto(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id),
+ loja_id uuid NOT NULL REFERENCES public.lojas(id),
+ tipo text NOT NULL CHECK(tipo IN ('entrada','saida')),
+ timestamp timestamptz NOT NULL DEFAULT clock_timestamp(),
+ localizacao jsonb
+);
+
+
+CREATE TABLE public.operational_tasks (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, description text NOT NULL DEFAULT '',
+ status text NOT NULL DEFAULT 'por_fazer', priority text NOT NULL DEFAULT 'normal',
+ assigned_to uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ created_by uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ loja_id uuid REFERENCES public.lojas(id) ON DELETE SET NULL, due_at timestamptz,
+ completed_at timestamptz, created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.operational_task_events (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), task_id uuid NOT NULL REFERENCES public.operational_tasks(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ action text NOT NULL, old_values jsonb, new_values jsonb, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.operational_goals (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), title text NOT NULL, description text NOT NULL DEFAULT '',
+ scope text NOT NULL, metric text NOT NULL, target_value numeric NOT NULL,
+ loja_id uuid REFERENCES public.lojas(id) ON DELETE RESTRICT,
+ funcionario_id uuid REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ starts_on date NOT NULL, ends_on date NOT NULL, status text NOT NULL DEFAULT 'activa',
+ created_by uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.operational_goal_events (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), goal_id uuid NOT NULL REFERENCES public.operational_goals(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ action text NOT NULL, old_values jsonb, new_values jsonb, created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.collab_reports (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ reference text GENERATED ALWAYS AS ('DD-' || upper(substr(replace(id::text, '-', ''), 1, 8))) STORED,
+ titulo text NOT NULL, descricao text NOT NULL, categoria text NOT NULL,
+ prioridade text NOT NULL DEFAULT 'normal', estado text NOT NULL DEFAULT 'novo',
+ reporter_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ loja_id uuid REFERENCES public.lojas(id) ON DELETE SET NULL,
+ assigned_to uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(), resolved_at timestamptz
+);
+CREATE TABLE public.collab_report_events (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), report_id uuid NOT NULL REFERENCES public.collab_reports(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ action text NOT NULL, old_values jsonb NOT NULL DEFAULT '{}'::jsonb,
+ new_values jsonb NOT NULL DEFAULT '{}'::jsonb, created_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO public.funcionarios(id,nome_completo,role,ativo,loja_id) VALUES
+ ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee','Funcionário inactivo','funcionario',false,'11111111-1111-4111-8111-111111111111');
+CREATE TABLE public.collab_report_comments (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ report_id uuid NOT NULL REFERENCES public.collab_reports(id) ON DELETE CASCADE,
+ funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ comentario text NOT NULL CHECK(length(trim(comentario)) BETWEEN 1 AND 4000),
+ interno boolean NOT NULL DEFAULT false,
+ created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.collab_conversations (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), tipo text NOT NULL CHECK(tipo IN ('directa','grupo')),
+ titulo text, criada_por uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ loja_id uuid REFERENCES public.lojas(id) ON DELETE SET NULL,
+ created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+ last_message_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT collab_group_title_required CHECK(tipo<>'grupo' OR (titulo IS NOT NULL AND length(trim(titulo)) BETWEEN 2 AND 100))
+);
+CREATE TABLE public.collab_conversation_members (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ conversation_id uuid NOT NULL REFERENCES public.collab_conversations(id) ON DELETE CASCADE,
+ funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE CASCADE,
+ papel text NOT NULL DEFAULT 'membro' CHECK(papel IN ('criador','membro')),
+ joined_at timestamptz NOT NULL DEFAULT now(), last_read_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(conversation_id,funcionario_id)
+);
+CREATE TABLE public.collab_messages (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ conversation_id uuid NOT NULL REFERENCES public.collab_conversations(id) ON DELETE CASCADE,
+ sender_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ body text NOT NULL CHECK(length(trim(body)) BETWEEN 1 AND 4000),
+ created_at timestamptz NOT NULL DEFAULT now(), edited_at timestamptz, deleted_at timestamptz
+);
+
+CREATE TABLE public.clientes (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ loja_registo_id uuid REFERENCES public.lojas(id),
+ tipo_documento text,
+ bi_cc text,
+ data_emissao_documento date,
+ data_validade_documento date
+);
+CREATE TABLE public.cliente_documentos (
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ cliente_id uuid NOT NULL REFERENCES public.clientes(id) ON DELETE RESTRICT,
+ tipo_documento text NOT NULL CHECK(tipo_documento IN ('cc','passaporte','cartao_residente','outro')),
+ numero_documento text NOT NULL,
+ data_emissao date,
+ data_validade date NOT NULL,
+ storage_path text NOT NULL UNIQUE,
+ mime_type text NOT NULL CHECK(mime_type IN ('application/pdf','image/jpeg','image/png','image/webp')),
+ tamanho_bytes bigint NOT NULL CHECK(tamanho_bytes BETWEEN 1 AND 6291456),
+ uploaded_by uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL,
+ uploaded_at timestamptz NOT NULL DEFAULT now(),
+ substituido_em timestamptz,
+ substituido_por uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX cliente_documentos_um_documento_ativo_por_cliente_uidx
+ ON public.cliente_documentos(cliente_id) WHERE substituido_em IS NULL;
+\ir ../../supabase/migrations/20261118203000_atomic_collaboration_messaging.sql
+\ir ../../supabase/migrations/20261118213000_atomic_client_document_replacement.sql
+
+CREATE TABLE public.collab_notifications(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(), funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id),
+ kind text NOT NULL, entity_id uuid, title text NOT NULL, body text NOT NULL,
+ created_at timestamptz NOT NULL DEFAULT now(),
+ CONSTRAINT collab_notifications_kind_check CHECK(kind IN ('report_created','report_updated','report_comment','chat_message','task_assigned','task_updated','goal_assigned','goal_updated'))
+);
+CREATE TABLE public.crm_opportunities(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ title text NOT NULL CHECK(char_length(trim(title)) BETWEEN 3 AND 180),
+ opportunity_type text NOT NULL CHECK(opportunity_type IN ('parceria','investidor','nova_loja','fornecedor','outro')),
+ stage text NOT NULL DEFAULT 'lead' CHECK(stage IN ('lead','contactado','qualificacao','proposta','negociacao','ganha','perdida')),
+ priority text NOT NULL DEFAULT 'normal' CHECK(priority IN ('baixa','normal','alta','urgente')),
+ expected_value numeric(14,2) CHECK(expected_value IS NULL OR expected_value>=0),
+ location text,contact_name text,contact_email text,contact_phone text,
+ assigned_to uuid REFERENCES public.funcionarios(id) ON DELETE SET NULL,
+ next_action text,next_action_at timestamptz,notes text NOT NULL DEFAULT '',
+ created_by uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),closed_at timestamptz
+);
+CREATE TABLE public.crm_opportunity_events(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),opportunity_id uuid NOT NULL REFERENCES public.crm_opportunities(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,action text NOT NULL,
+ old_values jsonb,new_values jsonb,created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE public.crm_expansion_sites(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+ opportunity_id uuid REFERENCES public.crm_opportunities(id) ON DELETE SET NULL,
+ name text NOT NULL CHECK(char_length(trim(name)) BETWEEN 3 AND 180),
+ address text NOT NULL CHECK(char_length(trim(address)) BETWEEN 5 AND 300),
+ city text NOT NULL CHECK(char_length(trim(city)) BETWEEN 2 AND 120),
+ district text,latitude numeric(9,6),longitude numeric(9,6),area_sqm numeric(10,2),
+ monthly_rent numeric(14,2),estimated_setup_cost numeric(14,2),estimated_monthly_revenue numeric(14,2),
+ estimated_monthly_other_costs numeric(14,2) NOT NULL DEFAULT 0,estimated_initial_stock numeric(14,2) NOT NULL DEFAULT 0,
+ estimated_monthly_staff_cost numeric(14,2) NOT NULL DEFAULT 0,estimated_monthly_utilities_cost numeric(14,2) NOT NULL DEFAULT 0,
+ footfall_score smallint NOT NULL DEFAULT 3,visibility_score smallint NOT NULL DEFAULT 3,
+ accessibility_score smallint NOT NULL DEFAULT 3,competition_score smallint NOT NULL DEFAULT 3,
+ security_score smallint NOT NULL DEFAULT 3,parking_score smallint NOT NULL DEFAULT 3,fit_score smallint NOT NULL DEFAULT 3,
+ status text NOT NULL DEFAULT 'em_avaliacao',notes text NOT NULL DEFAULT '',
+ created_by uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,
+ created_at timestamptz NOT NULL DEFAULT now(),updated_at timestamptz NOT NULL DEFAULT now(),
+ weighted_score numeric(5,2) GENERATED ALWAYS AS (
+ round(((footfall_score*25+visibility_score*20+accessibility_score*15+competition_score*10+security_score*10+parking_score*5+fit_score*15)::numeric/5),2)
+ ) STORED,CONSTRAINT crm_expansion_sites_opportunity_unique UNIQUE(opportunity_id,name)
+);
+CREATE TABLE public.crm_expansion_site_events(
+ id uuid PRIMARY KEY DEFAULT gen_random_uuid(),site_id uuid NOT NULL REFERENCES public.crm_expansion_sites(id) ON DELETE CASCADE,
+ actor_id uuid NOT NULL REFERENCES public.funcionarios(id) ON DELETE RESTRICT,action text NOT NULL,
+ old_values jsonb,new_values jsonb,created_at timestamptz NOT NULL DEFAULT now()
+);
+\ir ../../supabase/migrations/20261118220001_atomic_crm_opportunity_expansion_writes.sql
+\ir ../../supabase/migrations/20261118230001_atomic_employee_time_clock.sql
+DO $crm_rpc_permissions$
+BEGIN
+ IF has_function_privilege('authenticated','public.create_crm_opportunity_with_event(uuid,jsonb)','EXECUTE')
+ OR has_function_privilege('authenticated','public.update_crm_opportunity_with_event(uuid,uuid,timestamptz,jsonb)','EXECUTE')
+ OR has_function_privilege('authenticated','public.create_crm_expansion_site_with_event(uuid,jsonb)','EXECUTE')
+ OR has_function_privilege('authenticated','public.update_crm_expansion_site_with_event(uuid,uuid,timestamptz,jsonb)','EXECUTE') THEN
+  RAISE EXCEPTION 'authenticated não pode executar RPCs CRM SECURITY DEFINER';
+ END IF;
+ IF NOT has_function_privilege('service_role','public.create_crm_opportunity_with_event(uuid,jsonb)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.update_crm_opportunity_with_event(uuid,uuid,timestamptz,jsonb)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.create_crm_expansion_site_with_event(uuid,jsonb)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.update_crm_expansion_site_with_event(uuid,uuid,timestamptz,jsonb)','EXECUTE') THEN
+  RAISE EXCEPTION 'service_role não tem EXECUTE nas RPCs CRM';
+ END IF;
+END $crm_rpc_permissions$;
+
+
+\ir ../../supabase/migrations/20261118210000_atomic_collab_comment_audit.sql
+\ir ../../supabase/migrations/20261118174500_atomic_operational_creation_audit.sql
+\ir ../../supabase/migrations/20261118190000_atomic_operational_updates_audit.sql
+
+DO $audit$
+BEGIN
+ IF has_function_privilege('authenticated','public.create_operational_task_with_event(text,text,uuid,uuid,uuid,text,timestamptz)','EXECUTE')
+ OR has_function_privilege('authenticated','public.create_operational_goal_with_event(text,text,text,text,numeric,uuid,uuid,date,date,uuid)','EXECUTE')
+ OR has_function_privilege('authenticated','public.create_collab_report_with_event(text,text,text,text,uuid)','EXECUTE') THEN
+   RAISE EXCEPTION 'authenticated não pode executar as RPCs SECURITY DEFINER';
+ END IF;
+ IF NOT has_function_privilege('service_role','public.create_operational_task_with_event(text,text,uuid,uuid,uuid,text,timestamptz)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.create_operational_goal_with_event(text,text,text,text,numeric,uuid,uuid,date,date,uuid)','EXECUTE')
+ OR NOT has_function_privilege('service_role','public.create_collab_report_with_event(text,text,text,text,uuid)','EXECUTE') THEN
+   RAISE EXCEPTION 'service_role não tem EXECUTE nas RPCs operacionais';
+ END IF;
+END $audit$;
+
+CREATE FUNCTION public.reject_test_audit_for_admin_b()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.actor_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid THEN
+   RAISE EXCEPTION 'injected_audit_failure' USING ERRCODE='P0001';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER fail_task_audit BEFORE INSERT ON public.operational_task_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_audit_for_admin_b();
+CREATE TRIGGER fail_goal_audit BEFORE INSERT ON public.operational_goal_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_audit_for_admin_b();
+CREATE TRIGGER fail_report_audit BEFORE INSERT ON public.collab_report_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_audit_for_admin_b();
+
+DO $$
+DECLARE v jsonb; n integer; failed boolean;
+BEGIN
+ v:=public.create_operational_task_with_event('Tarefa válida','Teste atómico',
+  'cccccccc-cccc-4ccc-8ccc-cccccccccccc','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  '11111111-1111-4111-8111-111111111111','normal',NULL);
+ IF v->>'id' IS NULL THEN RAISE EXCEPTION 'RPC tarefa não devolveu ID'; END IF;
+ SELECT count(*) INTO n FROM public.operational_task_events WHERE task_id=(v->>'id')::uuid;
+ IF n<>1 THEN RAISE EXCEPTION 'Tarefa criada sem exactamente um evento'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_operational_task_with_event('Tarefa falhada','Teste rollback',
+   'cccccccc-cccc-4ccc-8ccc-cccccccccccc','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+   '11111111-1111-4111-8111-111111111111','normal',NULL);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada de auditoria não ocorreu na tarefa'; END IF;
+ SELECT count(*) INTO n FROM public.operational_tasks WHERE created_by='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ IF n<>0 THEN RAISE EXCEPTION 'Tarefa parcial persistiu após falha de auditoria'; END IF;
+
+ v:=public.create_operational_goal_with_event('Objectivo válido','Teste atómico','loja',
+  'transacoes_aprovadas',10,'11111111-1111-4111-8111-111111111111',NULL,
+  '2026-11-01','2026-11-30','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+ SELECT count(*) INTO n FROM public.operational_goal_events WHERE goal_id=(v->>'id')::uuid;
+ IF n<>1 THEN RAISE EXCEPTION 'Objectivo criado sem exactamente um evento'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_operational_goal_with_event('Objectivo falhado','Teste rollback','loja',
+   'transacoes_aprovadas',10,'11111111-1111-4111-8111-111111111111',NULL,
+   '2026-11-01','2026-11-30','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada de auditoria não ocorreu no objectivo'; END IF;
+ SELECT count(*) INTO n FROM public.operational_goals WHERE created_by='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ IF n<>0 THEN RAISE EXCEPTION 'Objectivo parcial persistiu após falha de auditoria'; END IF;
+
+ v:=public.create_collab_report_with_event('Ocorrência válida','Descrição de teste atómico',
+  'sistema','normal','cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+ SELECT count(*) INTO n FROM public.collab_report_events WHERE report_id=(v->>'id')::uuid;
+ IF n<>1 THEN RAISE EXCEPTION 'Ocorrência criada sem exactamente um evento'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_report_with_event('Ocorrência falhada','Descrição de teste rollback',
+   'sistema','normal','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada de auditoria não ocorreu na ocorrência'; END IF;
+ SELECT count(*) INTO n FROM public.collab_reports WHERE reporter_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+ IF n<>0 THEN RAISE EXCEPTION 'Ocorrência parcial persistiu após falha de auditoria'; END IF;
+END $$;
+
+
+-- Atomic task update and audit; injected event failures must roll back the row update.
+DO $$
+DECLARE v jsonb; v_id uuid; v_stamp timestamptz; n integer; failed boolean;
+BEGIN
+ v:=public.create_operational_task_with_event('Tarefa update','Antes',
+  'cccccccc-cccc-4ccc-8ccc-cccccccccccc','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  '11111111-1111-4111-8111-111111111111','normal',NULL);
+ v_id:=(v->>'id')::uuid;
+ v_stamp:=(v->>'updated_at')::timestamptz;
+ v:=public.update_operational_task_with_event(v_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',v_stamp,
+  '{"title":"Tarefa actualizada"}'::jsonb);
+ IF v->>'title'<>'Tarefa actualizada' THEN RAISE EXCEPTION 'Actualização atómica da tarefa falhou'; END IF;
+ SELECT count(*) INTO n FROM public.operational_task_events WHERE task_id=v_id;
+ IF n<>2 THEN RAISE EXCEPTION 'Histórico da tarefa não contém criação e actualização'; END IF;
+
+ v_stamp:=(v->>'updated_at')::timestamptz;
+ failed:=false;
+ BEGIN
+  PERFORM public.update_operational_task_with_event(v_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',v_stamp,
+   '{"title":"Não deve persistir"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha de auditoria da actualização da tarefa não foi injectada'; END IF;
+ SELECT count(*) INTO n FROM public.operational_tasks WHERE id=v_id AND title='Tarefa actualizada';
+ IF n<>1 THEN RAISE EXCEPTION 'Actualização parcial da tarefa persistiu após falha de auditoria'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.update_operational_task_with_event(v_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   '2000-01-01'::timestamptz,'{"title":"Conflito"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '40001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Actualização stale de tarefa não foi bloqueada'; END IF;
+END $$;
+
+-- Atomic goal update and audit.
+DO $$
+DECLARE v jsonb; v_id uuid; v_stamp timestamptz; n integer; failed boolean;
+BEGIN
+ v:=public.create_operational_goal_with_event('Objectivo update','Antes','loja',
+  'transacoes_aprovadas',10,'11111111-1111-4111-8111-111111111111',NULL,
+  '2026-11-01','2026-11-30','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+ v_id:=(v->>'id')::uuid;
+ v_stamp:=(v->>'updated_at')::timestamptz;
+ v:=public.update_operational_goal_with_event(v_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',v_stamp,
+  '{"title":"Objectivo actualizado","target_value":20}'::jsonb);
+ IF v->>'title'<>'Objectivo actualizado' OR (v->>'target_value')::numeric<>20
+ THEN RAISE EXCEPTION 'Actualização atómica do objectivo falhou'; END IF;
+ SELECT count(*) INTO n FROM public.operational_goal_events WHERE goal_id=v_id;
+ IF n<>2 THEN RAISE EXCEPTION 'Histórico do objectivo não contém criação e actualização'; END IF;
+
+ v_stamp:=(v->>'updated_at')::timestamptz;
+ failed:=false;
+ BEGIN
+  PERFORM public.update_operational_goal_with_event(v_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',v_stamp,
+   '{"title":"Não deve persistir"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha de auditoria da actualização do objectivo não foi injectada'; END IF;
+ SELECT count(*) INTO n FROM public.operational_goals WHERE id=v_id AND title='Objectivo actualizado';
+ IF n<>1 THEN RAISE EXCEPTION 'Actualização parcial do objectivo persistiu após falha de auditoria'; END IF;
+END $$;
+
+SELECT 'POSTGRES_OPERATIONAL_ATOMICITY_OK' AS result;
+
+-- Atomic employee conversation creation and message activity.
+CREATE FUNCTION public.reject_test_membership_for_employee()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.funcionario_id='dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid THEN
+   RAISE EXCEPTION 'injected_membership_failure' USING ERRCODE='P0001';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER fail_collab_membership BEFORE INSERT ON public.collab_conversation_members
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_membership_for_employee();
+
+CREATE FUNCTION public.reject_test_conversation_activity()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF current_setting('test.fail_collab_activity',true)='on' THEN
+  RAISE EXCEPTION 'injected_activity_failure' USING ERRCODE='P0001';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER fail_collab_activity BEFORE UPDATE ON public.collab_conversations
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_conversation_activity();
+
+DO $collab$
+DECLARE v jsonb; v_id uuid; n integer; failed boolean; v_last timestamptz;
+BEGIN
+ v:=public.create_collab_conversation_with_members(
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','directa',NULL,
+  ARRAY['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid]);
+ v_id:=(v->>'id')::uuid;
+ SELECT count(*) INTO n FROM public.collab_conversation_members WHERE conversation_id=v_id;
+ IF n<>2 OR (v->>'existing')::boolean THEN RAISE EXCEPTION 'Conversa directa ou participantes não foram criados'; END IF;
+
+ v:=public.create_collab_conversation_with_members(
+  'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','directa',NULL,
+  ARRAY['bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'::uuid,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid]);
+ IF (v->>'id')::uuid<>v_id OR NOT (v->>'existing')::boolean THEN
+   RAISE EXCEPTION 'Conversa directa existente não foi reutilizada';
+ END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_conversation_with_members(
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','grupo','Grupo rollback',
+   ARRAY['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,'dddddddd-dddd-4ddd-8ddd-dddddddddddd'::uuid]);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada de participante não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.collab_conversations WHERE titulo='Grupo rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Conversa parcial persistiu após falha de participante'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_conversation_with_members(
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','directa',NULL,
+   ARRAY['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid]);
+ EXCEPTION WHEN SQLSTATE '22023' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Participantes duplicados não foram rejeitados'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_conversation_with_members(
+   'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee','directa',NULL,
+   ARRAY['eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'::uuid,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid]);
+ EXCEPTION WHEN SQLSTATE '42501' OR SQLSTATE '22023' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário inactivo conseguiu criar conversa'; END IF;
+
+ v:=public.send_collab_message_with_activity(v_id,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Mensagem transaccional');
+ SELECT count(*) INTO n FROM public.collab_messages WHERE id=(v->>'id')::uuid;
+ IF n<>1 THEN RAISE EXCEPTION 'Mensagem não foi criada'; END IF;
+ SELECT last_message_at INTO v_last FROM public.collab_conversations WHERE id=v_id;
+ IF v_last IS DISTINCT FROM (v->>'created_at')::timestamptz THEN
+   RAISE EXCEPTION 'last_message_at não foi actualizado na mesma transacção';
+ END IF;
+
+ PERFORM set_config('test.fail_collab_activity','on',true);
+ SELECT last_message_at INTO v_last FROM public.collab_conversations WHERE id=v_id;
+ failed:=false;
+ BEGIN
+  PERFORM public.send_collab_message_with_activity(v_id,
+   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Esta mensagem deve sofrer rollback');
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada da actividade não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.collab_messages
+ WHERE conversation_id=v_id AND body='Esta mensagem deve sofrer rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Mensagem parcial persistiu após falha de last_message_at'; END IF;
+ IF (SELECT last_message_at FROM public.collab_conversations WHERE id=v_id) IS DISTINCT FROM v_last THEN
+   RAISE EXCEPTION 'last_message_at mudou apesar do rollback';
+ END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.send_collab_message_with_activity(v_id,
+   'cccccccc-cccc-4ccc-8ccc-cccccccccccc','Remetente não membro');
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Remetente fora da conversa não foi rejeitado'; END IF;
+END $collab$;
+
+SELECT 'POSTGRES_COLLAB_MESSAGING_ATOMICITY_OK' AS result;
+
+-- Report comments and their audit event must commit or roll back together.
+INSERT INTO public.collab_reports(titulo,descricao,categoria,reporter_id,assigned_to)
+VALUES ('Ocorrência de teste','Descrição suficientemente longa para teste','outro',
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+
+CREATE FUNCTION public.reject_test_collab_comment_event()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF NEW.action='commented' AND current_setting('test.fail_collab_comment_event',true)='on' THEN
+  RAISE EXCEPTION 'injected_comment_event_failure' USING ERRCODE='P0001';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER fail_collab_comment_event BEFORE INSERT ON public.collab_report_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_collab_comment_event();
+
+DO $comment_audit$
+DECLARE v_report_id uuid; v jsonb; n integer; failed boolean;
+BEGIN
+ SELECT id INTO v_report_id FROM public.collab_reports WHERE titulo='Ocorrência de teste';
+ v:=public.create_collab_report_comment_with_event(v_report_id,
+  'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Comentário de auditoria');
+ IF v->>'comentario'<>'Comentário de auditoria' OR (v->'funcionarios'->>'nome_completo')<>'Admin A' THEN
+  RAISE EXCEPTION 'A RPC não devolveu os dados do comentário esperados';
+ END IF;
+ SELECT count(*) INTO n FROM public.collab_report_events
+ WHERE report_id=v_report_id AND action='commented'
+   AND new_values->>'comment_id'=v->>'id';
+ IF n<>1 THEN RAISE EXCEPTION 'O comentário não tem exactamente um evento de auditoria'; END IF;
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_report_comment_with_event(v_report_id,
+   'cccccccc-cccc-4ccc-8ccc-cccccccccccc','Comentário sem acesso');
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário sem acesso conseguiu comentar'; END IF;
+
+ PERFORM set_config('test.fail_collab_comment_event','on',true);
+ failed:=false;
+ BEGIN
+  PERFORM public.create_collab_report_comment_with_event(v_report_id,
+   'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','Comentário deve sofrer rollback');
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada do evento de comentário não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.collab_report_comments
+ WHERE report_id=v_report_id AND comentario='Comentário deve sofrer rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Comentário parcial persistiu sem evento de auditoria'; END IF;
+END $comment_audit$;
+
+SELECT 'POSTGRES_COLLAB_COMMENT_AUDIT_ATOMICITY_OK' AS result;
+
+-- Client identity document replacement must preserve a single active version atomically.
+INSERT INTO public.clientes(id,loja_registo_id,tipo_documento,bi_cc,data_validade_documento)
+VALUES ('12121212-1212-4121-8121-121212121212','11111111-1111-4111-8111-111111111111','cc','12345678',
+ '2030-01-01');
+INSERT INTO public.cliente_documentos(id,cliente_id,tipo_documento,numero_documento,data_validade,storage_path,mime_type,tamanho_bytes,uploaded_by)
+VALUES ('13131313-1313-4131-8131-131313131313','12121212-1212-4121-8121-121212121212',
+ 'cc','12345678','2030-01-01','12121212-1212-4121-8121-121212121212/old.pdf',
+ 'application/pdf',100,'dddddddd-dddd-4ddd-8ddd-dddddddddddd');
+
+CREATE FUNCTION public.reject_test_client_document_insert()
+ RETURNS trigger LANGUAGE plpgsql AS $client_trigger$
+ BEGIN
+  IF current_setting('test.fail_client_document_insert',true)='on' THEN
+   RAISE EXCEPTION 'injected_client_document_failure' USING ERRCODE='P0001';
+  END IF;
+  RETURN NEW;
+ END $client_trigger$;
+ CREATE TRIGGER reject_client_document_insert BEFORE INSERT ON public.cliente_documentos
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_client_document_insert();
+
+
+DO $client_document$
+DECLARE v jsonb; n integer; failed boolean;
+BEGIN
+ v:=public.replace_client_identity_document(
+  '12121212-1212-4121-8121-121212121212','dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+  'passaporte','AB123456','2025-01-01','2035-01-01',
+  '12121212-1212-4121-8121-121212121212/new.pdf','application/pdf',200
+ );
+ IF v->>'documento_id' IS NULL OR v->>'previous_documento_id'<>'13131313-1313-4131-8131-131313131313' THEN
+  RAISE EXCEPTION 'RPC de substituição não devolveu os IDs esperados';
+ END IF;
+ SELECT count(*) INTO n FROM public.cliente_documentos
+ WHERE cliente_id='12121212-1212-4121-8121-121212121212' AND substituido_em IS NULL;
+ IF n<>1 THEN RAISE EXCEPTION 'A substituição não manteve exactamente um documento activo'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.clientes WHERE id='12121212-1212-4121-8121-121212121212'
+   AND tipo_documento='passaporte' AND bi_cc='AB123456' AND data_validade_documento='2035-01-01') THEN
+  RAISE EXCEPTION 'Os metadados do cliente não foram sincronizados';
+ END IF;
+
+ PERFORM set_config('test.fail_client_document_insert','on',true);
+ failed:=false;
+ BEGIN
+  PERFORM public.replace_client_identity_document(
+   '12121212-1212-4121-8121-121212121212','dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+   'cc','98765432','2025-01-01','2036-01-01',
+   '12121212-1212-4121-8121-121212121212/fail.pdf','application/pdf',200
+  );
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'A falha injectada na substituição não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.cliente_documentos
+ WHERE cliente_id='12121212-1212-4121-8121-121212121212' AND substituido_em IS NULL;
+ IF n<>1 OR NOT EXISTS(SELECT 1 FROM public.clientes WHERE id='12121212-1212-4121-8121-121212121212'
+   AND tipo_documento='passaporte' AND bi_cc='AB123456' AND data_validade_documento='2035-01-01') THEN
+  RAISE EXCEPTION 'Falha de inserção deixou estado documental parcialmente alterado';
+ END IF;
+END $client_document$;
+SELECT 'POSTGRES_CLIENT_DOCUMENT_REPLACEMENT_ATOMICITY_OK' AS result;
+
+-- CRM opportunity and expansion-site data plus audit must commit atomically.
+CREATE FUNCTION public.reject_test_crm_audit()
+RETURNS trigger LANGUAGE plpgsql AS $crm_audit$
+BEGIN
+ IF current_setting('test.fail_crm_audit',true)='on' THEN
+  RAISE EXCEPTION 'injected_crm_audit_failure' USING ERRCODE='P0001';
+ END IF;
+ RETURN NEW;
+END $crm_audit$;
+CREATE TRIGGER fail_opportunity_audit BEFORE INSERT ON public.crm_opportunity_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_crm_audit();
+CREATE TRIGGER fail_expansion_audit BEFORE INSERT ON public.crm_expansion_site_events
+ FOR EACH ROW EXECUTE FUNCTION public.reject_test_crm_audit();
+
+DO $crm_atomic$
+DECLARE v jsonb; v_id uuid; n integer; failed boolean; stamp timestamptz; v_site_id uuid;
+BEGIN
+ failed:=false;
+ BEGIN
+  PERFORM public.create_crm_opportunity_with_event('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+   '{"title":"Admin inactivo","opportunity_type":"parceria"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário inactivo conseguiu criar oportunidade'; END IF;
+
+ v:=public.create_crm_opportunity_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  '{"title":"Oportunidade teste","opportunity_type":"parceria","stage":"lead","priority":"normal","expected_value":1000,"notes":"teste"}'::jsonb);
+ v_id:=(v->>'id')::uuid;
+ SELECT count(*) INTO n FROM public.crm_opportunity_events WHERE opportunity_id=v_id;
+ IF n<>1 THEN RAISE EXCEPTION 'Oportunidade criada sem evento'; END IF;
+ stamp:=(v->>'updated_at')::timestamptz;
+ v:=public.update_crm_opportunity_with_event(v_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',stamp,
+  '{"stage":"proposta","expected_value":1500}'::jsonb);
+ IF v->>'stage'<>'proposta' OR (v->>'expected_value')::numeric<>1500 THEN
+  RAISE EXCEPTION 'Actualização da oportunidade falhou';
+ END IF;
+ SELECT count(*) INTO n FROM public.crm_opportunity_events WHERE opportunity_id=v_id;
+ IF n<>2 THEN RAISE EXCEPTION 'Actualização da oportunidade sem evento'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.update_crm_opportunity_with_event(v_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   stamp,'{"title":"actualização obsoleta"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '40001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Actualização obsoleta da oportunidade não foi bloqueada'; END IF;
+
+ PERFORM set_config('test.fail_crm_audit','on',true);
+ failed:=false;
+ BEGIN
+  PERFORM public.create_crm_opportunity_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   '{"title":"Oportunidade rollback","opportunity_type":"parceria"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada do histórico da oportunidade não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.crm_opportunities WHERE title='Oportunidade rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Oportunidade parcial persistiu sem evento'; END IF;
+ PERFORM set_config('test.fail_crm_audit','off',true);
+
+ failed:=false;
+ BEGIN
+  PERFORM public.create_crm_expansion_site_with_event('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+   '{"name":"Local de admin inactivo","address":"Rua de teste, 30","city":"Porto"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário inactivo conseguiu criar estudo de expansão'; END IF;
+
+ v:=public.create_crm_expansion_site_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  '{"name":"Local teste","address":"Rua de teste, 10","city":"Porto","status":"em_avaliacao","footfall_score":4}'::jsonb);
+ v_site_id:=(v->>'id')::uuid;
+ SELECT count(*) INTO n FROM public.crm_expansion_site_events WHERE crm_expansion_site_events.site_id=v_site_id;
+ IF n<>1 THEN RAISE EXCEPTION 'Estudo de expansão criado sem evento'; END IF;
+ stamp:=(v->>'updated_at')::timestamptz;
+ v:=public.update_crm_expansion_site_with_event(v_site_id,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+  stamp,'{"status":"visita_pendente","monthly_rent":1200}'::jsonb);
+ IF v->>'status'<>'visita_pendente' OR (v->>'monthly_rent')::numeric<>1200 THEN
+  RAISE EXCEPTION 'Actualização do estudo de expansão falhou';
+ END IF;
+ SELECT count(*) INTO n FROM public.crm_expansion_site_events WHERE crm_expansion_site_events.site_id=v_site_id;
+ IF n<>2 THEN RAISE EXCEPTION 'Actualização do estudo sem evento'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.update_crm_expansion_site_with_event(v_site_id,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   stamp,'{"name":"actualização obsoleta"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE '40001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Actualização obsoleta do estudo não foi bloqueada'; END IF;
+
+ PERFORM set_config('test.fail_crm_audit','on',true);
+ failed:=false;
+ BEGIN
+  PERFORM public.create_crm_expansion_site_with_event('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   '{"name":"Local rollback","address":"Rua de teste, 20","city":"Porto"}'::jsonb);
+ EXCEPTION WHEN SQLSTATE 'P0001' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Falha injectada do histórico do estudo não ocorreu'; END IF;
+ SELECT count(*) INTO n FROM public.crm_expansion_sites WHERE name='Local rollback';
+ IF n<>0 THEN RAISE EXCEPTION 'Estudo parcial persistiu sem evento'; END IF;
+END $crm_atomic$;
+SELECT 'POSTGRES_CRM_OPPORTUNITY_EXPANSION_ATOMICITY_OK' AS result;
+
+DO $clock_atomic$
+DECLARE p public.registos_ponto; failed boolean;
+BEGIN
+ p:=public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  '11111111-1111-4111-8111-111111111111','entrada',NULL);
+ IF p.tipo<>'entrada' OR p.funcionario_id<>'cccccccc-cccc-4ccc-8ccc-cccccccccccc' THEN
+  RAISE EXCEPTION 'Entrada de ponto não foi registada correctamente';
+ END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+   '11111111-1111-4111-8111-111111111111','entrada',NULL);
+ EXCEPTION WHEN SQLSTATE '23505' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Entrada duplicada não foi bloqueada'; END IF;
+ p:=public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+  '11111111-1111-4111-8111-111111111111','saida',NULL);
+ IF p.tipo<>'saida' THEN RAISE EXCEPTION 'Saída válida não foi registada'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+   '11111111-1111-4111-8111-111111111111','saida',NULL);
+ EXCEPTION WHEN SQLSTATE '23505' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Saída sem turno activo não foi bloqueada'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.register_employee_time_clock('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+   '11111111-1111-4111-8111-111111111111','entrada',NULL);
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário inactivo conseguiu registar ponto'; END IF;
+ failed:=false;
+ BEGIN
+  PERFORM public.register_employee_time_clock('cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+   '99999999-9999-4999-8999-999999999999','entrada',NULL);
+ EXCEPTION WHEN SQLSTATE '42501' THEN failed:=true;
+ END;
+ IF NOT failed THEN RAISE EXCEPTION 'Funcionário conseguiu registar ponto noutra loja'; END IF;
+ IF has_function_privilege('authenticated','public.register_employee_time_clock(uuid,uuid,text,jsonb)','EXECUTE') THEN
+  RAISE EXCEPTION 'authenticated não pode executar RPC SECURITY DEFINER';
+ END IF;
+ IF NOT has_function_privilege('service_role','public.register_employee_time_clock(uuid,uuid,text,jsonb)','EXECUTE') THEN
+  RAISE EXCEPTION 'service_role não tem EXECUTE na RPC';
+ END IF;
+END $clock_atomic$;
+SELECT 'POSTGRES_EMPLOYEE_TIME_CLOCK_ATOMICITY_OK' AS result;

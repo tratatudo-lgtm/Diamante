@@ -27,6 +27,7 @@ export interface StoreDeclarationAccessLog {
 
 export interface StoreDeclarationRepository {
   getPurchase(id: string): Promise<{ data: StoreDeclarationPurchase | null; error?: unknown | null }>;
+  getActiveStore(id: string): Promise<{ data: boolean; error?: unknown | null }>;
   getEvidence(id: string): Promise<{ data: StoreDeclarationEvidence | null; error?: unknown | null }>;
   download(path: string): Promise<{ data: Uint8Array | null; error?: unknown | null }>;
   createSignedUrl(path: string, expiresInSeconds: number): Promise<{ data: { signedUrl?: string } | null; error?: unknown | null }>;
@@ -176,6 +177,9 @@ export function createStoreDeclarationRouter({
       return;
     }
 
+    // O administrador principal tem âmbito global: consulta documentos de
+    // qualquer loja, incluindo lojas inactivas/arquivadas. A compra determina
+    // a loja real; não confiar num lojaId enviado pelo browser.
     await deliverPurchaseDeclaration(req.params.id, {
       id: admin.id,
       role: 'admin',

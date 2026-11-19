@@ -20,16 +20,21 @@ async function notify(employeeId: string, taskId: string, kind: 'task_assigned' 
 
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   const employee = user(req);
-  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 60));
-  let query = supabaseAdmin.from('operational_tasks')
-    .select('id,title,description,status,priority,assigned_to,created_by,loja_id,due_at,completed_at,created_at,updated_at,assignee:funcionarios!operational_tasks_assigned_to_fkey(id,nome_completo,role,loja_id),creator:funcionarios!operational_tasks_created_by_fkey(id,nome_completo),lojas(nome)')
-    .order('status').order('due_at', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false }).limit(limit);
-  if (!isAdmin(req)) query = query.eq('assigned_to', employee.id);
-  if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status', req.query.status);
-  if (isAdmin(req) && typeof req.query.loja_id === 'string') query = query.eq('loja_id', req.query.loja_id);
-  const { data, error } = await query;
-  if (error) return fail(res, 503, 'Não foi possível carregar as tarefas.');
-  return res.json({ success: true, tasks: data || [] });
+  const tasks: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    let query = supabaseAdmin.from('operational_tasks')
+      .select('id,title,description,status,priority,assigned_to,created_by,loja_id,due_at,completed_at,created_at,updated_at,assignee:funcionarios!operational_tasks_assigned_to_fkey(id,nome_completo,role,loja_id),creator:funcionarios!operational_tasks_created_by_fkey(id,nome_completo),lojas(nome)')
+      .order('status').order('due_at', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
+      .range(offset, offset + 499);
+    if (!isAdmin(req)) query = query.eq('assigned_to', employee.id);
+    if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status', req.query.status);
+    if (isAdmin(req) && typeof req.query.loja_id === 'string') query = query.eq('loja_id', req.query.loja_id);
+    const { data, error } = await query;
+    if (error) return fail(res, 503, 'Não foi possível carregar todas as tarefas.');
+    tasks.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return res.json({ success: true, tasks });
 });
 
 router.get('/:id/events', async (req: AuthenticatedRequest, res: Response) => {
@@ -38,11 +43,16 @@ router.get('/:id/events', async (req: AuthenticatedRequest, res: Response) => {
   const { data: task, error: taskError } = await taskQuery.eq('id', req.params.id).maybeSingle();
   if (taskError) return fail(res, 503, 'Não foi possível validar a tarefa.');
   if (!task) return fail(res, 404, 'Tarefa não encontrada.');
-  const { data, error } = await supabaseAdmin.from('operational_task_events')
-    .select('id,action,old_values,new_values,created_at,funcionarios!operational_task_events_actor_id_fkey(nome_completo)')
-    .eq('task_id', req.params.id).order('created_at', { ascending: false }).limit(100);
-  if (error) return fail(res, 503, 'Não foi possível carregar o histórico.');
-  return res.json({ success: true, events: data || [] });
+  const events: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabaseAdmin.from('operational_task_events')
+      .select('id,action,old_values,new_values,created_at,funcionarios!operational_task_events_actor_id_fkey(nome_completo)')
+      .eq('task_id', req.params.id).order('created_at', { ascending: false }).range(offset, offset + 499);
+    if (error) return fail(res, 503, 'Não foi possível carregar todo o histórico.');
+    events.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return res.json({ success: true, events });
 });
 
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
@@ -62,17 +72,16 @@ router.post('/', async (req: AuthenticatedRequest, res: Response) => {
   if (!assignee) return fail(res, 400, 'O responsável não existe ou não está activo.');
   const lojaId = req.body?.loja_id ?? assignee.loja_id;
   if (lojaId && assignee.loja_id && lojaId !== assignee.loja_id) return fail(res, 400, 'A loja da tarefa tem de corresponder à loja do responsável.');
-  const { data: task, error } = await supabaseAdmin.from('operational_tasks').insert({
-    title, description, assigned_to: assignedTo, created_by: user(req).id,
-    loja_id: lojaId || null, priority, due_at: dueAt?.toISOString() || null,
-  }).select('id,title,description,status,priority,assigned_to,created_by,loja_id,due_at,completed_at,created_at,updated_at').single();
-  if (error || !task) return fail(res, 503, 'Não foi possível criar a tarefa.');
-  const { error: eventError } = await supabaseAdmin.from('operational_task_events').insert({
-    task_id: task.id, actor_id: user(req).id, action: 'created', new_values: task,
+  const { data: taskData, error } = await supabaseAdmin.rpc('create_operational_task_with_event', {
+    p_title: title, p_description: description, p_assigned_to: assignedTo,
+    p_created_by: user(req).id, p_loja_id: lojaId || null,
+    p_priority: priority, p_due_at: dueAt?.toISOString() || null,
   });
-  if (eventError) {
-    await supabaseAdmin.from('operational_tasks').delete().eq('id', task.id);
-    return fail(res, 503, 'Não foi possível registar o histórico da tarefa.');
+  const task = taskData as any;
+  if (error || !task?.id) {
+    if (error?.code === '42501') return fail(res, 403, 'Não está autorizado a criar esta tarefa.');
+    if (error?.code === '22023') return fail(res, 400, 'O responsável ou a loja da tarefa já não são válidos.');
+    return fail(res, 503, 'Não foi possível criar a tarefa e registar o histórico.');
   }
   await notify(assignedTo, task.id, 'task_assigned', 'Nova tarefa atribuída', title);
   (globalThis as any).io?.to('admin').emit('task:created', { id: task.id, loja_id: task.loja_id });
@@ -129,26 +138,19 @@ router.patch('/:id', async (req: AuthenticatedRequest, res: Response) => {
     update.status = req.body.status;
   }
   if (!Object.keys(update).length) return fail(res, 400, 'Não foram indicadas alterações válidas.');
-  update.updated_at = new Date().toISOString();
-  if (update.status === 'concluida') update.completed_at = new Date().toISOString();
-  else if (update.status) update.completed_at = null;
-  const { data: updated, error: updateError } = await supabaseAdmin.from('operational_tasks')
-    .update(update).eq('id', current.id).eq('updated_at', current.updated_at)
-    .select('id,title,description,status,priority,assigned_to,created_by,loja_id,due_at,completed_at,created_at,updated_at').maybeSingle();
-  if (updateError) return fail(res, 503, 'Não foi possível actualizar a tarefa.');
-  if (!updated) return fail(res, 409, 'A tarefa foi alterada por outro utilizador. Actualize a página.');
-  const action = update.assigned_to ? 'reassigned' : update.status && update.status !== current.status ? 'status_changed' : 'updated';
-  const { error: eventError } = await supabaseAdmin.from('operational_task_events').insert({
-    task_id: current.id, actor_id: actor.id, action, old_values: current, new_values: updated,
+  const { data: updatedData, error: updateError } = await supabaseAdmin.rpc('update_operational_task_with_event', {
+    p_task_id: current.id, p_actor_id: actor.id,
+    p_expected_updated_at: current.updated_at, p_changes: update,
   });
-  if (eventError) {
-    await supabaseAdmin.from('operational_tasks').update({
-      title: current.title, description: current.description, status: current.status, priority: current.priority,
-      assigned_to: current.assigned_to, loja_id: current.loja_id, due_at: current.due_at,
-      completed_at: current.completed_at, updated_at: current.updated_at,
-    }).eq('id', current.id).eq('updated_at', updated.updated_at);
-    return fail(res, 503, 'Não foi possível guardar o histórico. A alteração foi revertida; tente novamente.');
+  const updated = updatedData as any;
+  if (updateError) {
+    if (updateError.code === 'P0002') return fail(res, 404, 'Tarefa não encontrada.');
+    if (updateError.code === '40001') return fail(res, 409, 'A tarefa foi alterada por outro utilizador. Actualize a página.');
+    if (updateError.code === '42501') return fail(res, 403, 'Não está autorizado a actualizar esta tarefa.');
+    if (updateError.code === '22023') return fail(res, 400, 'Os dados da tarefa são inválidos.');
+    return fail(res, 503, 'Não foi possível actualizar a tarefa e guardar o histórico.');
   }
+  if (!updated?.id) return fail(res, 503, 'Não foi possível confirmar a actualização da tarefa.');
   if (updated.assigned_to !== current.assigned_to) {
     await notify(updated.assigned_to, current.id, 'task_assigned', 'Tarefa atribuída', updated.title);
     (globalThis as any).io?.to(current.assigned_to).emit('task:updated', { id: current.id });

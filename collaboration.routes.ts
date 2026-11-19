@@ -46,11 +46,16 @@ async function canAccessReport(reportId: string, req: AuthenticatedRequest): Pro
 
 // Employee directory — only active staff fields required to start a conversation.
 router.get('/directory', async (req: AuthenticatedRequest, res: Response) => {
-  const { data, error } = await supabaseAdmin.from('funcionarios')
-    .select('id, nome_completo, role, loja_id, lojas(nome)')
-    .eq('ativo', true).order('nome_completo').limit(300);
-  if (error) return fail(res, 503, 'Não foi possível carregar a equipa.');
-  return res.json({ success: true, employees: (data || []).filter((item: any) => item.id !== employee(req).id) });
+  const data: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data: page, error } = await supabaseAdmin.from('funcionarios')
+      .select('id, nome_completo, role, loja_id, lojas(nome)')
+      .eq('ativo', true).order('nome_completo').range(offset, offset + 499);
+    if (error) return fail(res, 503, 'Não foi possível carregar toda a equipa.');
+    data.push(...(page || []));
+    if (!page || page.length < 500) break;
+  }
+  return res.json({ success: true, employees: data.filter((item: any) => item.id !== employee(req).id) });
 });
 
 router.get('/conversations', async (req: AuthenticatedRequest, res: Response) => {
@@ -61,22 +66,24 @@ router.get('/conversations', async (req: AuthenticatedRequest, res: Response) =>
   const ids = (memberships || []).map((item: any) => item.conversation_id);
   if (!ids.length) return res.json({ success: true, conversations: [] });
 
-  const [{ data: conversations, error }, { data: allMembers }] = await Promise.all([
+  const [{ data: conversations, error }, { data: allMembers, error: membersError }] = await Promise.all([
     supabaseAdmin.from('collab_conversations').select('id, tipo, titulo, loja_id, criada_por, created_at, updated_at, last_message_at')
       .in('id', ids).order('last_message_at', { ascending: false }),
     supabaseAdmin.from('collab_conversation_members')
       .select('conversation_id, funcionario_id, papel, last_read_at, funcionarios(nome_completo, role, loja_id)')
       .in('conversation_id', ids),
   ]);
-  if (error) return fail(res, 503, 'Não foi possível carregar as conversas.');
+  if (error || membersError) return fail(res, 503, 'Não foi possível carregar as conversas e os respectivos participantes.');
   const readAt = new Map((memberships || []).map((item: any) => [item.conversation_id, item.last_read_at]));
   const result = await Promise.all((conversations || []).map(async (conversation: any) => {
     const members = (allMembers || []).filter((item: any) => item.conversation_id === conversation.id);
     const lastRead = readAt.get(conversation.id) as string;
-    const { count } = await supabaseAdmin.from('collab_messages').select('id', { count: 'exact', head: true })
+    const { count, error: unreadError } = await supabaseAdmin.from('collab_messages').select('id', { count: 'exact', head: true })
       .eq('conversation_id', conversation.id).neq('sender_id', user.id).gt('created_at', lastRead || '1970-01-01T00:00:00Z');
+    if (unreadError) throw unreadError;
     return { ...conversation, members, unread_count: count || 0 };
-  }));
+  })).catch(() => null);
+  if (!result) return fail(res, 503, 'Não foi possível calcular as mensagens por ler.');
   return res.json({ success: true, conversations: result });
 });
 
@@ -112,20 +119,24 @@ router.post('/conversations', async (req: AuthenticatedRequest, res: Response) =
     }
   }
 
-  const { data: conversation, error } = await supabaseAdmin.from('collab_conversations').insert({
-    tipo: type, titulo: type === 'grupo' ? title : null, criada_por: user.id, loja_id: user.loja_id,
-  }).select('id').single();
-  if (error || !conversation) return fail(res, 503, 'Não foi possível criar a conversa.');
-  const { error: membershipError } = await supabaseAdmin.from('collab_conversation_members').insert(
-    participants.map((id: string) => ({ conversation_id: conversation.id, funcionario_id: id, papel: id === user.id ? 'criador' : 'membro' }))
-  );
-  if (membershipError) {
-    await supabaseAdmin.from('collab_conversations').delete().eq('id', conversation.id);
-    return fail(res, 503, 'Não foi possível adicionar os participantes.');
+  const { data: created, error } = await supabaseAdmin.rpc('create_collab_conversation_with_members', {
+    p_actor_id: user.id,
+    p_tipo: type,
+    p_titulo: type === 'grupo' ? title : null,
+    p_member_ids: participants,
+  });
+  if (error || !created?.id) {
+    if (error?.code === '42501') return fail(res, 403, 'A conta já não está autorizada a criar conversas.');
+    if (error?.code === '22023') return fail(res, 400, 'Os participantes ou os dados da conversa são inválidos.');
+    return fail(res, 503, 'Não foi possível criar a conversa e adicionar todos os participantes.');
   }
   const io = (globalThis as any).io;
-  for (const id of participants) io?.to(id).emit('chat:conversation', { conversationId: conversation.id });
-  return res.status(201).json({ success: true, conversationId: conversation.id });
+  if (!created.existing) {
+    for (const id of participants) io?.to(id).emit('chat:conversation', { conversationId: created.id });
+  }
+  return res.status(created.existing ? 200 : 201).json({
+    success: true, conversationId: created.id, existing: Boolean(created.existing),
+  });
 });
 
 router.get('/conversations/:id/messages', async (req: AuthenticatedRequest, res: Response) => {
@@ -147,13 +158,31 @@ router.post('/conversations/:id/messages', async (req: AuthenticatedRequest, res
   const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
   if (!body || body.length > 4000) return fail(res, 400, 'A mensagem deve ter entre 1 e 4.000 caracteres.');
   if (!(await isConversationMember(id, employee(req).id))) return fail(res, 404, 'Conversa não encontrada.');
-  const { data, error } = await supabaseAdmin.from('collab_messages').insert({
-    conversation_id: id, sender_id: employee(req).id, body,
-  }).select('id, conversation_id, sender_id, body, created_at, funcionarios(nome_completo, role)').single();
-  if (error || !data) return fail(res, 503, 'Não foi possível enviar a mensagem.');
-  await supabaseAdmin.from('collab_conversations').update({ last_message_at: data.created_at, updated_at: data.created_at }).eq('id', id);
-  const { data: recipients } = await supabaseAdmin.from('collab_conversation_members')
+  const { data: messageData, error } = await supabaseAdmin.rpc('send_collab_message_with_activity', {
+    p_conversation_id: id,
+    p_sender_id: employee(req).id,
+    p_body: body,
+  });
+  if (error || !messageData?.id) {
+    if (error?.code === '42501') return fail(res, 404, 'Conversa não encontrada.');
+    if (error?.code === '22023') return fail(res, 400, 'A mensagem é inválida.');
+    if (error?.code === 'P0002') return fail(res, 404, 'Conversa não encontrada.');
+    return fail(res, 503, 'Não foi possível enviar a mensagem.');
+  }
+  // The RPC returns the committed row. Do not turn a successful write into
+  // an HTTP error because a follow-up read failed: clients may retry and send
+  // the same message twice.
+  const data = {
+    id: messageData.id,
+    conversation_id: messageData.conversation_id,
+    sender_id: messageData.sender_id,
+    body: messageData.body,
+    created_at: messageData.created_at,
+    funcionarios: { nome_completo: employee(req).nome_completo, role: employee(req).role },
+  };
+  const { data: recipients, error: recipientsError } = await supabaseAdmin.from('collab_conversation_members')
     .select('funcionario_id').eq('conversation_id', id);
+  if (recipientsError) console.error('[Collaboration] Falha ao obter destinatários do evento de mensagem.');
   const io = (globalThis as any).io;
   for (const recipient of recipients || []) {
     io?.to(recipient.funcionario_id).emit('chat:message', data);
@@ -176,18 +205,14 @@ router.post('/reports', async (req: AuthenticatedRequest, res: Response) => {
   if (title.length < 5 || title.length > 140 || description.length < 10 || description.length > 8000) {
     return fail(res, 400, 'Indique um título (5–140 caracteres) e uma descrição (10–8.000 caracteres).');
   }
-  const { data, error } = await supabaseAdmin.from('collab_reports').insert({
-    titulo: title, descricao: description, categoria: category, prioridade: priority,
-    reporter_id: user.id, loja_id: user.loja_id,
-  }).select('id, reference, titulo, descricao, categoria, prioridade, estado, reporter_id, loja_id, assigned_to, created_at, updated_at').single();
-  if (error || !data) return fail(res, 503, 'Não foi possível registar a ocorrência.');
-  const { error: eventError } = await supabaseAdmin.from('collab_report_events').insert({
-    report_id: data.id, actor_id: user.id, action: 'created', old_values: {},
-    new_values: { titulo: data.titulo, categoria: data.categoria, prioridade: data.prioridade, estado: data.estado },
+  const { data: reportData, error } = await supabaseAdmin.rpc('create_collab_report_with_event', {
+    p_title: title, p_description: description, p_category: category,
+    p_priority: priority, p_reporter_id: user.id,
   });
-  if (eventError) {
-    await supabaseAdmin.from('collab_reports').delete().eq('id', data.id);
-    return fail(res, 503, 'Não foi possível registar a auditoria da ocorrência.');
+  const data = reportData as any;
+  if (error || !data?.id) {
+    if (error?.code === '42501') return fail(res, 403, 'A conta já não está autorizada a registar ocorrências.');
+    return fail(res, 503, 'Não foi possível registar a ocorrência e a respectiva auditoria.');
   }
   const io = (globalThis as any).io;
   io?.to('admin').emit('report:created', { id: data.id, reference: data.reference, prioridade: data.prioridade });
@@ -205,9 +230,14 @@ router.get('/reports', async (req: AuthenticatedRequest, res: Response) => {
   let query = supabaseAdmin.from('collab_reports')
     .select('id, reference, titulo, descricao, categoria, prioridade, estado, reporter_id, loja_id, assigned_to, created_at, updated_at, resolved_at, funcionarios!collab_reports_reporter_id_fkey(nome_completo, role, loja_id)', { count: 'exact' });
   if (!isAdmin(req)) query = query.or('reporter_id.eq.' + user.id + ',assigned_to.eq.' + user.id);
-  const { data, error, count } = await query.order('created_at', { ascending: false }).limit(150);
-  if (error) return fail(res, 503, 'Não foi possível carregar as ocorrências.');
-  return res.json({ success: true, reports: data || [], total: count || 0 });
+  const reports: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await query.order('created_at', { ascending: false }).range(offset, offset + 499);
+    if (error) return fail(res, 503, 'Não foi possível carregar todas as ocorrências.');
+    reports.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return res.json({ success: true, reports, total: reports.length });
 });
 
 router.get('/reports/:id', async (req: AuthenticatedRequest, res: Response) => {
@@ -217,7 +247,7 @@ router.get('/reports/:id', async (req: AuthenticatedRequest, res: Response) => {
     supabaseAdmin.from('collab_report_comments').select('id, funcionario_id, comentario, interno, created_at, funcionarios(nome_completo, role)')
       .eq('report_id', req.params.id).eq('interno', false).order('created_at'),
     supabaseAdmin.from('collab_report_events').select('id, actor_id, action, old_values, new_values, created_at, funcionarios!collab_report_events_actor_id_fkey(nome_completo, role)')
-      .eq('report_id', req.params.id).order('created_at', { ascending: false }).limit(100),
+      .eq('report_id', req.params.id).order('created_at', { ascending: false }),
     supabaseAdmin.from('collab_report_attachments').select('id, original_name, mime_type, size_bytes, created_at')
       .eq('report_id', req.params.id).order('created_at', { ascending: false }),
   ]);
@@ -229,10 +259,16 @@ router.post('/reports/:id/comments', async (req: AuthenticatedRequest, res: Resp
   const comment = typeof req.body?.comentario === 'string' ? req.body.comentario.trim() : '';
   if (!comment || comment.length > 4000) return fail(res, 400, 'O comentário deve ter entre 1 e 4.000 caracteres.');
   if (!(await canAccessReport(req.params.id, req))) return fail(res, 404, 'Ocorrência não encontrada.');
-  const { data, error } = await supabaseAdmin.from('collab_report_comments').insert({
-    report_id: req.params.id, funcionario_id: employee(req).id, comentario: comment, interno: false,
-  }).select('id, funcionario_id, comentario, created_at, funcionarios(nome_completo, role)').single();
-  if (error || !data) return fail(res, 503, 'Não foi possível adicionar o comentário.');
+  const { data, error } = await supabaseAdmin.rpc('create_collab_report_comment_with_event', {
+    p_report_id: req.params.id,
+    p_actor_id: employee(req).id,
+    p_comment: comment,
+  });
+  if (error || !data?.id) {
+    if (error?.code === '42501' || error?.code === 'P0002') return fail(res, 404, 'Ocorrência não encontrada.');
+    if (error?.code === '22023') return fail(res, 400, 'O comentário é inválido.');
+    return fail(res, 503, 'Não foi possível adicionar o comentário e o respectivo registo de auditoria.');
+  }
   const { data: report } = await supabaseAdmin.from('collab_reports').select('reporter_id, assigned_to').eq('id', req.params.id).single();
   const io = (globalThis as any).io;
   if (report) {

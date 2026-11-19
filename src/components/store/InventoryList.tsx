@@ -17,9 +17,10 @@ import { format } from 'date-fns';
 
 interface InventoryListProps {
   onShowToast: (type: 'success' | 'error' | 'info', message: string, title?: string) => void;
+  selectedStoreId?: string;
 }
 
-export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => {
+export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast, selectedStoreId }) => {
   const [items, setItems] = useState<InventarioFisico[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'todos' | 'pendente_aprovacao' | 'em_loja' | 'enviado_sede' | 'fundido'>('todos');
@@ -32,7 +33,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
     try {
       const token = sessionStorage.getItem('diamante_jwt_token');
       if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
-      const response = await fetch('/api/store/inventory', {
+      const response = await fetch('/api/store/inventory' + (selectedStoreId ? '?lojaId=' + encodeURIComponent(selectedStoreId) : ''), {
         headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
         signal: AbortSignal.timeout(10000),
       });
@@ -47,7 +48,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
     } finally {
       setIsLoading(false);
     }
-  }, [onShowToast]);
+  }, [onShowToast, selectedStoreId]);
 
   useEffect(() => {
     void fetchInventory();
@@ -61,7 +62,8 @@ export const InventoryList: React.FC<InventoryListProps> = ({ onShowToast }) => 
       if (!token) throw new Error('Sessão de API não encontrada.');
       const response = await fetch(`/api/store/inventory/${encodeURIComponent(itemId)}/dispatch`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ lojaId: selectedStoreId || undefined }),
         signal: AbortSignal.timeout(10000),
       });
       const payload = await response.json().catch(() => null);

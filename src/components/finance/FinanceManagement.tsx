@@ -77,6 +77,10 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
   const [loadingRows,setLoadingRows]=useState(true);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
+  const [selectedExpenseId,setSelectedExpenseId]=useState<string|null>(null);
+  const [expenseEvents,setExpenseEvents]=useState<Array<Record<string,any>>>([]);
+  const [expenseEventsLoading,setExpenseEventsLoading]=useState(false);
+  const [expenseEventsError,setExpenseEventsError]=useState('');
   const [form,setForm]=useState({loja_id:'',categoria:'renda',descricao:'',fornecedor:'',valor:'',data_despesa:new Date().toISOString().slice(0,10)});
   const token=typeof window!=='undefined'?sessionStorage.getItem('diamante_jwt_token'):null;
   const request=async(path:string,init:RequestInit={})=>{
@@ -111,6 +115,12 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
     catch(e:any){setError(e?.message||'Falha ao actualizar despesa.');}
     finally{setBusy(false);}
   };
+  const loadExpenseEvents=async(id:string)=>{
+    setSelectedExpenseId(id);setExpenseEvents([]);setExpenseEventsLoading(true);setExpenseEventsError('');
+    try{const result=await request(`/api/admin/finance/expenses/${encodeURIComponent(id)}/events`);setExpenseEvents(Array.isArray(result.data)?result.data:[]);}
+    catch(e:any){setExpenseEventsError(e?.message||'Não foi possível carregar o histórico.');}
+    finally{setExpenseEventsLoading(false);}
+  };
   const closeMonth=async(lojaId:string)=>{
     if(!window.confirm('Fechar definitivamente o mês '+selectedMonth+' para esta loja? As despesas deste período ficam bloqueadas.'))return;
     setBusy(true);setError('');
@@ -127,8 +137,8 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
     finally{setBusy(false);}
   };
   const money=(n:number)=>new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR'}).format(Number(n)||0);
-  const pending=rows.filter(r=>r.estado==='pendente').reduce((s,r)=>s+Number(r.valor),0);
-  const paid=rows.filter(r=>r.estado==='paga').reduce((s,r)=>s+Number(r.valor),0);
+  const pending=rows.filter(r=>r.estado==='pendente').reduce((s,r)=>s+Math.round(Number(r.valor)*100),0)/100;
+  const paid=rows.filter(r=>r.estado==='paga').reduce((s,r)=>s+Math.round(Number(r.valor)*100),0)/100;
   return <section aria-label="Despesas operacionais por loja" className="rounded-2xl border border-slate-800 bg-[#151b2b] p-4 sm:p-6 space-y-5">
     <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-white">Despesas Operacionais</h2><p className="text-xs text-slate-400">Registo, aprovação e liquidação de despesas por loja</p></div><button type="button" onClick={()=>void load()} className="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300">Actualizar</button></div>
     {error&&<p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
@@ -158,7 +168,16 @@ function OperationalExpensesPanel({ stores }: { stores: {id:string;nome:string}[
       <div><h3 className="text-sm font-semibold text-white">Fecho mensal por loja</h3><p className="text-xs text-slate-500">O fecho congela os valores do período e bloqueia alterações às despesas dessa loja.</p></div>
       <div className="space-y-2">{stores.map(store=>{const closing=closings.find(x=>x.loja_id===store.id);return <div key={store.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-slate-900/60 p-3"><div><p className="text-sm font-medium text-slate-200">{store.nome}</p><p className="text-xs text-slate-500">{closing?closing.estado==='fechado'?'Fechado em '+new Date(closing.fechado_em).toLocaleString('pt-PT'):'Reaberto':'Ainda sem fecho para '+selectedMonth}</p></div><div>{closing?.estado==='fechado'?<button type="button" disabled={busy} onClick={()=>void reopenMonth(closing.id)} className="rounded-lg border border-amber-500/30 px-3 py-2 text-xs text-amber-300 disabled:opacity-50">Reabrir com motivo</button>:<button type="button" disabled={busy} onClick={()=>void closeMonth(store.id)} className="rounded-lg bg-[#D4AF37] px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-50">Fechar mês</button>}</div></div>;})}</div>
     </div>
-    <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="text-[11px] uppercase text-slate-500"><tr><th className="p-3">Data / Loja</th><th className="p-3">Categoria / Descrição</th><th className="p-3">Valor</th><th className="p-3">Estado</th><th className="p-3">Acções</th></tr></thead><tbody className="divide-y divide-slate-800">{rows.map(row=><tr key={row.id}><td className="p-3 text-slate-300">{new Date(row.data_despesa+'T12:00:00').toLocaleDateString('pt-PT')}<span className="block text-xs text-slate-500">{stores.find(s=>s.id===row.loja_id)?.nome||'Loja'}</span></td><td className="p-3 text-slate-300">{expenseCategories.find(([v])=>v===row.categoria)?.[1]||row.categoria}<span className="block max-w-xs truncate text-xs text-slate-500">{row.descricao}{row.fornecedor?' · '+row.fornecedor:''}</span></td><td className="p-3 font-semibold text-white">{money(row.valor)}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${row.estado==='paga'?'bg-emerald-500/10 text-emerald-300':row.estado==='rejeitada'?'bg-rose-500/10 text-rose-300':row.estado==='aprovada'?'bg-sky-500/10 text-sky-300':'bg-amber-500/10 text-amber-300'}`}>{row.estado}</span></td><td className="p-3"><div className="flex flex-wrap gap-1">{row.estado==='pendente'&&<><button disabled={busy} onClick={()=>void changeStatus(row.id,'aprovada')} className="rounded bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">Aprovar</button><button disabled={busy} onClick={()=>void changeStatus(row.id,'rejeitada')} className="rounded bg-rose-500/10 px-2 py-1 text-xs text-rose-300">Rejeitar</button></>}{row.estado==='aprovada'&&<button disabled={busy} onClick={()=>void changeStatus(row.id,'paga')} className="rounded bg-sky-500/10 px-2 py-1 text-xs text-sky-300">Marcar paga</button>}</div></td></tr>)}</tbody></table>{!loadingRows&&rows.length===0&&<p className="p-6 text-center text-sm text-slate-500">Ainda não existem despesas registadas.</p>}{loadingRows&&<p className="p-6 text-center text-sm text-slate-500">A carregar despesas…</p>}</div>
+    <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="text-[11px] uppercase text-slate-500"><tr><th className="p-3">Data / Loja</th><th className="p-3">Categoria / Descrição</th><th className="p-3">Valor</th><th className="p-3">Estado</th><th className="p-3">Acções</th></tr></thead><tbody className="divide-y divide-slate-800">{rows.map(row=><tr key={row.id}><td className="p-3 text-slate-300">{new Date(row.data_despesa+'T12:00:00').toLocaleDateString('pt-PT')}<span className="block text-xs text-slate-500">{stores.find(s=>s.id===row.loja_id)?.nome||'Loja'}</span></td><td className="p-3 text-slate-300">{expenseCategories.find(([v])=>v===row.categoria)?.[1]||row.categoria}<span className="block max-w-xs truncate text-xs text-slate-500">{row.descricao}{row.fornecedor?' · '+row.fornecedor:''}</span></td><td className="p-3 font-semibold text-white">{money(row.valor)}</td><td className="p-3"><span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${row.estado==='paga'?'bg-emerald-500/10 text-emerald-300':row.estado==='rejeitada'?'bg-rose-500/10 text-rose-300':row.estado==='aprovada'?'bg-sky-500/10 text-sky-300':'bg-amber-500/10 text-amber-300'}`}>{row.estado}</span></td><td className="p-3"><div className="flex flex-wrap gap-1">{row.estado==='pendente'&&<><button disabled={busy} onClick={()=>void changeStatus(row.id,'aprovada')} className="rounded bg-emerald-500/10 px-2 py-1 text-xs text-emerald-300">Aprovar</button><button disabled={busy} onClick={()=>void changeStatus(row.id,'rejeitada')} className="rounded bg-rose-500/10 px-2 py-1 text-xs text-rose-300">Rejeitar</button></>}{row.estado==='aprovada'&&<button disabled={busy} onClick={()=>void changeStatus(row.id,'paga')} className="rounded bg-sky-500/10 px-2 py-1 text-xs text-sky-300">Marcar paga</button>}<button type="button" onClick={()=>void loadExpenseEvents(row.id)} className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">Histórico</button></div></td></tr>)}</tbody></table>{!loadingRows&&rows.length===0&&<p className="p-6 text-center text-sm text-slate-500">Ainda não existem despesas registadas.</p>}{loadingRows&&<p className="p-6 text-center text-sm text-slate-500">A carregar despesas…</p>}</div>
+    {selectedExpenseId&&<div className="rounded-xl border border-slate-800 bg-[#0b0f19] p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-white">Histórico de auditoria da despesa</h3><button type="button" onClick={()=>setSelectedExpenseId(null)} className="text-xs text-slate-400">Fechar</button></div>
+      {expenseEventsLoading?<p className="text-xs text-slate-400">A carregar histórico…</p>:expenseEventsError?<p role="alert" className="text-xs text-rose-300">{expenseEventsError}</p>:expenseEvents.length===0?<p className="text-xs text-slate-400">Sem eventos disponíveis.</p>:<ol className="space-y-2">{expenseEvents.map(event=><li key={event.id} className="border-l-2 border-amber-500/40 pl-3">
+        <p className="text-xs font-semibold text-slate-200">{event.acao==='legacy_import'?'Registo histórico importado':event.acao==='criada'?'Despesa registada':event.acao==='aprovada'?'Despesa aprovada':event.acao==='rejeitada'?'Despesa rejeitada':'Despesa paga'}</p>
+        <p className="text-[10px] text-slate-400">{event.snapshot?.legacy_import===true?'Importado na activação da auditoria':event.created_at?new Date(event.created_at).toLocaleString('pt-PT'):'Data não disponível'}{event.actor_id?' · Responsável: '+event.actor_id:' · Responsável não registado'}</p>
+        {event.motivo&&<p className="mt-1 text-[10px] text-slate-400">{event.motivo}</p>}
+        {event.snapshot?.legacy_import===true&&<p className="mt-1 text-[10px] text-amber-300">Estado existente na migração; não representa a data comprovada da transição original.</p>}
+      </li>)}</ol>}
+    </div>}
   </section>;
 }
 
@@ -185,6 +204,41 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
   const [selectedTx, setSelectedTx] = useState<FinancialTransaction | null>(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [paymentEvents, setPaymentEvents] = useState<Array<Record<string, any>>>([]);
+  const [paymentEventsLoading, setPaymentEventsLoading] = useState(false);
+  const [paymentEventsError, setPaymentEventsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!selectedTx?.id) {
+      setPaymentEvents([]);
+      setPaymentEventsError(null);
+      return;
+    }
+    const loadPaymentEvents = async () => {
+      setPaymentEventsLoading(true);
+      setPaymentEventsError(null);
+      try {
+        const token = typeof window !== 'undefined' ? sessionStorage.getItem('diamante_jwt_token') : null;
+        if (!token) throw new Error('Sessão administrativa não encontrada.');
+        const response = await fetch(`/api/admin/finance/payments/${encodeURIComponent(selectedTx.id)}/events`, {
+          headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        const result: { success?: boolean; data?: Array<Record<string, any>>; message?: string } = await response.json().catch(() => ({}));
+        if (!response.ok || result.success !== true) {
+          throw new Error(result.message || 'Não foi possível carregar o histórico.');
+        }
+        if (active) setPaymentEvents(Array.isArray(result.data) ? result.data : []);
+      } catch (error: any) {
+        if (active) setPaymentEventsError(error?.message || 'Não foi possível carregar o histórico.');
+      } finally {
+        if (active) setPaymentEventsLoading(false);
+      }
+    };
+    void loadPaymentEvents();
+    return () => { active = false; };
+  }, [selectedTx?.id]);
 
   // Form State para Novo Pagamento
   const [newPayment, setNewPayment] = useState({
@@ -298,8 +352,14 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
   };
 
   const handleRejectPayment = async (txId: string) => {
+    const motivo = window.prompt('Indique o motivo da rejeição (mínimo 5 caracteres):');
+    if (motivo === null) return;
+    if (motivo.trim().length < 5) {
+      setActionError('O motivo da rejeição deve ter pelo menos 5 caracteres.');
+      return;
+    }
     try {
-      await rejectPayment(txId);
+      await rejectPayment(txId, motivo.trim());
       if (selectedTx?.id === txId) setSelectedTx((prev) => prev ? { ...prev, estado: 'rejeitado' } : null);
     } catch (err: any) {
       setActionError(err?.message || 'Falha ao rejeitar o pagamento.');
@@ -908,16 +968,50 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                   </div>
                 </div>
 
-                {/* Comprovativo Bancário Digital Simulador */}
+                <div className="rounded-xl border border-slate-800 bg-[#0b0f19] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-bold text-white">Histórico de auditoria</h4>
+                    <span className="text-[10px] text-slate-500">Registos imutáveis</span>
+                  </div>
+                  {paymentEventsLoading ? (
+                    <p className="text-xs text-slate-400">A carregar histórico…</p>
+                  ) : paymentEventsError ? (
+                    <p className="text-xs text-rose-300">{paymentEventsError}</p>
+                  ) : paymentEvents.length === 0 ? (
+                    <p className="text-xs text-slate-400">Sem eventos de auditoria disponíveis.</p>
+                  ) : (
+                    <ol className="space-y-2">
+                      {paymentEvents.map((event) => (
+                        <li key={event.id} className="border-l-2 border-amber-500/40 pl-3">
+                          <p className="text-xs font-semibold text-slate-200">
+                            {event.acao === 'legacy_import' ? 'Registo histórico importado' :
+                             event.acao === 'marcado_pago' ? 'Marcado como pago' :
+                             event.acao === 'rejeitado' ? 'Pagamento rejeitado' : 'Pagamento registado'}
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            {event.snapshot?.legacy_import === true ? 'Importado na activação da auditoria' : event.created_at ? new Date(event.created_at).toLocaleString('pt-PT') : 'Data não disponível'}
+                            {event.actor_id ? ` · Administrador: ${event.actor_id}` : ' · Responsável não registado'}
+                          </p>
+                          {event.motivo && <p className="text-[10px] text-slate-400 mt-1">{event.motivo}</p>}
+                          {event.snapshot?.legacy_import === true && (
+                            <p className="text-[10px] text-amber-300 mt-1">Estado existente na migração; não representa a data comprovada da transição original.</p>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+
+                {/* Referência documental fornecida no registo; não comprova liquidação bancária. */}
                 <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <FileText className="w-4 h-4 text-[#D4AF37]" />
                     <div>
                       <p className="text-[11px] font-semibold text-white">
-                        Comprovativo SEPA Digital
+                        Referência documental (não verificada)
                       </p>
                       <p className="text-[10px] font-mono text-slate-400">
-                        Ref: {selectedTx.comprovativoRef || 'SEPA-REF-PEND'}
+                        Ref: {selectedTx.comprovativoRef || 'Sem referência documental'}
                       </p>
                     </div>
                   </div>
@@ -926,7 +1020,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition-colors cursor-pointer"
                   >
                     <Eye className="w-3.5 h-3.5 text-[#D4AF37]" />
-                    <span>Visualizar Recibo</span>
+                    <span>Visualizar registo</span>
                   </button>
                 </div>
               </div>
@@ -947,7 +1041,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                       className="inline-flex items-center gap-2 px-5 py-2 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-slate-950 text-xs font-bold shadow-lg shadow-[#D4AF37]/25 transition-all cursor-pointer"
                     >
                       <Check className="w-4 h-4 stroke-[3]" />
-                      <span>Confirmar Pagamento Imediato</span>
+                      <span>Marcar como pago (confirmação manual)</span>
                     </button>
                   </>
                 ) : (
@@ -957,7 +1051,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition-colors cursor-pointer"
                     >
                       <Printer className="w-4 h-4 text-[#D4AF37]" />
-                      <span>Imprimir Comprovativo</span>
+                      <span>Imprimir registo interno</span>
                     </button>
 
                     <button
@@ -974,7 +1068,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
         )}
 
         {/* =========================================================
-            6. MODAL DO COMPROVATIVO OFICIAL (Impressão / Visualização)
+            6. MODAL DO REGISTO INTERNO DE PAGAMENTO (não é comprovativo bancário)
            ========================================================= */}
         {isReceiptModalOpen && selectedTx && (
           <div
@@ -1004,13 +1098,17 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
 
               <div className="text-center py-2">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">
-                  Comprovativo de Liquidação Financeira
+                  Registo Interno de Pagamento
                 </span>
                 <p className="text-2xl font-black text-slate-900 font-mono mt-1">
                   {formatEUR(selectedTx.valor)}
                 </p>
-                <p className="text-xs text-emerald-700 font-bold uppercase mt-1">
-                  &bull; Operação Liquidada com Sucesso &bull;
+                <p className={`text-xs font-bold uppercase mt-1 ${selectedTx.estado === 'pago' ? 'text-amber-700' : selectedTx.estado === 'rejeitado' ? 'text-rose-700' : 'text-slate-600'}`}>
+                  {selectedTx.estado === 'pago'
+                    ? 'Marcado como pago no sistema — sem confirmação bancária integrada'
+                    : selectedTx.estado === 'rejeitado'
+                      ? 'Pagamento rejeitado'
+                      : 'Pagamento pendente'}
                 </p>
               </div>
 
@@ -1044,16 +1142,16 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                   <span className="font-medium">{selectedTx.lojaNome}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Código SEPA:</span>
+                  <span className="text-slate-500">Referência indicada:</span>
                   <span className="font-mono text-[10px]">
-                    {selectedTx.comprovativoRef || 'SEPA-AUT-9921'}
+                    {selectedTx.comprovativoRef || 'Não fornecido'}
                   </span>
                 </div>
               </div>
 
               <div className="text-[10px] text-slate-400 text-center leading-relaxed">
-                Este documento serve de comprovativo oficial da ordem de transferência irrevogável
-                para aquisição de artefactos em metais preciosos.
+                Este documento é apenas um registo interno dos dados introduzidos no sistema.
+                Não constitui comprovativo bancário, confirmação SEPA ou prova de liquidação.
               </div>
 
               <div className="flex justify-end gap-2 pt-2">

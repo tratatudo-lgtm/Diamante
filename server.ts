@@ -188,58 +188,7 @@ app.get('/api/store/profile', verifyAuth, async (req: AuthenticatedRequest, res:
   }
 });
 
-// O funcionário activo só pode encaminhar artigos que pertencem à sua própria loja.
-app.post('/api/store/inventory/:id/dispatch', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const employee = req.authenticatedUser;
-  const itemId = req.params.id;
-  if (!employee?.ativo || !employee.loja_id) {
-    return res.status(403).json({ success: false, message: 'A conta não está associada a uma loja ativa.' });
-  }
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(itemId)) {
-    return res.status(400).json({ success: false, message: 'Identificador de artigo inválido.' });
-  }
-
-  try {
-    const { data: item, error: readError } = await supabaseAdmin
-      .from('inventario_fisico')
-      .select('id, estado, loja_atual_id')
-      .eq('id', itemId)
-      .eq('loja_atual_id', employee.loja_id)
-      .maybeSingle();
-
-    if (readError) {
-      console.error('[STORE] Falha ao validar artigo para expedição.');
-      return res.status(503).json({ success: false, message: 'Não foi possível validar o artigo.' });
-    }
-    if (!item) {
-      return res.status(404).json({ success: false, message: 'Artigo não encontrado nesta loja.' });
-    }
-    if (item.estado !== 'em_loja') {
-      return res.status(409).json({ success: false, message: 'O artigo já não está disponível para expedição.' });
-    }
-
-    const { data: updated, error: updateError } = await supabaseAdmin
-      .from('inventario_fisico')
-      .update({ estado: 'enviado_sede', data_saida: new Date().toISOString() })
-      .eq('id', itemId)
-      .eq('loja_atual_id', employee.loja_id)
-      .eq('estado', 'em_loja')
-      .select('id, estado')
-      .maybeSingle();
-
-    if (updateError) {
-      console.error('[STORE] Falha ao registar expedição de artigo.');
-      return res.status(503).json({ success: false, message: 'Não foi possível registar a expedição.' });
-    }
-    if (!updated) {
-      return res.status(409).json({ success: false, message: 'O estado do artigo foi alterado. Atualize o inventário.' });
-    }
-    return res.json({ success: true, item: updated });
-  } catch {
-    return res.status(500).json({ success: false, message: 'Erro interno ao registar a expedição.' });
-  }
-});
-
+// A expedição é definida exclusivamente em store.routes.ts, montado em /api/store.
 // ENDPOINT: LISTAR TRANSAÇÕES PENDENTES PARA AUTORIZAÇÃO
 app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req, res) => {
   
@@ -989,7 +938,7 @@ app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
     const [transactionsRes, employeesRes, historyKpisRes] = await Promise.all([
       supabaseAdmin
         .from('transacoes')
-        .select('id, valor_final, peso_gramas, created_at, estado')
+        .select('id, loja_id, valor_final, peso_gramas, created_at, estado, declaracao_assinada_id')
         .eq('loja_id', lojaId)
         .order('created_at', { ascending: false })
         .limit(10),
@@ -1401,12 +1350,14 @@ async function setupViteOrStatic() {
 
 // Iniciar servidor HTTP com WebSocket (substitui app.listen tradicional)
 setupViteOrStatic().then(() => {
-  const PORT = process.env.PORT || 3000;
-  httpServer.listen(PORT, () => {
+  const PORT = parseInt(process.env.PORT || '3000', 10);
+  const HOST = '127.0.0.1'; // APIs and WebSocket stay behind Nginx; never bind publicly.
+  httpServer.listen(PORT, HOST, () => {
     startBirthdayWhatsAppWorker();
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
     console.log(`Porta: ${PORT}`);
+    console.log(`Host: ${HOST}`);
     console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
     console.log(`WebSocket: Ativo (Socket.IO)`);
     console.log(`=========================================`);

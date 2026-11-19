@@ -35,8 +35,13 @@ class FakeRepository implements StoreDeclarationRepository {
   signedError: unknown | null = null;
   auditError: unknown | null = null;
   calls: string[] = [];
+  activeStores = new Set([ownStore, otherStore]);
   logs: StoreDeclarationAccessLog[] = [];
 
+  async getActiveStore(id: string) {
+    this.calls.push('store:' + id);
+    return { data: this.activeStores.has(id) };
+  }
   async getPurchase(id: string) {
     this.calls.push('purchase');
     return { data: this.purchase?.id === id ? this.purchase : null, error: this.purchaseError };
@@ -132,13 +137,18 @@ test('funcionário ativo consulta declaração da própria loja e recebe URL ass
   });
 });
 
-test('administrador ativo consulta declaração de outra loja', async () => {
+test('administrador principal consulta declaração de qualquer loja sem selector e sem associação a loja', async () => {
   await withServer(async (base, repository) => {
     repository.purchase = { ...repository.purchase!, loja_id: otherStore };
+    repository.activeStores.delete(otherStore); // histórico de loja inactiva continua acessível à administração
     const response = await fetch(`${base}/api/store/admin/purchases/${purchaseId}/declaration`, {
       headers: { Authorization: 'Bearer admin' },
     });
     assert.equal(response.status, 200);
+    assert.deepEqual(repository.calls, [
+      'purchase', 'evidence', 'download:store/purchase/declaration.pdf',
+      'sign:60:store/purchase/declaration.pdf', 'audit',
+    ]);
     assert.equal(repository.logs[0].accessed_by, 'admin-1');
     assert.equal(repository.logs[0].accessed_role, 'admin');
   });

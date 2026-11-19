@@ -29,11 +29,12 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 interface NewPurchaseFormProps {
   onSuccess: () => void;
   onShowToast: (type: 'success' | 'error' | 'info', message: string, title?: string) => void;
+  selectedStoreId?: string;
 }
 
-export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onShowToast }) => {
+export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onShowToast, selectedStoreId }) => {
   const { userSession, funcionario } = useAuth();
-  const lojaId = userSession?.loja_id || funcionario?.loja_id || null;
+  const lojaId = selectedStoreId || userSession?.loja_id || funcionario?.loja_id || null;
 
   // Form states
   const [clienteNome, setClienteNome] = useState('');
@@ -73,10 +74,13 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
   useEffect(() => {
     let active = true;
     const loadPurchaseSettings = async () => {
+      setSettingsLoading(true);
+      setPurchaseSettings([]);
+      setSettingsError(null);
       try {
         const token = sessionStorage.getItem('diamante_jwt_token');
         if (!token) throw new Error('Sessão expirada. Volte a iniciar sessão.');
-        const response = await fetch('/api/store/purchase-settings', {
+        const response = await fetch('/api/store/purchase-settings' + (lojaId ? '?lojaId=' + encodeURIComponent(lojaId) : ''), {
           headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
           signal: AbortSignal.timeout(8000),
         });
@@ -96,7 +100,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
     };
     loadPurchaseSettings();
     return () => { active = false; };
-  }, []);
+  }, [lojaId]);
 
   const getToque = (value: string) => Number(value.match(/(\d{3})\s*‰/)?.[1] || 0);
   const selectedPricing = purchaseSettings.find((item) => item.toque_millesimos === getToque(metal));
@@ -215,6 +219,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         cotacaoUnidade: selectedPricing.cotacao_unidade,
         cotacaoObservadaEm: selectedPricing.cotacao_observada_em,
         descricao: descricao.trim() || `${tipoPeca} em ${metal}`,
+        lojaId,
       };
       const declarationBuffer = await declaracaoAssinada.arrayBuffer();
       const declarationDigest = await crypto.subtle.digest('SHA-256', declarationBuffer);
@@ -253,6 +258,7 @@ export const NewPurchaseForm: React.FC<NewPurchaseFormProps> = ({ onSuccess, onS
         },
         body: JSON.stringify({
           idempotencyKey,
+          lojaId,
           clienteNome: purchasePayload.clienteNome,
           clienteCc: purchasePayload.clienteCc,
           mimeType: declaracaoAssinada.type,
