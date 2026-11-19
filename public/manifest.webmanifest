@@ -11,5 +11,5 @@
   "orientation": "any",
   "background_color": "#070d18",
   "theme_color": "#070d18",
-  "icons": [{ "src": "/icons/diamante-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "icons": [{ "src": "/icons/diamante-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }
