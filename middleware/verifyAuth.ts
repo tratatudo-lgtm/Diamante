@@ -17,8 +17,11 @@ export interface AuthenticatedRequest extends Request {
 }
 
 /** Validates the API JWT and re-loads the active employee from Supabase. */
-export async function verifyAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
-  const secret = process.env.JWT_SECRET;
+export interface VerifyAuthDependencies { secret: string | undefined; findActiveEmployee: (id: string) => Promise<{ data: any; error?: unknown | null }>; }
+
+export function createVerifyAuth(dependencies: VerifyAuthDependencies) {
+return async function verifyAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  const secret = dependencies.secret;
   if (!secret) {
     res.status(503).json({ success: false, message: 'Autenticação indisponível.' });
     return;
@@ -31,19 +34,14 @@ export async function verifyAuth(req: AuthenticatedRequest, res: Response, next:
   }
 
   try {
-    const claims = jwt.verify(header.slice(7).trim(), secret) as jwt.JwtPayload;
+    const claims = jwt.verify(header.slice(7).trim(), secret, { algorithms: ['HS256'] }) as jwt.JwtPayload;
     const userId = typeof claims.id === 'string' ? claims.id : '';
     if (!userId) {
       res.status(401).json({ success: false, message: 'Sessão inválida.' });
       return;
     }
 
-    const { data, error } = await supabaseAdmin
-      .from('funcionarios')
-      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
-      .eq('id', userId)
-      .eq('ativo', true)
-      .maybeSingle();
+    const { data, error } = await dependencies.findActiveEmployee(userId);
 
     if (error) {
       res.status(503).json({ success: false, message: 'Não foi possível validar a sessão.' });
@@ -91,4 +89,15 @@ export async function verifyAuth(req: AuthenticatedRequest, res: Response, next:
   } catch {
     res.status(401).json({ success: false, message: 'Sessão inválida ou expirada.' });
   }
+};
 }
+
+export const verifyAuth = createVerifyAuth({
+  secret: process.env.JWT_SECRET,
+  findActiveEmployee: async (id: string) => {
+    const { data, error } = await supabaseAdmin.from('funcionarios')
+      .select('id, nome_completo, email, role, loja_id, telemovel, ativo, lojas(nome, codigo_loja)')
+      .eq('id', id).eq('ativo', true).maybeSingle();
+    return { data, error };
+  },
+});

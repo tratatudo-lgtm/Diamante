@@ -42,22 +42,27 @@ async function visibleGoal(goalId: string, req: AuthenticatedRequest) {
 router.get('/directory', async (req: AuthenticatedRequest, res: Response) => {
   if (!admin(req)) return fail(res,403,'Apenas administradores podem consultar os destinos dos objectivos.');
   const [{data:stores,error:storeError},{data:employees,error:employeeError}] = await Promise.all([
-    supabaseAdmin.from('lojas').select('id,nome').eq('ativo',true).order('nome'),
-    supabaseAdmin.from('funcionarios').select('id,nome_completo,loja_id,lojas(nome)').eq('ativo',true).order('nome_completo').limit(500),
+    supabaseAdmin.from('lojas').select('id,nome,ativo').order('nome'),
+    supabaseAdmin.from('funcionarios').select('id,nome_completo,loja_id,ativo,lojas(nome)').order('nome_completo'),
   ]);
   if(storeError||employeeError)return fail(res,503,'Não foi possível carregar lojas e funcionários.');
   return res.json({success:true,stores:stores||[],employees:employees||[]});
 });
 
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
-  let query = supabaseAdmin.from('operational_goals')
-    .select('*,lojas(nome),funcionarios!operational_goals_funcionario_id_fkey(id,nome_completo,loja_id)')
-    .order('ends_on',{ascending:true}).limit(200);
-  if (!admin(req)) query = query.or('funcionario_id.eq.' + actor(req).id + (actor(req).loja_id ? ',loja_id.eq.' + actor(req).loja_id : ''));
-  if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status',req.query.status);
-  const { data, error } = await query;
-  if (error) return fail(res,503,'Não foi possível carregar os objectivos.');
-  const ids = (data || []).map((goal: any) => goal.id);
+  const data: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    let query = supabaseAdmin.from('operational_goals')
+      .select('*,lojas(nome),funcionarios!operational_goals_funcionario_id_fkey(id,nome_completo,loja_id)')
+      .order('ends_on',{ascending:true}).range(offset, offset + 499);
+    if (!admin(req)) query = query.or('funcionario_id.eq.' + actor(req).id + (actor(req).loja_id ? ',loja_id.eq.' + actor(req).loja_id : ''));
+    if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status',req.query.status);
+    const { data: page, error } = await query;
+    if (error) return fail(res,503,'Não foi possível carregar todos os objectivos.');
+    data.push(...(page || []));
+    if (!page || page.length < 500) break;
+  }
+  const ids = data.map((goal: any) => goal.id);
   if (!ids.length) return res.json({ success:true, goals:[] });
   const { data: progressRows, error: progressError } = await supabaseAdmin.rpc('get_operational_goal_progress', { p_goal_ids: ids });
   if (progressError || !progressRows) return fail(res,503,'Não foi possível calcular o desempenho dos objectivos.');
@@ -74,11 +79,16 @@ router.get('/:id/events', async (req: AuthenticatedRequest, res: Response) => {
   try { goal = await visibleGoal(req.params.id,req); }
   catch { return fail(res,503,'Não foi possível validar o acesso ao objectivo.'); }
   if (!goal) return fail(res,404,'Objectivo não encontrado.');
-  const { data,error } = await supabaseAdmin.from('operational_goal_events')
-    .select('id,action,old_values,new_values,created_at,funcionarios!operational_goal_events_actor_id_fkey(nome_completo)')
-    .eq('goal_id',goal.id).order('created_at',{ascending:false}).limit(100);
-  if (error) return fail(res,503,'Não foi possível carregar o histórico.');
-  return res.json({success:true,events:data || []});
+  const events: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabaseAdmin.from('operational_goal_events')
+      .select('id,action,old_values,new_values,created_at,funcionarios!operational_goal_events_actor_id_fkey(nome_completo)')
+      .eq('goal_id',goal.id).order('created_at',{ascending:false}).range(offset, offset + 499);
+    if (error) return fail(res,503,'Não foi possível carregar todo o histórico.');
+    events.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return res.json({success:true,events});
 });
 
 router.post('/', async (req: AuthenticatedRequest,res: Response) => {
@@ -106,10 +116,16 @@ router.post('/', async (req: AuthenticatedRequest,res: Response) => {
     funcionarioId = data.id; notifyId = data.id;
   }
   const insert = { title,description,scope,metric,target_value:target,loja_id:lojaId,funcionario_id:funcionarioId,starts_on:starts,ends_on:ends,created_by:actor(req).id };
-  const { data:goal,error } = await supabaseAdmin.from('operational_goals').insert(insert).select('*').single();
-  if (error || !goal) return fail(res,503,'Não foi possível criar o objectivo.');
-  const { error:eventError } = await supabaseAdmin.from('operational_goal_events').insert({goal_id:goal.id,actor_id:actor(req).id,action:'created',new_values:goal});
-  if (eventError) { await supabaseAdmin.from('operational_goals').delete().eq('id',goal.id); return fail(res,503,'Não foi possível registar o histórico do objectivo.'); }
+  const { data:goalData,error } = await supabaseAdmin.rpc('create_operational_goal_with_event',{
+    p_title:title,p_description:description,p_scope:scope,p_metric:metric,p_target_value:target,
+    p_loja_id:lojaId,p_funcionario_id:funcionarioId,p_starts_on:starts,p_ends_on:ends,p_created_by:actor(req).id,
+  });
+  const goal = goalData as any;
+  if(error || !goal?.id){
+    if(error?.code==='42501')return fail(res,403,'Não está autorizado a criar este objectivo.');
+    if(error?.code==='22023')return fail(res,400,'O destino do objectivo já não é válido.');
+    return fail(res,503,'Não foi possível criar o objectivo e registar o histórico.');
+  }
   if (notifyId) await notify(notifyId,goal.id,'goal_assigned','Novo objectivo atribuído',title);
   if (lojaId) {
     const {data:team} = await supabaseAdmin.from('funcionarios').select('id').eq('loja_id',lojaId).eq('ativo',true);
@@ -135,12 +151,20 @@ router.patch('/:id', async (req: AuthenticatedRequest,res: Response) => {
   const nextStart=String(update.starts_on ?? current.starts_on); const nextEnd=String(update.ends_on ?? current.ends_on);
   if(nextEnd<nextStart)return fail(res,400,'A data final deve ser posterior à inicial.');
   if(Object.keys(update).length===1)return fail(res,400,'Não foram indicadas alterações.');
-  const {data:updated,error}=await supabaseAdmin.from('operational_goals').update(update).eq('id',current.id).eq('updated_at',current.updated_at).select('*').maybeSingle();
-  if(error)return fail(res,503,'Não foi possível actualizar o objectivo.');
-  if(!updated)return fail(res,409,'O objectivo foi alterado por outro administrador. Actualize a página.');
-  const action=update.status?'status_changed':'updated';
-  const {error:eventError}=await supabaseAdmin.from('operational_goal_events').insert({goal_id:current.id,actor_id:actor(req).id,action,old_values:current,new_values:updated});
-  if(eventError){await supabaseAdmin.from('operational_goals').update({title:current.title,description:current.description,target_value:current.target_value,status:current.status,starts_on:current.starts_on,ends_on:current.ends_on,updated_at:current.updated_at}).eq('id',current.id).eq('updated_at',updated.updated_at);return fail(res,503,'Não foi possível guardar o histórico. A alteração foi revertida.');}
+  delete update.updated_at;
+  const {data:updatedData,error}=await supabaseAdmin.rpc('update_operational_goal_with_event',{
+    p_goal_id:current.id,p_actor_id:actor(req).id,
+    p_expected_updated_at:current.updated_at,p_changes:update,
+  });
+  const updated=updatedData as any;
+  if(error){
+    if(error.code==='P0002')return fail(res,404,'Objectivo não encontrado.');
+    if(error.code==='40001')return fail(res,409,'O objectivo foi alterado por outro administrador. Actualize a página.');
+    if(error.code==='42501')return fail(res,403,'Apenas administradores activos podem gerir objectivos.');
+    if(error.code==='22023')return fail(res,400,'Os dados do objectivo são inválidos.');
+    return fail(res,503,'Não foi possível actualizar o objectivo e guardar o histórico.');
+  }
+  if(!updated?.id)return fail(res,503,'Não foi possível confirmar a actualização do objectivo.');
   if(current.scope==='funcionario'&&current.funcionario_id)await notify(current.funcionario_id,current.id,'goal_updated','Objectivo actualizado',updated.title);
   if(current.scope==='loja'&&current.loja_id) {
     const {data:team}=await supabaseAdmin.from('funcionarios').select('id').eq('loja_id',current.loja_id).eq('ativo',true);

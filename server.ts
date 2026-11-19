@@ -26,11 +26,15 @@ import { isSocketTokenActive } from './socket-session';
 import { verifyAdmin } from './middleware/verifyAdmin';
 import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { sendWhatsAppBirthdayGreeting } from './whatsapp.service';
+import { requiresSecondPurchaseApproval } from './store-purchase-validation';
+import { authorizePurchase } from './purchase-approval';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// A aplicação só confia no proxy local Nginx; nunca confiar cegamente em X-Forwarded-For.
+app.set('trust proxy', 'loopback');
 const args = process.argv.slice(2);
 const portArgIndex = args.indexOf('--port');
 const cliPort = portArgIndex !== -1 && args[portArgIndex + 1] ? parseInt(args[portArgIndex + 1], 10) : null;
@@ -43,6 +47,9 @@ const isProduction = process.env.NODE_ENV === 'production';
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   process.env.APP_URL,
+  'https://diamantedouro.duckdns.org',
+  'https://loja-diamantedouro.duckdns.org',
+  'https://admin-diamantedouro.duckdns.org',
   `http://localhost:${PORT}`,
   'http://localhost:3000',
   'http://localhost:5173',
@@ -83,18 +90,19 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
     return next();
   }
 
-  // Nunca confiar em X-Forwarded-For fornecido pelo cliente.
-  const remoteAddress = req.socket.remoteAddress;
+  // req.ip respeita apenas o proxy loopback explicitamente confiado acima.
+  // O Nginx acrescenta o IP real do cliente no fim de X-Forwarded-For.
+  const clientIp = typeof req.ip === 'string'
+    ? req.ip.trim().toLowerCase().replace(/^::ffff:/, '')
+    : '';
 
-  if (typeof remoteAddress !== 'string' || !remoteAddress.trim()) {
+  if (!clientIp) {
     res.status(503).json({
       success: false,
       message: 'Não foi possível validar a origem do pedido.',
     });
     return;
   }
-
-  const clientIp = remoteAddress.trim().toLowerCase().replace(/^::ffff:/, '');
   const now = Date.now();
   const windowMs = 60 * 1000;
   const maxAttempts = 30;
@@ -180,58 +188,7 @@ app.get('/api/store/profile', verifyAuth, async (req: AuthenticatedRequest, res:
   }
 });
 
-// O funcionário activo só pode encaminhar artigos que pertencem à sua própria loja.
-app.post('/api/store/inventory/:id/dispatch', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const employee = req.authenticatedUser;
-  const itemId = req.params.id;
-  if (!employee?.ativo || !employee.loja_id) {
-    return res.status(403).json({ success: false, message: 'A conta não está associada a uma loja ativa.' });
-  }
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(itemId)) {
-    return res.status(400).json({ success: false, message: 'Identificador de artigo inválido.' });
-  }
-
-  try {
-    const { data: item, error: readError } = await supabaseAdmin
-      .from('inventario_fisico')
-      .select('id, estado, loja_atual_id')
-      .eq('id', itemId)
-      .eq('loja_atual_id', employee.loja_id)
-      .maybeSingle();
-
-    if (readError) {
-      console.error('[STORE] Falha ao validar artigo para expedição.');
-      return res.status(503).json({ success: false, message: 'Não foi possível validar o artigo.' });
-    }
-    if (!item) {
-      return res.status(404).json({ success: false, message: 'Artigo não encontrado nesta loja.' });
-    }
-    if (item.estado !== 'em_loja') {
-      return res.status(409).json({ success: false, message: 'O artigo já não está disponível para expedição.' });
-    }
-
-    const { data: updated, error: updateError } = await supabaseAdmin
-      .from('inventario_fisico')
-      .update({ estado: 'enviado_sede', data_saida: new Date().toISOString() })
-      .eq('id', itemId)
-      .eq('loja_atual_id', employee.loja_id)
-      .eq('estado', 'em_loja')
-      .select('id, estado')
-      .maybeSingle();
-
-    if (updateError) {
-      console.error('[STORE] Falha ao registar expedição de artigo.');
-      return res.status(503).json({ success: false, message: 'Não foi possível registar a expedição.' });
-    }
-    if (!updated) {
-      return res.status(409).json({ success: false, message: 'O estado do artigo foi alterado. Atualize o inventário.' });
-    }
-    return res.json({ success: true, item: updated });
-  } catch {
-    return res.status(500).json({ success: false, message: 'Erro interno ao registar a expedição.' });
-  }
-});
-
+// A expedição é definida exclusivamente em store.routes.ts, montado em /api/store.
 // ENDPOINT: LISTAR TRANSAÇÕES PENDENTES PARA AUTORIZAÇÃO
 app.get('/api/v1/admin/dashboard/pending', verifyAdmin, async (req, res) => {
   
@@ -259,107 +216,68 @@ app.post('/api/v1/admin/dashboard/authorize', verifyAdmin, async (req, res) => {
     return res.status(400).json({ success: false, error: 'ID da transação obrigatório' });
   }
 
+  const adminId = (req as any).adminUser?.id;
+  if (!adminId) {
+    return res.status(401).json({ success: false, error: 'Sessão administrativa inválida' });
+  }
+
   try {
-    const adminId = (req as any).adminUser?.id;
-    if (!adminId) {
-      return res.status(401).json({ success: false, error: 'Sessão administrativa inválida' });
-    }
-
-    const [{ data: transaction, error: transactionError }, { data: settings, error: settingsError }] = await Promise.all([
-      supabaseAdmin.from('transacoes')
-        .select('id, loja_id, estado, valor_final, primeira_aprovacao_por')
-        .eq('id', transactionId)
-        .maybeSingle(),
-      supabaseAdmin.from('configuracoes_sistema')
-        .select('valor')
-        .eq('chave', 'parametros_compra_ouro')
-        .maybeSingle(),
-    ]);
-
-    if (transactionError || settingsError) {
-      console.error('[Authorize] Falha ao consultar transação ou regras de aprovação.');
-      return res.status(503).json({ success: false, error: 'Não foi possível validar as regras de aprovação.' });
-    }
-    if (!transaction || transaction.estado !== 'pendente_aprovacao') {
-      return res.status(409).json({ success: false, error: 'A compra não está pendente ou já foi processada.' });
-    }
-
-    const thresholds = settings?.valor?.tetos;
-    const doubleSignatureAt = thresholds?.ativo === true
-      ? Number(thresholds.exigir_dupla_assinatura_acima) || 0
-      : 0;
-    const requiresDoubleSignature = doubleSignatureAt > 0 && Number(transaction.valor_final) >= doubleSignatureAt;
-
-    if (requiresDoubleSignature && !transaction.primeira_aprovacao_por) {
-      const now = new Date().toISOString();
-      const { data: firstApproval, error: firstError } = await supabaseAdmin
-        .from('transacoes')
-        .update({ primeira_aprovacao_por: adminId, data_primeira_aprovacao: now })
-        .eq('id', transactionId)
-        .eq('estado', 'pendente_aprovacao')
-        .is('primeira_aprovacao_por', null)
-        .select('id')
-        .maybeSingle();
-
-      if (firstError) throw firstError;
-      if (!firstApproval) {
-        return res.status(409).json({ success: false, error: 'A primeira assinatura foi registada por outro administrador. Actualize a lista.' });
-      }
-
-      return res.json({
-        success: true,
-        requiresSecondApproval: true,
-        message: 'Primeira assinatura registada. É necessária a aprovação de um segundo administrador.',
-        transactionId,
-      });
-    }
-
-    if (requiresDoubleSignature && transaction.primeira_aprovacao_por === adminId) {
-      return res.status(409).json({
-        success: false,
-        error: 'A segunda assinatura tem de ser realizada por um administrador diferente.',
-      });
-    }
-
-    const now = new Date().toISOString();
-    let approvalQuery = supabaseAdmin
-      .from('transacoes')
-      .update({
-        estado: 'aprovado',
-        aprovado_por: adminId,
-        data_aprovacao: now,
-      })
-      .eq('id', transactionId)
-      .eq('estado', 'pendente_aprovacao');
-
-    // Revalidar a identidade do segundo aprovador na própria escrita,
-    // evitando que uma verificação anterior fique desactualizada.
-    if (requiresDoubleSignature) {
-      approvalQuery = approvalQuery.neq('primeira_aprovacao_por', adminId);
-    }
-
-    const { data: approved, error: approvalError } = await approvalQuery
-      .select('id, loja_id')
-      .maybeSingle();
-
-    if (approvalError) throw approvalError;
-    if (!approved) {
-      return res.status(409).json({ success: false, error: 'A compra foi entretanto processada por outro administrador.' });
-    }
-
-    const io = (globalThis as any).io;
-    if (io) {
-      const event = { id: approved.id, loja_id: approved.loja_id, estado: 'aprovado', approved_at: now };
-      io.to('admin').emit('transaction:approved', event);
-      if (approved.loja_id) io.to('store:' + approved.loja_id).emit('transaction:approved', event);
-    }
-
-    return res.json({
-      success: true,
-      requiresSecondApproval: false,
-      message: 'Compra aprovada com sucesso.',
-      transactionId: approved.id,
+    const result = await authorizePurchase({
+      transactionId,
+      adminId,
+      repository: {
+        async getTransaction(id) {
+          const { data, error } = await supabaseAdmin.from('transacoes')
+            .select('id, loja_id, estado, valor_final, primeira_aprovacao_por')
+            .eq('id', id)
+            .maybeSingle();
+          if (error) throw error;
+          return data;
+        },
+        async getSettings() {
+          const { data, error } = await supabaseAdmin.from('configuracoes_sistema')
+            .select('valor')
+            .eq('chave', 'parametros_compra_ouro')
+            .maybeSingle();
+          if (error) throw error;
+          return data?.valor?.tetos ?? null;
+        },
+        async recordFirstApproval(id, approvingAdminId, at) {
+          const { data, error } = await supabaseAdmin.from('transacoes')
+            .update({ primeira_aprovacao_por: approvingAdminId, data_primeira_aprovacao: at })
+            .eq('id', id)
+            .eq('estado', 'pendente_aprovacao')
+            .is('primeira_aprovacao_por', null)
+            .select('id')
+            .maybeSingle();
+          if (error) throw error;
+          return Boolean(data);
+        },
+        async approve(id, approvingAdminId, at, requireDifferentAdmin) {
+          let query = supabaseAdmin.from('transacoes')
+            .update({ estado: 'aprovado', aprovado_por: approvingAdminId, data_aprovacao: at })
+            .eq('id', id)
+            .eq('estado', 'pendente_aprovacao');
+          if (requireDifferentAdmin) query = query.neq('primeira_aprovacao_por', approvingAdminId);
+          const { data, error } = await query.select('id, loja_id').maybeSingle();
+          if (error) throw error;
+          return data;
+        },
+      },
     });
+
+    if (result.status !== 200) return res.status(result.status).json(result.body);
+
+    if ('approved' in result) {
+      const approved = result.approved;
+      const io = (globalThis as any).io;
+      if (io) {
+        const event = { id: approved.id, loja_id: approved.loja_id, estado: 'aprovado', approved_at: result.approvedAt };
+        io.to('admin').emit('transaction:approved', event);
+        if (approved.loja_id) io.to('store:' + approved.loja_id).emit('transaction:approved', event);
+      }
+    }
+    return res.status(200).json(result.body);
   } catch {
     console.error('[Authorize Error] Falha interna ao autorizar compra.');
     return res.status(500).json({ success: false, error: 'Não foi possível autorizar a compra.' });
@@ -1020,7 +938,7 @@ app.get('/api/admin/war-room/stores/:id', verifyAdmin, async (req, res) => {
     const [transactionsRes, employeesRes, historyKpisRes] = await Promise.all([
       supabaseAdmin
         .from('transacoes')
-        .select('id, valor_final, peso_gramas, created_at, estado')
+        .select('id, loja_id, valor_final, peso_gramas, created_at, estado, declaracao_assinada_id')
         .eq('loja_id', lojaId)
         .order('created_at', { ascending: false })
         .limit(10),
@@ -1355,7 +1273,8 @@ async function processBirthdayWhatsAppQueue(): Promise<void> {
   try {
     const { data: birthdays, error } = await supabaseAdmin.rpc('claim_birthday_whatsapp_messages');
     if (error) {
-      console.error('[Birthday WhatsApp] Não foi possível reclamar a fila.');
+      // Diagnóstico limitado a campos técnicos; não registar payloads, dados de clientes ou credenciais.
+      console.error('[Birthday WhatsApp] RPC claim falhou. Código:', error.code || 'unknown');
       return;
     }
     for (const birthday of birthdays || []) {
@@ -1432,12 +1351,15 @@ async function setupViteOrStatic() {
 
 // Iniciar servidor HTTP com WebSocket (substitui app.listen tradicional)
 setupViteOrStatic().then(() => {
-  const PORT = process.env.PORT || 3000;
-  httpServer.listen(PORT, () => {
+  const PORT = parseInt(process.env.PORT || '3000', 10);
+  // O contentor escuta na interface interna; compose.yaml publica a porta apenas em 127.0.0.1 do VPS, atrás do Nginx.
+  const HOST = '0.0.0.0';
+  httpServer.listen(PORT, HOST, () => {
     startBirthdayWhatsAppWorker();
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
     console.log(`Porta: ${PORT}`);
+    console.log(`Host: ${HOST}`);
     console.log(`Ambiente: ${isProduction ? 'Produção' : 'Desenvolvimento'}`);
     console.log(`WebSocket: Ativo (Socket.IO)`);
     console.log(`=========================================`);

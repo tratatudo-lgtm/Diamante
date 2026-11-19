@@ -17,9 +17,10 @@ import {
 
 interface ProtectedClientsProps {
   onShowToast: (type: 'success' | 'error' | 'info', message: string, title?: string) => void;
+  selectedStoreId?: string;
 }
 
-export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast }) => {
+export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast, selectedStoreId }) => {
   const [clientes, setClientes] = useState<ClienteProtegido[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,7 +40,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
     try {
       const token = sessionStorage.getItem('diamante_jwt_token');
       if (!token) throw new Error('Sessão não encontrada.');
-      const response = await fetch('/api/clients/protected?search=' + encodeURIComponent(search), {
+      const response = await fetch('/api/clients/protected?search=' + encodeURIComponent(search) + (selectedStoreId ? '&lojaId=' + encodeURIComponent(selectedStoreId) : ''), {
         headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(10000),
       });
@@ -52,7 +53,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedStoreId]);
 
   useEffect(() => {
     fetchProtectedClients();
@@ -74,7 +75,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
       const response = await fetch(`/api/clients/${encodeURIComponent(clientId)}/birthday-consent`, {
         method: 'PATCH',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
-        body: JSON.stringify({ consentimento }),
+        body: JSON.stringify({ consentimento, lojaId: selectedStoreId || undefined }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || result?.success !== true) throw new Error(result?.message || 'Não foi possível registar o consentimento.');
@@ -106,7 +107,7 @@ export const ProtectedClients: React.FC<ProtectedClientsProps> = ({ onShowToast 
       const response = await fetch(`/api/clients/${encodeURIComponent(clientId)}/documents`, {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${token || ''}` },
-        body: JSON.stringify({ tipoDocumento: documentType, numeroDocumento: documentNumber, dataEmissao: documentIssueDate || null, dataValidade: documentExpiryDate, mimeType: documentFile.type, fileName: documentFile.name, fileBase64: base64 }),
+        body: JSON.stringify({ tipoDocumento: documentType, numeroDocumento: documentNumber, dataEmissao: documentIssueDate || null, dataValidade: documentExpiryDate, mimeType: documentFile.type, fileName: documentFile.name, fileBase64: base64, lojaId: selectedStoreId || undefined }),
       });
       const result = await response.json().catch(() => null);
       if (!response.ok || result?.success !== true) throw new Error(result?.message || 'Falha ao actualizar documento.');

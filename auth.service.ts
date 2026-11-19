@@ -2,9 +2,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { randomInt } from 'crypto';
+import { randomInt, createHmac } from 'crypto';
 import { sendWhatsAppOtp, formatPortuguesePhone } from './whatsapp.service';
-import { isOtpActive } from './otp-session';
 
 const JWT_SECRET: string = (() => {
   const secret = process.env.JWT_SECRET;
@@ -44,18 +43,14 @@ export interface AuthenticatedUser {
   ativo: boolean;
 }
 
-interface StoredOtp {
-  phone: string;
-  code: string;
-  expiresAt: number;
-  attempts: number;
-  userId?: string;
+const OTP_HMAC_SECRET = process.env.OTP_HMAC_SECRET;
+if (!OTP_HMAC_SECRET || OTP_HMAC_SECRET.length < 32) {
+  throw new Error('OTP_HMAC_SECRET tem de ser um segredo real com pelo menos 32 caracteres.');
 }
 
-// Armazenamento em memória para códigos OTP ativos
-export const otpStore = new Map<string, StoredOtp>();
-
-const otpRequestLimits = new Map<string, { count: number; resetAt: number }>();
+function otpDigest(value: string): string {
+  return createHmac('sha256', OTP_HMAC_SECRET!).update(value).digest('hex');
+}
 
 /**
  * Gera variantes normalizadas para pesquisa de um número de telemóvel português.
@@ -234,22 +229,7 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
     };
   }
 
-  const now = Date.now();
-  const limit = otpRequestLimits.get(formatted);
-  if (limit && now < limit.resetAt && limit.count >= 5) {
-    return { success: false, message: 'Demasiados pedidos de código. Tente novamente mais tarde.', statusCode: 429 };
-  }
-  if (!limit || now >= limit.resetAt) {
-    otpRequestLimits.set(formatted, { count: 1, resetAt: now + 15 * 60 * 1000 });
-  } else {
-    limit.count += 1;
-  }
-  if (otpRequestLimits.size > 10000) {
-    for (const [key, value] of otpRequestLimits) {
-      if (now >= value.resetAt) otpRequestLimits.delete(key);
-    }
-  }
-
+  // 1. Validate the registered, active employee before generating a challenge.
   // 1. Validação estrita contra a BD Supabase
   const user = await findUserInSupabaseByPhone(formatted);
 
@@ -262,24 +242,51 @@ export async function requestOtpForPhone(rawPhone: string): Promise<{
     };
   }
 
-  // 2. Gera código de 6 dígitos
   const otpCode = randomInt(100000, 1000000).toString();
-  const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutos
-
-  otpStore.set(formatted, {
-    phone: formatted,
-    code: otpCode,
-    expiresAt,
-    attempts: 0,
-    userId: user.id,
+  const phoneHash = otpDigest('phone:' + formatted);
+  const codeHash = otpDigest('code:' + formatted + ':' + otpCode);
+  const { data: challengeRows, error: challengeError } = await supabaseAdmin.rpc('create_whatsapp_otp_challenge', {
+    p_phone_hash: phoneHash,
+    p_employee_id: user.id,
+    p_code_hash: codeHash,
+    p_expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
   });
+  const challengeStatus = Array.isArray(challengeRows) ? challengeRows[0]?.status : null;
+  if (challengeError || challengeStatus !== 'created') {
+    return {
+      success: false,
+      message: challengeStatus === 'pending'
+        ? 'Já existe um código ativo. Utilize o código recebido ou aguarde a sua expiração.'
+        : challengeStatus === 'rate_limited'
+          ? 'Demasiados pedidos de código. Tente novamente mais tarde.'
+          : 'Não foi possível preparar a validação. Tente novamente mais tarde.',
+      statusCode: challengeStatus === 'pending' || challengeStatus === 'rate_limited' ? 429 : 503,
+    };
+  }
 
   console.log('[Auth Service] Utilizador validado; a iniciar envio de OTP.');
 
-  // 3. Envia código via Evolution API
-  const sendResult = await sendWhatsAppOtp(formatted, otpCode);
+  // 3. Envia código via Evolution API. Revoke only this exact challenge if delivery fails.
+  let sendResult: Awaited<ReturnType<typeof sendWhatsAppOtp>>;
+  try {
+    sendResult = await sendWhatsAppOtp(formatted, otpCode);
+  } catch {
+    await supabaseAdmin.rpc('revoke_whatsapp_otp_challenge', {
+      p_phone_hash: phoneHash,
+      p_code_hash: codeHash,
+    });
+    return {
+      success: false,
+      message: 'Não foi possível confirmar o envio real do código por WhatsApp. Solicite um novo código mais tarde.',
+      statusCode: 502,
+    };
+  }
+
   if (!sendResult.success || sendResult.simulated) {
-    otpStore.delete(formatted);
+    await supabaseAdmin.rpc('revoke_whatsapp_otp_challenge', {
+      p_phone_hash: phoneHash,
+      p_code_hash: codeHash,
+    });
     return {
       success: false,
       message: 'Não foi possível confirmar o envio real do código por WhatsApp. Solicite um novo código mais tarde.',
@@ -308,8 +315,16 @@ export async function verifyOtpAndAuthenticate(
   role?: string;
   statusCode?: number;
 }> {
-  const formatted = formatPortuguesePhone(rawPhone);
   const code = typeof inputCode === 'string' ? inputCode.trim() : '';
+  if (typeof rawPhone !== 'string' || !/^\d{6}$/.test(code)) {
+    return {
+      success: false,
+      message: 'Introduza um número de telemóvel válido e um código de 6 algarismos.',
+      statusCode: 400,
+    };
+  }
+
+  const formatted = formatPortuguesePhone(rawPhone);
 
   if (!formatted) {
     return {
@@ -319,49 +334,33 @@ export async function verifyOtpAndAuthenticate(
     };
   }
 
-  const stored = otpStore.get(formatted);
-
-  if (!stored) {
+  const phoneHash = otpDigest('phone:' + formatted);
+  const codeHash = otpDigest('code:' + formatted + ':' + code);
+  const { data: consumedRows, error: consumeError } = await supabaseAdmin.rpc('consume_whatsapp_otp_challenge', {
+    p_phone_hash: phoneHash,
+    p_code_hash: codeHash,
+  });
+  if (consumeError) {
+    return { success: false, message: 'Não foi possível validar o código neste momento.', statusCode: 503 };
+  }
+  const consumed = Array.isArray(consumedRows) ? consumedRows[0] : null;
+  if (consumed?.status !== 'valid' || typeof consumed.employee_id !== 'string') {
+    const messages: Record<string, string> = {
+      expired: 'O código de verificação expirou após 5 minutos. Solicite um novo código.',
+      locked: 'Demasiadas tentativas incorrectas. O código foi cancelado.',
+      invalid: 'Código de verificação incorrecto.',
+      not_found: 'Código de verificação inexistente ou já utilizado. Solicite um novo código.',
+    };
     return {
       success: false,
-      message: 'Código de verificação inexistente ou expirado. Solicite um novo código.',
-      statusCode: 400,
+      message: messages[consumed?.status] || 'Código de verificação inexistente ou expirado. Solicite um novo código.',
+      statusCode: consumed?.status === 'locked' ? 429 : consumed?.status === 'invalid' ? 401 : 400,
     };
   }
-
-  if (!isOtpActive(stored.expiresAt)) {
-    otpStore.delete(formatted);
-    return {
-      success: false,
-      message: 'O código de verificação expirou após 5 minutos. Solicite um novo código.',
-      statusCode: 400,
-    };
-  }
-
-  stored.attempts += 1;
-  if (stored.attempts > 3) {
-    otpStore.delete(formatted);
-    return {
-      success: false,
-      message: 'Demasiadas tentativas incorretas. O código foi cancelado.',
-      statusCode: 429,
-    };
-  }
-
-  if (stored.code !== code) {
-    return {
-      success: false,
-      message: 'Código de verificação incorreto.',
-      statusCode: 401,
-    };
-  }
-
-  // Código correto: remove do store
-  otpStore.delete(formatted);
 
   // Consulta novamente a base de dados Supabase para obter os privilégios reais
   const dbUser = await findUserInSupabaseByPhone(formatted);
-  if (!dbUser || !stored.userId || stored.userId !== dbUser.id) {
+  if (!dbUser || consumed.employee_id !== dbUser.id) {
     return {
       success: false,
       message: 'Acesso negado. Registo de utilizador inexistente ou inativo no Supabase.',

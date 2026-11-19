@@ -384,16 +384,16 @@ export function useFinanceTransactions() {
     void fetchTransactions();
   }, [fetchTransactions]);
 
-  const updatePaymentStatus = async (txId: string, estado: 'pago' | 'rejeitado') => {
+  const updatePaymentStatus = async (txId: string, estado: 'pago' | 'rejeitado', motivo?: string) => {
     await adminApiRequest(`/api/admin/finance/payments/${encodeURIComponent(txId)}/status`, {
       method: 'PATCH',
-      body: JSON.stringify({ estado }),
+      body: JSON.stringify({ estado, motivo }),
     });
     setData((prev) => prev.map((tx) => tx.id === txId ? { ...tx, estado } : tx));
   };
 
   const confirmPayment = (txId: string) => updatePaymentStatus(txId, 'pago');
-  const rejectPayment = (txId: string) => updatePaymentStatus(txId, 'rejeitado');
+  const rejectPayment = (txId: string, motivo: string) => updatePaymentStatus(txId, 'rejeitado', motivo);
 
   const createPayment = async (newTx: FinancialTransaction) => {
     const result = await adminApiRequest('/api/admin/finance/payments', {

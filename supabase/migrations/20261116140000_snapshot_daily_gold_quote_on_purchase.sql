@@ -105,20 +105,13 @@ BEGIN
       OR v_transaction.metal <> btrim(p_metal)
       OR v_transaction.peso_gramas <> p_peso_gramas
       OR v_transaction.valor_final <> round(p_valor_final, 2)
-      OR v_transaction.valor_sugerido <> round(p_valor_sugerido, 2)
-      OR v_transaction.cotacao_spot_dia IS DISTINCT FROM p_cotacao_spot
-      OR v_transaction.margem_aplicada IS DISTINCT FROM p_margem
       OR v_transaction.descricao IS DISTINCT FROM nullif(btrim(coalesce(p_descricao, '')), '')
-      OR v_transaction.cotacao_origem IS DISTINCT FROM btrim(p_cotacao_origem)
-      OR v_transaction.cotacao_moeda IS DISTINCT FROM p_cotacao_moeda
-      OR v_transaction.cotacao_unidade IS DISTINCT FROM p_cotacao_unidade
-      OR v_transaction.cotacao_observada_em IS DISTINCT FROM p_cotacao_observada_em
     THEN
       RAISE EXCEPTION 'Chave de idempotência já utilizada por outra operação'
         USING ERRCODE = '42501';
     END IF;
 
-    RETURN to_jsonb(v_transaction);
+    RETURN to_jsonb(v_transaction) || jsonb_build_object('_idempotent_replay', true);
   END IF;
 
   v_inventory_code := 'INV-' || upper(replace(gen_random_uuid()::text, '-', ''));
@@ -131,7 +124,7 @@ BEGIN
     btrim(p_tipo_peca), btrim(p_metal), p_peso_gramas, 'pendente_aprovacao'
   );
 
-  RETURN to_jsonb(v_transaction);
+  RETURN to_jsonb(v_transaction) || jsonb_build_object('_idempotent_replay', false);
 END;
 $function$;
 

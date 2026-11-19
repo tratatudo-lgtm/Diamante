@@ -41,5 +41,15 @@ jobs:
       - name: TypeScript check
         run: bun run lint
 
+      - name: Automated unit tests
+        run: bun run test
+
       - name: Production build
         run: bun run build
+
+      - name: Docker production image smoke test
+        run: >-
+          docker build
+          --build-arg VITE_SUPABASE_URL=https://build.invalid.supabase.co
+          --build-arg VITE_SUPABASE_ANON_KEY=public-build-placeholder
+          -t diamante-os:ci .

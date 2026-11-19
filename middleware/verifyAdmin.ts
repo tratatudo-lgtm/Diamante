@@ -24,7 +24,10 @@ export interface AdminRequest extends Request {
  * Autoriza exclusivamente funcionários ativos com role "admin" na tabela
  * funcionarios. Cabeçalhos e campos do body nunca são prova de identidade.
  */
-export async function verifyAdmin(
+export interface VerifyAdminDependencies { secret: string; findActiveEmployee: (id: string) => Promise<{ data: any; error?: unknown | null }>; }
+
+export function createVerifyAdmin(dependencies: VerifyAdminDependencies) {
+return async function verifyAdmin(
   req: AdminRequest,
   res: Response,
   next: NextFunction
@@ -38,7 +41,7 @@ export async function verifyAdmin(
 
     let decoded: any;
     try {
-      decoded = jwt.verify(authHeader.slice(7).trim(), JWT_SECRET);
+      decoded = jwt.verify(authHeader.slice(7).trim(), dependencies.secret, { algorithms: ['HS256'] });
     } catch {
       res.status(401).json({ success: false, message: 'Sessão inválida ou expirada.' });
       return;
@@ -50,12 +53,7 @@ export async function verifyAdmin(
       return;
     }
 
-    const { data: funcionario, error } = await supabaseAdmin
-      .from('funcionarios')
-      .select('id, nome_completo, telemovel, role, ativo')
-      .eq('id', userId)
-      .eq('ativo', true)
-      .maybeSingle();
+    const { data: funcionario, error } = await dependencies.findActiveEmployee(userId);
 
     if (error) {
       console.error('[verifyAdmin] Falha na consulta de permissões do funcionário.');
@@ -63,7 +61,10 @@ export async function verifyAdmin(
       return;
     }
 
-    if (!funcionario || funcionario.role !== 'admin') {
+    const adminRole = typeof funcionario?.role === 'string'
+      ? funcionario.role.trim().toLowerCase()
+      : '';
+    if (!funcionario || funcionario.ativo !== true || funcionario.id !== userId || adminRole !== 'admin') {
       res.status(403).json({ success: false, message: 'Acesso reservado a administradores autorizados.' });
       return;
     }
@@ -71,7 +72,7 @@ export async function verifyAdmin(
     req.adminUser = {
       id: funcionario.id,
       telemovel: funcionario.telemovel || undefined,
-      role: funcionario.role,
+      role: adminRole,
       nome_completo: funcionario.nome_completo || undefined,
     };
 
@@ -81,4 +82,15 @@ export async function verifyAdmin(
     console.error('[verifyAdmin] Erro interno ao validar permissões.');
     res.status(500).json({ success: false, message: 'Erro interno ao validar permissões.' });
   }
+};
 }
+
+export const verifyAdmin = createVerifyAdmin({
+  secret: JWT_SECRET,
+  findActiveEmployee: async (id: string) => {
+    const { data, error } = await supabaseAdmin.from('funcionarios')
+      .select('id, nome_completo, telemovel, role, ativo')
+      .eq('id', id).eq('ativo', true).maybeSingle();
+    return { data, error };
+  },
+});

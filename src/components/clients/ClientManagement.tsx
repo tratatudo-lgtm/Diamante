@@ -108,7 +108,6 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
     lojaOrigemId: '',
     status: 'normal' as ClientStatus,
     notasInternas: '',
-    consentimentoRgpd: false,
   });
 
   // =========================================================
@@ -205,7 +204,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newClient.nome.trim() || !newClient.nif.trim() || !newClient.docIdentificacao.trim() || !phoneNumber.trim() || !newClient.dataNascimento || !newClient.consentimentoRgpd) { setActionError('Nome, NIF, documento de identificação, data de nascimento, telefone e consentimento RGPD são obrigatórios.'); return; }
+    if (!newClient.nome.trim() || !newClient.nif.trim() || !newClient.docIdentificacao.trim() || !phoneNumber.trim() || !newClient.dataNascimento) { setActionError('Nome, NIF, documento de identificação, data de nascimento e telefone são obrigatórios.'); return; }
     const birthDate = new Date(`${newClient.dataNascimento}T00:00:00.000Z`);
     const latestAllowedBirthDate = new Date();
     latestAllowedBirthDate.setUTCHours(0, 0, 0, 0);
@@ -232,7 +231,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
     try {
       await createClient(created);
       setIsNewClientModalOpen(false);
-      setNewClient({ nome: '', nif: '', telemovel: '', email: '', docIdentificacao: '', tipoDocumento: 'cc', codigoPostal: '', paisResidencia: 'PT', dataNascimento: '', morada: '', cidade: '', lojaOrigemId: '', status: 'normal', notasInternas: '', consentimentoRgpd: false });
+      setNewClient({ nome: '', nif: '', telemovel: '', email: '', docIdentificacao: '', tipoDocumento: 'cc', codigoPostal: '', paisResidencia: 'PT', dataNascimento: '', morada: '', cidade: '', lojaOrigemId: '', status: 'normal', notasInternas: '' });
       setPhoneCountry('PT'); setPhoneNumber(''); setDocumentType('cc'); setAddressCountry('PT');
     } catch (err: any) {
       setActionError(err?.message || 'Falha ao criar o cliente.');
@@ -1124,10 +1123,9 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                   />
                 </div>
 
-                <label className="flex items-start gap-2 rounded-xl border border-slate-700 bg-[#0b0f19] p-3 text-slate-300">
-                  <input type="checkbox" required checked={newClient.consentimentoRgpd} onChange={(e) => setNewClient({ ...newClient, consentimentoRgpd: e.target.checked })} className="mt-0.5 accent-[#D4AF37]" />
-                  <span>Confirmo que o cliente foi informado e deu consentimento para o tratamento dos seus dados pessoais, nos termos aplicáveis do RGPD. *</span>
-                </label>
+                <div className="rounded-xl border border-slate-700 bg-[#0b0f19] p-3 text-sm text-slate-300">
+                  A ficha de cliente não regista consentimento RGPD por meio de uma checkbox. Quando aplicável à compra, a declaração assinada é digitalizada ou fotografada e arquivada individualmente na respetiva transação.
+                </div>
 
                 {/* Botões */}
                 <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">

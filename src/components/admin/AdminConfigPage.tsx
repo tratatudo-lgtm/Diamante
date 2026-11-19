@@ -38,7 +38,7 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
 
   // Estados de Configuração
   const [margens, setMargens] = useState<MargemMetalConfig[]>([]);
-  const [tetos, setTetos] = useState<TetoAprovacaoConfig>({ id: '', loja_id: null, valor_limite_sem_aprovacao: 0, peso_limite_sem_aprovacao_g: 0, exigir_dupla_assinatura_acima: 0, notificar_whatsapp_master: false, telemovel_alerta: '', ativo: false });
+  const [tetos, setTetos] = useState<TetoAprovacaoConfig>({ id: '', loja_id: null, valor_limite_sem_aprovacao: 0, peso_limite_sem_aprovacao_g: 0, exigir_dupla_assinatura_acima: 0, exigir_dupla_assinatura: false, notificar_whatsapp_master: false, telemovel_alerta: '', ativo: false });
   const [contasBancarias, setContasBancarias] = useState<ContaBancariaConfig[]>([]);
   const [historicoCotacoes, setHistoricoCotacoes] = useState<any[]>([]);
   const [isLoadingHistorico, setIsLoadingHistorico] = useState(false);
@@ -526,22 +526,53 @@ export const AdminConfigPage: React.FC<AdminConfigPageProps> = ({ onNavigate }) 
                   </div>
                 </div>
 
-                {/* Dupla Assinatura */}
-                <div className="pt-2">
-                  <label className="block text-xs font-semibold text-white mb-1">
-                    Exigir Dupla Assinatura (Gerente + Sede) Acima de (€)
-                  </label>
-                  <div className="flex items-center gap-2 max-w-xs">
-                    <input
-                      type="number"
-                      step="500"
-                      value={tetos.exigir_dupla_assinatura_acima}
-                      onChange={(e) =>
-                        setTetos({ ...tetos, exigir_dupla_assinatura_acima: parseFloat(e.target.value) || 0 })
-                      }
-                      className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-hidden focus:border-[#D4AF37]"
-                    />
-                    <span className="text-sm font-mono text-slate-400">EUR</span>
+                {/* Política de aprovação simples ou dupla */}
+                <div className="pt-2 border-t border-slate-800 space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="pr-4">
+                      <label htmlFor="dual-purchase-approval" className="block text-xs font-semibold text-white mb-1">
+                        Exigir segunda assinatura em compras de valor elevado
+                      </label>
+                      <p className="text-[11px] text-slate-400">
+                        Desativado: uma assinatura de administrador é suficiente para qualquer valor.
+                        Ativado: compras a partir do limite abaixo exigem dois administradores diferentes.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        id="dual-purchase-approval"
+                        type="checkbox"
+                        checked={tetos.exigir_dupla_assinatura}
+                        onChange={(e) => setTetos({ ...tetos, exigir_dupla_assinatura: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-700 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#D4AF37]"></div>
+                    </label>
+                  </div>
+                  <div className={tetos.exigir_dupla_assinatura ? '' : 'opacity-50'}>
+                    <label htmlFor="dual-purchase-threshold" className="block text-xs font-semibold text-white mb-1">
+                      Limite a partir do qual são necessárias duas assinaturas (€)
+                    </label>
+                    <div className="flex items-center gap-2 max-w-xs">
+                      <input
+                        id="dual-purchase-threshold"
+                        type="number"
+                        min="0.01"
+                        step="50"
+                        disabled={!tetos.exigir_dupla_assinatura}
+                        value={tetos.exigir_dupla_assinatura_acima}
+                        onChange={(e) =>
+                          setTetos({ ...tetos, exigir_dupla_assinatura_acima: parseFloat(e.target.value) || 0 })
+                        }
+                        className="w-full px-3 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-sm font-mono text-white focus:outline-hidden focus:border-[#D4AF37] disabled:cursor-not-allowed"
+                      />
+                      <span className="text-sm font-mono text-slate-400">EUR</span>
+                    </div>
+                    {tetos.exigir_dupla_assinatura && tetos.exigir_dupla_assinatura_acima <= 0 && (
+                      <p className="text-[11px] text-amber-400 mt-2">
+                        Define um limite superior a zero para ativar a regra de dupla aprovação.
+                      </p>
+                    )}
                   </div>
                 </div>
 
