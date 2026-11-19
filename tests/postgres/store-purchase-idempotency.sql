@@ -89,7 +89,7 @@ BEGIN
   (v_payload->>'valor_final')::numeric,(v_payload->>'valor_sugerido')::numeric,
   (v_payload->>'cotacao_spot')::numeric,(v_payload->>'margem')::numeric,
   v_payload->>'descricao',v_payload->>'cotacao_origem',v_payload->>'cotacao_moeda',
-  v_payload->>'cotacao_unidade',(v_payload->>'cotacao_observada_em')::timestamptz);
+  v_payload->>'cotacao_unidade',(v_payload->>'cotacao_observada_em')::timestamptz,'33333333-3333-4333-8333-333333333333');
  IF NOT coalesce((v_result->>'_idempotent_replay')::boolean,false) THEN
   RAISE EXCEPTION 'Replay idêntico não foi reconhecido';
  END IF;
