@@ -14,18 +14,20 @@ function fail(res: Response, label: string) {
 
 router.get('/clients', async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('clientes')
-      .select('id,nome,nif,bi_cc,tipo_documento,telemovel,email,morada,loja_registo_id,created_at,contacto,data_nascimento,data_emissao_documento,data_validade_documento')
-      .order('nome', { ascending: true })
-      .limit(500);
-    if (error) return fail(res, 'Falha ao consultar clientes.');
-    const clients = data || [];
+    const clients: any[] = [];
+    for (let offset = 0; ; offset += 500) {
+      const { data, error } = await supabaseAdmin.from('clientes')
+        .select('id,nome,nif,bi_cc,tipo_documento,telemovel,email,morada,loja_registo_id,created_at,contacto,data_nascimento,data_emissao_documento,data_validade_documento')
+        .order('nome', { ascending: true }).range(offset, offset + 499);
+      if (error) return fail(res, 'Falha ao consultar todos os clientes.');
+      clients.push(...(data || []));
+      if (!data || data.length < 500) break;
+    }
     const ids = clients.map((c: any) => c.id);
     const [linked, stores] = await Promise.all([
       ids.length ? supabaseAdmin.from('transacoes')
         .select('id,cliente_id,cliente_nome,cliente_contacto,loja_id,peso_gramas,valor_final,estado,created_at,tipo_peca,metal')
-        .in('cliente_id', ids).order('created_at', { ascending: false }).limit(2000)
+        .in('cliente_id', ids).order('created_at', { ascending: false })
         : Promise.resolve({ data: [], error: null } as any),
       supabaseAdmin.from('lojas').select('id,nome')
     ]);
@@ -64,13 +66,13 @@ router.get('/clients/:id', async (req: Request, res: Response) => {
     const [linked, legacy, attachments, stores] = await Promise.all([
       supabaseAdmin.from('transacoes')
         .select('id,cliente_id,cliente_nome,cliente_contacto,loja_id,peso_gramas,valor_final,estado,created_at,tipo_peca,metal')
-        .eq('cliente_id', id).order('created_at', { ascending: false }).limit(500),
+        .eq('cliente_id', id).order('created_at', { ascending: false }),
       supabaseAdmin.from('transacoes')
         .select('id,cliente_id,cliente_nome,cliente_contacto,loja_id,peso_gramas,valor_final,estado,created_at,tipo_peca,metal')
-        .is('cliente_id', null).eq('cliente_nome', client.nome).order('created_at', { ascending: false }).limit(100),
+        .is('cliente_id', null).eq('cliente_nome', client.nome).order('created_at', { ascending: false }),
       supabaseAdmin.from('crm_anexos')
         .select('id,cliente_id,transacao_id,artigo_id,bucket_id,storage_path,nome_ficheiro,mime_type,tamanho_bytes,categoria,created_at')
-        .eq('cliente_id', id).order('created_at', { ascending: false }).limit(100),
+        .eq('cliente_id', id).order('created_at', { ascending: false }),
       supabaseAdmin.from('lojas').select('id,nome')
     ]);
     if (linked.error || legacy.error || attachments.error || stores.error) return fail(res, 'Falha ao consultar ficha de cliente.');
@@ -84,7 +86,7 @@ router.get('/clients/:id', async (req: Request, res: Response) => {
     const { data: articles, error: articlesError } = txIds.length
       ? await supabaseAdmin.from('artigos')
           .select('id,transacao_id,tipo,descricao,peso_gramas,quilates,foto_url,estado,loja_id')
-          .in('transacao_id', txIds).limit(1000)
+          .in('transacao_id', txIds)
       : { data: [], error: null } as any;
     if (articlesError) return fail(res, 'Falha ao consultar artigos do cliente.');
 
@@ -116,7 +118,7 @@ router.get('/suppliers', async (_req: Request, res: Response) => {
   try {
     const { data, error } = await supabaseAdmin.from('crm_fornecedores')
       .select('id,nome,nif,contacto,email,morada,observacoes,ativo,created_at,updated_at')
-      .order('nome', { ascending: true }).limit(500);
+      .order('nome', { ascending: true });
     if (error) return fail(res, 'Falha ao consultar fornecedores.');
     return res.json({ success: true, data: data || [] });
   } catch {
