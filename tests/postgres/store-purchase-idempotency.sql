@@ -24,7 +24,8 @@ CREATE TABLE public.transacoes (
  cotacao_spot_dia numeric NOT NULL, cotacao_dia numeric NOT NULL,
  margem_aplicada numeric NOT NULL, descricao text, estado text NOT NULL,
  cotacao_origem text, cotacao_moeda text, cotacao_unidade text,
- cotacao_observada_em timestamptz
+ cotacao_observada_em timestamptz,
+ declaracao_assinada_id uuid
 );
 CREATE TABLE public.inventario_fisico (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -38,7 +39,20 @@ INSERT INTO public.lojas(id,nome) VALUES
 INSERT INTO public.funcionarios(id,nome_completo,role,loja_id) VALUES
  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','Funcionário teste','funcionario','11111111-1111-4111-8111-111111111111');
 
+CREATE TABLE public.store_purchase_consent_evidence (
+ id uuid PRIMARY KEY, idempotency_key uuid NOT NULL UNIQUE,
+ funcionario_id uuid NOT NULL REFERENCES public.funcionarios(id),
+ loja_id uuid NOT NULL REFERENCES public.lojas(id),
+ cliente_nome text NOT NULL, cliente_documento text NOT NULL,
+ storage_path text NOT NULL UNIQUE, mime_type text NOT NULL,
+ tamanho_bytes bigint NOT NULL, sha256 text NOT NULL,
+ versao_declaracao text NOT NULL DEFAULT 'declaracao-compra-v1',
+ uploaded_at timestamptz NOT NULL DEFAULT now()
+);
+
 \ir ../../supabase/migrations/20261116140000_snapshot_daily_gold_quote_on_purchase.sql
+\ir ../../supabase/migrations/20261119110000_remove_unbound_purchase_rpc_and_store_actor_role.sql
+INSERT INTO public.store_purchase_consent_evidence (id,idempotency_key,funcionario_id,loja_id,cliente_nome,cliente_documento,storage_path,mime_type,tamanho_bytes,sha256) VALUES ('33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','11111111-1111-4111-8111-111111111111','Cliente teste','CC123','test/key/doc.pdf','application/pdf',100,repeat('a',64));
 
 DO $test$
 DECLARE
@@ -63,7 +77,7 @@ BEGIN
   (v_payload->>'valor_final')::numeric,(v_payload->>'valor_sugerido')::numeric,
   (v_payload->>'cotacao_spot')::numeric,(v_payload->>'margem')::numeric,
   v_payload->>'descricao',v_payload->>'cotacao_origem',v_payload->>'cotacao_moeda',
-  v_payload->>'cotacao_unidade',(v_payload->>'cotacao_observada_em')::timestamptz);
+  v_payload->>'cotacao_unidade',(v_payload->>'cotacao_observada_em')::timestamptz,'33333333-3333-4333-8333-333333333333');
  IF coalesce((v_result->>'_idempotent_replay')::boolean,true) THEN
   RAISE EXCEPTION 'A primeira compra não foi marcada como criação original';
  END IF;
