@@ -75,3 +75,37 @@ A separate verbose `list_tables` inspection returned 54 public tables. This is a
 - Not present in the public schema snapshot: `store_purchase_consent_evidence` and `store_purchase_declaration_access_logs`.
 
 This schema snapshot is not proof that a particular local migration was applied: objects may predate the local files, be created by a differently named migration, or have been changed manually. The two absent evidence tables remain candidates for unapplied schema work, subject to dependency and SQL review. The earlier list of 37 filename slugs without a ledger-name match must therefore be treated as an investigation queue, not an "unapplied migrations" list.
+
+
+## Reconciliation update — 2026-11-19
+
+The filename-collision inventory above records the initial audit and is superseded by this section for the current branch state.
+
+### Changes committed to the integration branch
+
+- Aligned **46 local migration files** to the exact version IDs in the remote ledger. For each of these files, the Git blob SHA was checked against the corresponding historical file in `rebuild/diamante-douro-secure`; all 46 matched exactly before renaming.
+- Moved the dual-purchase-approval migration to `20261116003000_add_dual_purchase_approval.sql`, using the unchanged blob from PR #6.
+- Moved `performance_goals` to `20261116120000_performance_goals.sql`, using the unchanged blob from PR #6.
+- Resolved four collisions among newly authored migrations by retaining their SQL blobs and assigning distinct version prefixes:
+  - `20261118190001_audit_gold_refining_completion.sql`
+  - `20261118210001_guard_gold_batch_completion.sql`
+  - `20261118220001_atomic_crm_opportunity_expansion_writes.sql`
+  - `20261118230001_atomic_employee_time_clock.sql`
+
+The branch now has 95 SQL migration files and **zero duplicate 14-digit version prefixes**.
+
+### Deliberately unresolved historical ambiguity
+
+`make_store_purchases_idempotent` has three remote ledger rows (`20261114212540`, `20261114212607`, `20261114212644`) but only one local SQL file (`20261114214000_make_store_purchases_idempotent.sql`). The single local file cannot be mapped one-to-one to three historical migration bodies. It was deliberately left unchanged and must not be auto-renamed or applied until the original three SQL bodies are recovered and compared.
+
+The two remote rows for `require_active_employee_for_inventory_and_kpis` each have a corresponding local file; both local blobs match the historical branch blobs and both remote version IDs are preserved.
+
+### Production schema evidence
+
+A read-only catalog query confirmed the client identity fields, adult-validation function, birthday queue/consent functions and consent audit table, operational task/goal tables, collaboration notifications, monthly closing table, financial transactions and client document table. It did not find the two signed purchase declaration evidence tables. The monthly-close function lookup used an initial guessed name and is not treated as evidence of absence.
+
+### Validation status
+
+- Static filename audit: the current tree contains zero duplicate version prefixes.
+- CI for the new commit: awaiting completion at the time this section was written.
+- No production migration was applied, no remote migration ledger was edited, and no VPS/Evolution API operation was performed.
