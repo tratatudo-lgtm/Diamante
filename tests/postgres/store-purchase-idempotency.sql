@@ -27,6 +27,10 @@ CREATE TABLE public.transacoes (
  cotacao_observada_em timestamptz,
  declaracao_assinada_id uuid
 );
+CREATE UNIQUE INDEX transacoes_idempotency_key_uidx
+ ON public.transacoes(idempotency_key)
+ WHERE idempotency_key IS NOT NULL;
+
 CREATE TABLE public.inventario_fisico (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
  loja_atual_id uuid NOT NULL REFERENCES public.lojas(id),
