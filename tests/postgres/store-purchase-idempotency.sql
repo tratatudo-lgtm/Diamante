@@ -112,7 +112,7 @@ BEGIN
     (v_payload->>'cotacao_spot')::numeric,(v_payload->>'margem')::numeric,
     v_payload->>'descricao',v_payload->>'cotacao_origem',v_payload->>'cotacao_moeda',
     v_payload->>'cotacao_unidade',(v_payload->>'cotacao_observada_em')::timestamptz);
-  EXCEPTION WHEN SQLSTATE '42501' THEN v_failed:=true;
+  EXCEPTION WHEN SQLSTATE '42501' OR SQLSTATE '22023' THEN v_failed:=true;
   END;
   IF NOT v_failed THEN
    RAISE EXCEPTION 'Replay divergente não foi rejeitado: %',v_payload;
