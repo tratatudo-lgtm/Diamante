@@ -46,11 +46,16 @@ async function canAccessReport(reportId: string, req: AuthenticatedRequest): Pro
 
 // Employee directory — only active staff fields required to start a conversation.
 router.get('/directory', async (req: AuthenticatedRequest, res: Response) => {
-  const { data, error } = await supabaseAdmin.from('funcionarios')
-    .select('id, nome_completo, role, loja_id, lojas(nome)')
-    .eq('ativo', true).order('nome_completo').limit(300);
-  if (error) return fail(res, 503, 'Não foi possível carregar a equipa.');
-  return res.json({ success: true, employees: (data || []).filter((item: any) => item.id !== employee(req).id) });
+  const data: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data: page, error } = await supabaseAdmin.from('funcionarios')
+      .select('id, nome_completo, role, loja_id, lojas(nome)')
+      .eq('ativo', true).order('nome_completo').range(offset, offset + 499);
+    if (error) return fail(res, 503, 'Não foi possível carregar toda a equipa.');
+    data.push(...(page || []));
+    if (!page || page.length < 500) break;
+  }
+  return res.json({ success: true, employees: data.filter((item: any) => item.id !== employee(req).id) });
 });
 
 router.get('/conversations', async (req: AuthenticatedRequest, res: Response) => {
@@ -225,9 +230,14 @@ router.get('/reports', async (req: AuthenticatedRequest, res: Response) => {
   let query = supabaseAdmin.from('collab_reports')
     .select('id, reference, titulo, descricao, categoria, prioridade, estado, reporter_id, loja_id, assigned_to, created_at, updated_at, resolved_at, funcionarios!collab_reports_reporter_id_fkey(nome_completo, role, loja_id)', { count: 'exact' });
   if (!isAdmin(req)) query = query.or('reporter_id.eq.' + user.id + ',assigned_to.eq.' + user.id);
-  const { data, error, count } = await query.order('created_at', { ascending: false }).limit(150);
-  if (error) return fail(res, 503, 'Não foi possível carregar as ocorrências.');
-  return res.json({ success: true, reports: data || [], total: count || 0 });
+  const reports: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await query.order('created_at', { ascending: false }).range(offset, offset + 499);
+    if (error) return fail(res, 503, 'Não foi possível carregar todas as ocorrências.');
+    reports.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return res.json({ success: true, reports, total: reports.length });
 });
 
 router.get('/reports/:id', async (req: AuthenticatedRequest, res: Response) => {
@@ -237,7 +247,7 @@ router.get('/reports/:id', async (req: AuthenticatedRequest, res: Response) => {
     supabaseAdmin.from('collab_report_comments').select('id, funcionario_id, comentario, interno, created_at, funcionarios(nome_completo, role)')
       .eq('report_id', req.params.id).eq('interno', false).order('created_at'),
     supabaseAdmin.from('collab_report_events').select('id, actor_id, action, old_values, new_values, created_at, funcionarios!collab_report_events_actor_id_fkey(nome_completo, role)')
-      .eq('report_id', req.params.id).order('created_at', { ascending: false }).limit(100),
+      .eq('report_id', req.params.id).order('created_at', { ascending: false }),
     supabaseAdmin.from('collab_report_attachments').select('id, original_name, mime_type, size_bytes, created_at')
       .eq('report_id', req.params.id).order('created_at', { ascending: false }),
   ]);
