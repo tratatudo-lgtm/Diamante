@@ -1,6 +1,6 @@
 export interface StoreDeclarationRequest {
   transactionId: string;
-  storeId: string;
+  storeId?: string;
   token: string;
 }
 
@@ -9,12 +9,12 @@ export async function requestStoreDeclarationUrl(
   fetcher: typeof fetch = fetch,
 ): Promise<string> {
   if (!token.trim()) throw new Error('Sessão administrativa expirada. Volte a iniciar sessão.');
-  if (!transactionId.trim() || !storeId.trim()) {
-    throw new Error('Compra ou loja seleccionada inválida.');
+  if (!transactionId.trim()) {
+    throw new Error('Identificador de compra inválido.');
   }
 
   const response = await fetcher(
-    `/api/store/admin/purchases/${encodeURIComponent(transactionId)}/declaration?lojaId=${encodeURIComponent(storeId)}`,
+    `/api/store/admin/purchases/${encodeURIComponent(transactionId)}/declaration`,
     {
       headers: { Accept: 'application/json', Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(10000),
