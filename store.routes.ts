@@ -169,21 +169,30 @@ storeRouter.post('/clock', verifyAuth, async (req: AuthenticatedRequest, res: Re
 
 storeRouter.get('/inventory', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res, true);
-  if (!lojaId) return;
+  const requestedStoreId = req.query.lojaId;
+  const globalAdminRead = employee?.role === 'admin' &&
+    (requestedStoreId === undefined || requestedStoreId === null || requestedStoreId === '');
+  const lojaId = globalAdminRead ? null : await resolveRequestedStore(employee, requestedStoreId, res, true);
+  if (!globalAdminRead && !lojaId) return;
 
   try {
-    const { data, error } = await supabaseAdmin
-      .from('inventario_fisico')
-      .select('*')
-      .eq('loja_atual_id', lojaId)
-      .order('data_entrada', { ascending: false });
-
-    if (error) {
-      console.error('[STORE INVENTORY] Falha ao consultar inventário da loja.');
-      return res.status(503).json({ success: false, message: 'Não foi possível carregar o inventário da loja.' });
+    const pageSize = 500;
+    const items: Array<Record<string, unknown>> = [];
+    for (let offset = 0; ; offset += pageSize) {
+      let query = supabaseAdmin.from('inventario_fisico')
+        .select('*')
+        .order('data_entrada', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+      if (lojaId) query = query.eq('loja_atual_id', lojaId);
+      const { data, error } = await query;
+      if (error) {
+        console.error('[STORE INVENTORY] Falha ao consultar inventário global/loja.');
+        return res.status(503).json({ success: false, message: 'Não foi possível carregar o inventário.' });
+      }
+      items.push(...(data || []));
+      if (!data || data.length < pageSize) break;
     }
-    return res.json({ success: true, items: data || [] });
+    return res.json({ success: true, items, scope: globalAdminRead ? 'global' : 'store' });
   } catch {
     console.error('[STORE INVENTORY] Erro interno ao consultar inventário.');
     return res.status(500).json({ success: false, message: 'Erro interno ao carregar o inventário.' });
