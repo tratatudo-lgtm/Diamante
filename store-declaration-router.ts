@@ -177,26 +177,13 @@ export function createStoreDeclarationRouter({
       return;
     }
 
-    const lojaId = typeof req.query.lojaId === 'string' ? req.query.lojaId : '';
-    if (!isUuid(lojaId)) {
-      res.status(400).json({ success: false, message: 'É necessário seleccionar uma loja válida.' });
-      return;
-    }
-
-    const { data: activeStore, error: storeError } = await repository.getActiveStore(lojaId);
-    if (storeError) {
-      res.status(503).json({ success: false, message: 'Não foi possível validar a loja seleccionada.' });
-      return;
-    }
-    if (!activeStore) {
-      res.status(404).json({ success: false, message: 'Loja não encontrada ou inactiva.' });
-      return;
-    }
-
+    // O administrador principal tem âmbito global: consulta documentos de
+    // qualquer loja, incluindo lojas inactivas/arquivadas. A compra determina
+    // a loja real; não confiar num lojaId enviado pelo browser.
     await deliverPurchaseDeclaration(req.params.id, {
       id: admin.id,
       role: 'admin',
-      lojaId,
+      lojaId: null,
     }, repository, res);
   });
 
