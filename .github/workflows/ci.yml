@@ -80,6 +80,35 @@ jobs:
       - name: Apply migrations and run finance integration assertions
         run: bash tests/postgres/run-finance-integration.sh
 
+  postgres-store-purchase-idempotency:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGDATABASE: postgres
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Verify declaration-bound purchase idempotency
+        run: psql -v ON_ERROR_STOP=1 -f tests/postgres/store-purchase-idempotency.sql
+
   postgres-operational-atomicity:
     runs-on: ubuntu-latest
     services:
