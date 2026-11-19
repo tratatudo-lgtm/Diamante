@@ -50,14 +50,19 @@ router.get('/directory', async (req: AuthenticatedRequest, res: Response) => {
 });
 
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
-  let query = supabaseAdmin.from('operational_goals')
-    .select('*,lojas(nome),funcionarios!operational_goals_funcionario_id_fkey(id,nome_completo,loja_id)')
-    .order('ends_on',{ascending:true}).limit(200);
-  if (!admin(req)) query = query.or('funcionario_id.eq.' + actor(req).id + (actor(req).loja_id ? ',loja_id.eq.' + actor(req).loja_id : ''));
-  if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status',req.query.status);
-  const { data, error } = await query;
-  if (error) return fail(res,503,'Não foi possível carregar os objectivos.');
-  const ids = (data || []).map((goal: any) => goal.id);
+  const data: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    let query = supabaseAdmin.from('operational_goals')
+      .select('*,lojas(nome),funcionarios!operational_goals_funcionario_id_fkey(id,nome_completo,loja_id)')
+      .order('ends_on',{ascending:true}).range(offset, offset + 499);
+    if (!admin(req)) query = query.or('funcionario_id.eq.' + actor(req).id + (actor(req).loja_id ? ',loja_id.eq.' + actor(req).loja_id : ''));
+    if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status',req.query.status);
+    const { data: page, error } = await query;
+    if (error) return fail(res,503,'Não foi possível carregar todos os objectivos.');
+    data.push(...(page || []));
+    if (!page || page.length < 500) break;
+  }
+  const ids = data.map((goal: any) => goal.id);
   if (!ids.length) return res.json({ success:true, goals:[] });
   const { data: progressRows, error: progressError } = await supabaseAdmin.rpc('get_operational_goal_progress', { p_goal_ids: ids });
   if (progressError || !progressRows) return fail(res,503,'Não foi possível calcular o desempenho dos objectivos.');
@@ -74,11 +79,16 @@ router.get('/:id/events', async (req: AuthenticatedRequest, res: Response) => {
   try { goal = await visibleGoal(req.params.id,req); }
   catch { return fail(res,503,'Não foi possível validar o acesso ao objectivo.'); }
   if (!goal) return fail(res,404,'Objectivo não encontrado.');
-  const { data,error } = await supabaseAdmin.from('operational_goal_events')
-    .select('id,action,old_values,new_values,created_at,funcionarios!operational_goal_events_actor_id_fkey(nome_completo)')
-    .eq('goal_id',goal.id).order('created_at',{ascending:false}).limit(100);
-  if (error) return fail(res,503,'Não foi possível carregar o histórico.');
-  return res.json({success:true,events:data || []});
+  const events: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabaseAdmin.from('operational_goal_events')
+      .select('id,action,old_values,new_values,created_at,funcionarios!operational_goal_events_actor_id_fkey(nome_completo)')
+      .eq('goal_id',goal.id).order('created_at',{ascending:false}).range(offset, offset + 499);
+    if (error) return fail(res,503,'Não foi possível carregar todo o histórico.');
+    events.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return res.json({success:true,events});
 });
 
 router.post('/', async (req: AuthenticatedRequest,res: Response) => {
