@@ -20,16 +20,21 @@ async function notify(employeeId: string, taskId: string, kind: 'task_assigned' 
 
 router.get('/', async (req: AuthenticatedRequest, res: Response) => {
   const employee = user(req);
-  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 60));
-  let query = supabaseAdmin.from('operational_tasks')
-    .select('id,title,description,status,priority,assigned_to,created_by,loja_id,due_at,completed_at,created_at,updated_at,assignee:funcionarios!operational_tasks_assigned_to_fkey(id,nome_completo,role,loja_id),creator:funcionarios!operational_tasks_created_by_fkey(id,nome_completo),lojas(nome)')
-    .order('status').order('due_at', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false }).limit(limit);
-  if (!isAdmin(req)) query = query.eq('assigned_to', employee.id);
-  if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status', req.query.status);
-  if (isAdmin(req) && typeof req.query.loja_id === 'string') query = query.eq('loja_id', req.query.loja_id);
-  const { data, error } = await query;
-  if (error) return fail(res, 503, 'Não foi possível carregar as tarefas.');
-  return res.json({ success: true, tasks: data || [] });
+  const tasks: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    let query = supabaseAdmin.from('operational_tasks')
+      .select('id,title,description,status,priority,assigned_to,created_by,loja_id,due_at,completed_at,created_at,updated_at,assignee:funcionarios!operational_tasks_assigned_to_fkey(id,nome_completo,role,loja_id),creator:funcionarios!operational_tasks_created_by_fkey(id,nome_completo),lojas(nome)')
+      .order('status').order('due_at', { ascending: true, nullsFirst: false }).order('created_at', { ascending: false })
+      .range(offset, offset + 499);
+    if (!isAdmin(req)) query = query.eq('assigned_to', employee.id);
+    if (typeof req.query.status === 'string' && statuses.has(req.query.status)) query = query.eq('status', req.query.status);
+    if (isAdmin(req) && typeof req.query.loja_id === 'string') query = query.eq('loja_id', req.query.loja_id);
+    const { data, error } = await query;
+    if (error) return fail(res, 503, 'Não foi possível carregar todas as tarefas.');
+    tasks.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return res.json({ success: true, tasks });
 });
 
 router.get('/:id/events', async (req: AuthenticatedRequest, res: Response) => {
@@ -38,11 +43,16 @@ router.get('/:id/events', async (req: AuthenticatedRequest, res: Response) => {
   const { data: task, error: taskError } = await taskQuery.eq('id', req.params.id).maybeSingle();
   if (taskError) return fail(res, 503, 'Não foi possível validar a tarefa.');
   if (!task) return fail(res, 404, 'Tarefa não encontrada.');
-  const { data, error } = await supabaseAdmin.from('operational_task_events')
-    .select('id,action,old_values,new_values,created_at,funcionarios!operational_task_events_actor_id_fkey(nome_completo)')
-    .eq('task_id', req.params.id).order('created_at', { ascending: false }).limit(100);
-  if (error) return fail(res, 503, 'Não foi possível carregar o histórico.');
-  return res.json({ success: true, events: data || [] });
+  const events: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabaseAdmin.from('operational_task_events')
+      .select('id,action,old_values,new_values,created_at,funcionarios!operational_task_events_actor_id_fkey(nome_completo)')
+      .eq('task_id', req.params.id).order('created_at', { ascending: false }).range(offset, offset + 499);
+    if (error) return fail(res, 503, 'Não foi possível carregar todo o histórico.');
+    events.push(...(data || []));
+    if (!data || data.length < 500) break;
+  }
+  return res.json({ success: true, events });
 });
 
 router.post('/', async (req: AuthenticatedRequest, res: Response) => {
