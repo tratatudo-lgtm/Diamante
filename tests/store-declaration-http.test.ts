@@ -137,49 +137,20 @@ test('funcionário ativo consulta declaração da própria loja e recebe URL ass
   });
 });
 
-test('administrador activo consulta declaração apenas da loja seleccionada', async () => {
+test('administrador principal consulta declaração de qualquer loja sem selector e sem associação a loja', async () => {
   await withServer(async (base, repository) => {
     repository.purchase = { ...repository.purchase!, loja_id: otherStore };
-    const response = await fetch(`${base}/api/store/admin/purchases/${purchaseId}/declaration?lojaId=${otherStore}`, {
-      headers: { Authorization: 'Bearer admin' },
-    });
-    assert.equal(response.status, 200);
-    assert.deepEqual(repository.calls.slice(0, 2), ['store:' + otherStore, 'purchase']);
-    assert.equal(repository.logs[0].accessed_by, 'admin-1');
-    assert.equal(repository.logs[0].accessed_role, 'admin');
-  });
-});
-
-test('administrador não consulta declaração sem loja seleccionada', async () => {
-  await withServer(async (base, repository) => {
+    repository.activeStores.delete(otherStore); // histórico de loja inactiva continua acessível à administração
     const response = await fetch(`${base}/api/store/admin/purchases/${purchaseId}/declaration`, {
       headers: { Authorization: 'Bearer admin' },
     });
-    assert.equal(response.status, 400);
-    assert.deepEqual(repository.calls, []);
-  });
-});
-
-test('administrador não consulta declaração de loja diferente da seleccionada', async () => {
-  await withServer(async (base, repository) => {
-    repository.purchase = { ...repository.purchase!, loja_id: otherStore };
-    const response = await fetch(`${base}/api/store/admin/purchases/${purchaseId}/declaration?lojaId=${ownStore}`, {
-      headers: { Authorization: 'Bearer admin' },
-    });
-    assert.equal(response.status, 403);
-    assert.deepEqual(repository.calls, ['store:' + ownStore, 'purchase']);
-    assert.equal(repository.logs.length, 0);
-  });
-});
-
-test('administrador não consulta declarações de loja inactiva', async () => {
-  await withServer(async (base, repository) => {
-    repository.activeStores.delete(otherStore);
-    const response = await fetch(`${base}/api/store/admin/purchases/${purchaseId}/declaration?lojaId=${otherStore}`, {
-      headers: { Authorization: 'Bearer admin' },
-    });
-    assert.equal(response.status, 404);
-    assert.deepEqual(repository.calls, ['store:' + otherStore]);
+    assert.equal(response.status, 200);
+    assert.deepEqual(repository.calls, [
+      'purchase', 'evidence', 'download:store/purchase/declaration.pdf',
+      'sign:60:store/purchase/declaration.pdf', 'audit',
+    ]);
+    assert.equal(repository.logs[0].accessed_by, 'admin-1');
+    assert.equal(repository.logs[0].accessed_role, 'admin');
   });
 });
 
