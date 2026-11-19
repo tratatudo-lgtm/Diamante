@@ -52,7 +52,7 @@ CREATE TABLE public.store_purchase_consent_evidence (
 
 \ir ../../supabase/migrations/20261116140000_snapshot_daily_gold_quote_on_purchase.sql
 \ir ../../supabase/migrations/20261119110000_remove_unbound_purchase_rpc_and_store_actor_role.sql
-INSERT INTO public.store_purchase_consent_evidence (id,idempotency_key,funcionario_id,loja_id,cliente_nome,cliente_documento,storage_path,mime_type,tamanho_bytes,sha256) VALUES ('33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','11111111-1111-4111-8111-111111111111','Cliente teste','CC123','test/key/doc.pdf','application/pdf',100,repeat('a',64));
+INSERT INTO public.store_purchase_consent_evidence (id,idempotency_key,funcionario_id,loja_id,cliente_nome,cliente_documento,storage_path,mime_type,tamanho_bytes,sha256,actor_role) VALUES ('33333333-3333-4333-8333-333333333333','22222222-2222-4222-8222-222222222222','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','11111111-1111-4111-8111-111111111111','Cliente teste','CC123','test/key/doc.pdf','application/pdf',100,repeat('a',64),'funcionario');
 
 DO $test$
 DECLARE
