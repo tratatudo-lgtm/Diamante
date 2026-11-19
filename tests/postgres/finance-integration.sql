@@ -10,10 +10,10 @@ INSERT INTO public.despesas_operacionais(
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 );
 
-\ir ../../supabase/migrations/20261115134500_store_operational_expenses.sql
-\ir ../../supabase/migrations/20261115150000_monthly_store_financial_closing.sql
-\ir ../../supabase/migrations/20261115151000_harden_monthly_financial_closing.sql
-\ir ../../supabase/migrations/20261115152000_serialize_expense_mutations_with_monthly_closing.sql
+\ir ../../supabase/migrations/20261115133423_store_operational_expenses.sql
+\ir ../../supabase/migrations/20261115135818_monthly_store_financial_closing.sql
+\ir ../../supabase/migrations/20261115135840_harden_monthly_financial_closing.sql
+\ir ../../supabase/migrations/20261115135916_serialize_expense_mutations_with_monthly_closing.sql
 \ir ../../supabase/migrations/20261118180000_harden_financial_period_integrity.sql
 \ir ../../supabase/migrations/20261118220000_add_financial_payment_audit.sql
 \ir ../../supabase/migrations/20261118230000_add_operational_expense_audit.sql
