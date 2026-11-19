@@ -12,7 +12,7 @@ function response(status: number, body: unknown): Response {
   });
 }
 
-test('requestStoreDeclarationUrl envia sessão e loja seleccionada e devolve URL HTTPS', async () => {
+test('requestStoreDeclarationUrl envia sessão sem depender de loja seleccionada e devolve URL HTTPS', async () => {
   
     let calledUrl = '';
     let calledAuthorization = '';
@@ -21,7 +21,7 @@ test('requestStoreDeclarationUrl envia sessão e loja seleccionada e devolve URL
       calledAuthorization = new Headers(init?.headers).get('Authorization') || '';
       return response(200, { success: true, url: signedUrl });
     });
-    assert.ok(calledUrl.includes('/api/store/admin/purchases/purchase%2F1/declaration?lojaId=store%201'));
+    assert.equal(calledUrl, '/api/store/admin/purchases/purchase%2F1/declaration');
     assert.equal(calledAuthorization, 'Bearer jwt-token');
     assert.equal(url, signedUrl);
 });
