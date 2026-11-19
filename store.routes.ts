@@ -14,14 +14,16 @@ async function resolveRequestedStore(
   employee: AuthenticatedRequest['authenticatedUser'],
   requestedStoreId: unknown,
   res: Response,
+  allowInactiveRead = false,
 ): Promise<string | null> {
   const scope = resolveStoreScope(employee, requestedStoreId);
   if (!scope.ok) {
     res.status(scope.status).json({ success: false, message: scope.message });
     return null;
   }
-  const { data: store, error } = await supabaseAdmin.from('lojas')
-    .select('id').eq('id', scope.lojaId).eq('ativo', true).maybeSingle();
+  let storeQuery = supabaseAdmin.from('lojas').select('id').eq('id', scope.lojaId);
+  if (!allowInactiveRead) storeQuery = storeQuery.eq('ativo', true);
+  const { data: store, error } = await storeQuery.maybeSingle();
   if (error) {
     console.error('[STORE SCOPE] Falha ao validar loja activa.');
     res.status(503).json({ success: false, message: 'Não foi possível validar a loja seleccionada.' });
@@ -40,7 +42,7 @@ storeRouter.get('/stores', verifyAuth, async (req: AuthenticatedRequest, res: Re
     return res.status(403).json({ success: false, message: 'A lista de lojas está reservada à administração.' });
   }
   const { data, error } = await supabaseAdmin.from('lojas')
-    .select('id, nome, codigo_loja, morada').eq('ativo', true).order('nome', { ascending: true });
+    .select('id, nome, codigo_loja, morada, ativo').order('nome', { ascending: true });
   if (error) {
     console.error('[STORE SCOPE] Falha ao listar lojas activas.');
     return res.status(503).json({ success: false, message: 'Não foi possível carregar as lojas.' });
@@ -51,7 +53,7 @@ storeRouter.get('/stores', verifyAuth, async (req: AuthenticatedRequest, res: Re
 
 storeRouter.get('/dashboard', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res);
+  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res, true);
   if (!lojaId) return;
 
   const today = typeof req.query.today === 'string' ? req.query.today : '';
@@ -167,7 +169,7 @@ storeRouter.post('/clock', verifyAuth, async (req: AuthenticatedRequest, res: Re
 
 storeRouter.get('/inventory', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res);
+  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res, true);
   if (!lojaId) return;
 
   try {
@@ -226,7 +228,7 @@ storeRouter.post('/inventory/:id/dispatch', verifyAuth, async (req: Authenticate
 
 storeRouter.get('/purchase-settings', verifyAuth, async (req: AuthenticatedRequest, res: Response) => {
   const employee = req.authenticatedUser;
-  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res);
+  const lojaId = await resolveRequestedStore(employee, req.query.lojaId, res, true);
   if (!lojaId) return;
 
   try {
