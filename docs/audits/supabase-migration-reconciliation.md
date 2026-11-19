@@ -109,3 +109,23 @@ A read-only catalog query confirmed the client identity fields, adult-validation
 - Static filename audit: the current tree contains zero duplicate version prefixes.
 - CI for the new commit: awaiting completion at the time this section was written.
 - No production migration was applied, no remote migration ledger was edited, and no VPS/Evolution API operation was performed.
+
+
+### Final validation and remaining ledger exceptions
+
+After the initial failed PostgreSQL run, the two integration scripts were updated to reference the reconciled filenames. A full run on commit `828f5749de74c286ce5b979d05de25c448f9e196` completed with **all four jobs successful**:
+- `validate` (TypeScript, unit tests, build): success
+- `migration-filename-audit`: success
+- `postgres-finance-integration`: success
+- `postgres-operational-atomicity`: success
+
+The OTP migration was also aligned to the remote ledger's unusual exact name/version pair: local `20261117153000_persist_whatsapp_otp_challenges.sql` is now `20261117135452_20261117153000_persist_whatsapp_otp_challenges.sql`. The ledger name contains the full original local filename, and a read-only production catalog query confirmed the table plus all three expected RPC signatures, SECURITY DEFINER status, service_role EXECUTE and no authenticated EXECUTE. The SQL blob was preserved unchanged. This is strong schema/ledger correspondence, not a byte-for-byte comparison with an unavailable remote SQL body.
+
+Current branch snapshot after that rename: 95 SQL files, zero duplicate version prefixes. The rename itself changes only the filename; CI is re-running for the latest commit.
+
+Still unresolved:
+- Three remote ledger entries for `make_store_purchases_idempotent` versus one local file. Original three SQL bodies are not available in the current historical branch; no mapping or renumbering was attempted.
+- Remote-only ledger migrations `crm_relations_suppliers_and_attachments` and `secure_transaction_creation_through_api` have no corresponding local SQL file in the inspected branch trees. Their SQL must be recovered from source history before a clean-install stream can be certified.
+- The OTP row above is mapped by exact ledger name and schema signature, but remote SQL source is unavailable for a blob comparison.
+
+No remote ledger repair or production DDL was performed.
