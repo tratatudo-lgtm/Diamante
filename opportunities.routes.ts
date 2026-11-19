@@ -26,22 +26,32 @@ router.get('/directory', async (_req: AdminRequest,res: Response) => {
 });
 
 router.get('/', async (_req: AdminRequest,res: Response) => {
-  const {data,error}=await supabaseAdmin.from('crm_opportunities')
-    .select('id,title,opportunity_type,stage,priority,expected_value,location,contact_name,contact_email,contact_phone,assigned_to,next_action,next_action_at,notes,created_by,created_at,updated_at,closed_at,assignee:funcionarios!crm_opportunities_assigned_to_fkey(id,nome_completo,loja_id),creator:funcionarios!crm_opportunities_created_by_fkey(id,nome_completo)')
-    .order('updated_at',{ascending:false}).limit(1000);
-  if(error)return fail(res,503,'Não foi possível carregar oportunidades comerciais.');
-  return res.json({success:true,opportunities:data||[]});
+  const opportunities: any[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const {data,error}=await supabaseAdmin.from('crm_opportunities')
+      .select('id,title,opportunity_type,stage,priority,expected_value,location,contact_name,contact_email,contact_phone,assigned_to,next_action,next_action_at,notes,created_by,created_at,updated_at,closed_at,assignee:funcionarios!crm_opportunities_assigned_to_fkey(id,nome_completo,loja_id),creator:funcionarios!crm_opportunities_created_by_fkey(id,nome_completo)')
+      .order('updated_at',{ascending:false}).range(offset,offset+499);
+    if(error)return fail(res,503,'Não foi possível carregar todas as oportunidades comerciais.');
+    opportunities.push(...(data||[]));
+    if(!data||data.length<500)break;
+  }
+  return res.json({success:true,opportunities});
 });
 
 router.get('/:id/events', async (req: AdminRequest,res: Response) => {
   const {data:opportunity,error:readError}=await supabaseAdmin.from('crm_opportunities').select('id').eq('id',req.params.id).maybeSingle();
   if(readError)return fail(res,503,'Não foi possível validar a oportunidade.');
   if(!opportunity)return fail(res,404,'Oportunidade não encontrada.');
-  const {data,error}=await supabaseAdmin.from('crm_opportunity_events')
-    .select('id,action,old_values,new_values,created_at,actor:funcionarios!crm_opportunity_events_actor_id_fkey(nome_completo)')
-    .eq('opportunity_id',req.params.id).order('created_at',{ascending:false}).limit(150);
-  if(error)return fail(res,503,'Não foi possível carregar o histórico.');
-  return res.json({success:true,events:data||[]});
+  const events:any[]=[];
+  for(let offset=0;;offset+=500){
+    const {data,error}=await supabaseAdmin.from('crm_opportunity_events')
+      .select('id,action,old_values,new_values,created_at,actor:funcionarios!crm_opportunity_events_actor_id_fkey(nome_completo)')
+      .eq('opportunity_id',req.params.id).order('created_at',{ascending:false}).range(offset,offset+499);
+    if(error)return fail(res,503,'Não foi possível carregar todo o histórico.');
+    events.push(...(data||[]));
+    if(!data||data.length<500)break;
+  }
+  return res.json({success:true,events});
 });
 
 router.post('/', async (req: AdminRequest,res: Response) => {
