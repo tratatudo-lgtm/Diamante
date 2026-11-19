@@ -18,8 +18,8 @@ async function notify(employeeId: string, id: string, kind: 'opportunity_assigne
 
 router.get('/directory', async (_req: AdminRequest,res: Response) => {
   const [{data:employees,error:e1},{data:stores,error:e2}] = await Promise.all([
-    supabaseAdmin.from('funcionarios').select('id,nome_completo,loja_id,lojas(nome)').eq('ativo',true).order('nome_completo').limit(500),
-    supabaseAdmin.from('lojas').select('id,nome').eq('ativo',true).order('nome').limit(300),
+    supabaseAdmin.from('funcionarios').select('id,nome_completo,loja_id,lojas(nome)').order('nome_completo'),
+    supabaseAdmin.from('lojas').select('id,nome,ativo').order('nome'),
   ]);
   if(e1||e2)return fail(res,503,'Não foi possível carregar responsáveis e lojas.');
   return res.json({success:true,employees:employees||[],stores:stores||[]});
