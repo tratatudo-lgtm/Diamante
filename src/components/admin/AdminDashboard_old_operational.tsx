@@ -45,6 +45,9 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
   const { userSession, logout } = useAuth();
+  const [seasonalTheme, setSeasonalTheme] = useState<{mode?:string;festival?:string}>({mode:'automatic'});
+  useEffect(() => { fetch('/api/admin/settings/public-theme').then(r=>r.ok?r.json():null).then(v=>{if(v?.theme)setSeasonalTheme(v.theme)}).catch(()=>{}); }, []);
+  const seasonalFestival = seasonalTheme.mode==='normal' ? '' : seasonalTheme.mode==='manual' ? seasonalTheme.festival : (()=>{ const m=new Date().getMonth()+1,d=new Date().getDate(); if(m===12&&d>=1)return 'natal'; if(m===1&&d<=7)return 'ano-novo'; if(m===6&&d>=1&&d<=30)return 'santos-populares'; return ''; })();
 
   // State
   const [lojas, setLojas] = useState<LojaComKpi[]>([]);
@@ -293,6 +296,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_78%)]" />
       </div>
       <DiamanteSidebar currentPath="/dashboard-admin" onNavigate={onNavigate} />
+      {seasonalFestival && <div aria-hidden="true" className="pointer-events-none fixed top-0 left-0 right-0 z-[60] h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent opacity-80"/>}
+      {seasonalFestival==='natal' && <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[39] h-24 opacity-30 bg-gradient-to-b from-emerald-900/30 to-transparent"><div className="absolute right-4 top-2 text-2xl">❄️ ✨ 🎄</div></div>}
+      {seasonalFestival==='ano-novo' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">✨ 🎆</div>}
+      {seasonalFestival==='santos-populares' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🎉 🌿</div>}
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 

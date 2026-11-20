@@ -39,7 +39,8 @@ export type SettingsTab =
   | 'bancos'
   | 'aprovadores'
   | 'notificacoes'
-  | 'seguranca';
+  | 'seguranca'
+  | 'festivos';
 
 export interface BankAccount {
   id: string;
@@ -66,6 +67,7 @@ export interface SettingsPageProps {
 
 export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('geral');
+  const [festiveTheme, setFestiveTheme] = useState<{mode:'automatic'|'manual'|'normal'; festival:string}>({mode:'automatic',festival:'natal'});
   const [isSaving, setIsSaving] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -115,6 +117,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     if (dbSettings) {
       if (dbSettings.general) setGeneralConfig((prev) => ({ ...prev, ...dbSettings.general }));
       if (dbSettings.goldPrices) setGoldPrices((prev) => ({ ...prev, ...dbSettings.goldPrices }));
+      if ((dbSettings as any).festiveTheme) setFestiveTheme((dbSettings as any).festiveTheme);
     }
   }, [dbSettings]);
 
@@ -127,6 +130,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
   };
 
   const handleSaveSettings = async () => {
+    if (activeTab === 'festivos') {
+      setIsSaving(true);
+      try { await saveSettings({ ...(dbSettings || {}), festiveTheme } as any); triggerToast('Tema festivo guardado e aplicado globalmente.'); }
+      catch (err:any) { triggerToast(err?.message || 'Falha ao guardar tema.'); }
+      finally { setIsSaving(false); }
+      return;
+    }
     if (activeTab !== 'geral' && activeTab !== 'ouro') {
       triggerToast('Esta secção ainda não está ligada à persistência. Nenhuma alteração foi guardada.');
       return;
@@ -176,6 +186,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
     { id: 'aprovadores', label: 'Aprovadores & OTP', icon: UserCheck },
     { id: 'notificacoes', label: 'Notificações & Alertas', icon: Bell },
     { id: 'seguranca', label: 'Segurança & API', icon: ShieldCheck },
+    { id: 'festivos', label: 'Aparência & Festivos', icon: Sparkles },
   ] as const;
 
   return (
@@ -273,6 +284,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ onNavigate }) => {
             {/* =========================================================
                 SECÇÃO 1: GERAL & EMPRESA
                ========================================================= */}
+            {activeTab === 'festivos' && (
+              <section className="p-6 rounded-2xl bg-[#151b2b] border border-slate-800 space-y-5 shadow-xl">
+                <h2 className="text-lg font-bold text-white">Aparência e Temas Festivos</h2>
+                <p className="text-sm text-slate-400">Estas opções alteram o ambiente visual da página inicial e do Painel Central para todos os utilizadores.</p>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  {[['automatic','Automático','Calendário tradicional português'],['manual','Manual','Escolha uma festividade'],['normal','Normal','Sem elementos festivos']].map(([mode,label,desc]) => <button key={mode} onClick={() => setFestiveTheme(v=>({...v,mode:mode as any}))} className={`p-4 rounded-xl border text-left ${festiveTheme.mode===mode?'border-[#D4AF37] bg-[#D4AF37]/10':'border-slate-700 bg-slate-900/40'}`}><b>{label}</b><p className="text-xs text-slate-400 mt-1">{desc}</p></button>)}
+                </div>
+                {festiveTheme.mode==='manual' && <label className="block text-sm text-slate-300">Festividade<select value={festiveTheme.festival} onChange={e=>setFestiveTheme(v=>({...v,festival:e.target.value}))} className="mt-2 w-full rounded-xl bg-slate-900 border border-slate-700 p-3 text-white">{[['natal','Natal'],['ano-novo','Ano Novo'],['carnaval','Carnaval'],['pascoa','Páscoa'],['santos-populares','Santos Populares'],['halloween','Halloween']].map(([v,l])=><option value={v} key={v}>{l}</option>)}</select></label>}
+                <div className="rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/5 p-4"><b className="text-[#D4AF37]">Pré-visualização</b><p className="mt-2 text-sm">{festiveTheme.mode==='normal'?'Diamante OS — ambiente normal':festiveTheme.mode==='automatic'?'Tema sazonal automático: Natal, Ano Novo, Carnaval, Páscoa e Santos Populares.':'Tema escolhido: '+festiveTheme.festival}</p><p className="text-xs text-slate-400 mt-1">Efeitos discretos, sem interferir nos dados, operações ou navegação.</p></div>
+              </section>
+            )}
+
             {activeTab === 'geral' && (
               <section className="p-6 rounded-2xl bg-[#151b2b] border border-slate-800 space-y-6 shadow-xl animate-in fade-in">
                 <div className="flex items-center justify-between border-b border-slate-800 pb-4">
