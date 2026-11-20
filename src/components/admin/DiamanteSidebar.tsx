@@ -44,7 +44,7 @@ export interface DiamanteSidebarProps {
 
 /** Rotas preservadas e alinhadas com a navegação administrativa existente. */
 export const menuItems: MenuItem[] = [
-  { id: 'war-room', label: 'Sala de Guerra', path: '/dashboard-admin', icon: LayoutDashboard, badge: 'LIVE' },
+  { id: 'war-room', label: 'Centro de Operações', path: '/dashboard-admin', icon: LayoutDashboard, badge: 'LIVE' },
   { id: 'stores', label: 'Gestão de Lojas', path: '/stores', icon: Building2, badge: 'REDE' },
   { id: 'employees', label: 'Equipa & Funcionários', path: '/employees', icon: Users, badge: null },
   { id: 'finance', label: 'Financeiro & Tesouraria', path: '/finance', icon: Wallet, badge: null },
@@ -193,7 +193,7 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-[11px] font-semibold tracking-[0.015em] ${active ? 'text-white' : ''}`}>{item.label}</span>
-                  {item.id === 'war-room' && <span className="mt-0.5 block text-[9px] font-medium tracking-wider text-slate-500">CENTRO DE COMANDO</span>}
+                  {item.id === 'war-room' && <span className="mt-0.5 block text-[9px] font-medium tracking-wider text-slate-500">CENTRO DE OPERAÇÕES</span>}
                 </span>
                 {item.badge && (
                   <span className={`rounded-md px-1.5 py-1 text-[8px] font-bold tracking-[0.12em] ${
