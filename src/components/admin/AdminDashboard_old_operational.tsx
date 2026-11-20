@@ -313,6 +313,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       {seasonalFestival==='natal' && <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[39] h-24 opacity-30 bg-gradient-to-b from-emerald-900/30 to-transparent"><div className="absolute right-4 top-2 text-2xl">❄️ ✨ 🎄</div></div>}
       {seasonalFestival==='ano-novo' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">✨ 🎆</div>}
       {seasonalFestival==='santos-populares' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🎉 🌿</div>}
+      {seasonalFestival==='carnaval' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🎭 🎉</div>}
+      {seasonalFestival==='pascoa' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🐣 🌷</div>}
+      {seasonalFestival==='halloween' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🎃 👻</div>}
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
