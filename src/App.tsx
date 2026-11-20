@@ -94,7 +94,7 @@ function AppRouter() {
   const navigate = (path: string) => {
     setCurrentPath(path);
     if (typeof window !== 'undefined' && window.history) {
-      window.history.pushState({}, '', path);
+      window.history.pushState({ previousPath: currentPath }, '', path);
     }
   };
 
