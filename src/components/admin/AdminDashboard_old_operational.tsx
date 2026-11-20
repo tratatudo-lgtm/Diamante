@@ -70,6 +70,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const [recentTxs, setRecentTxs] = useState<Transacao[]>([]);
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [dataError, setDataError] = useState<string | null>(null);
+  const [activeOperationsTab, setActiveOperationsTab] = useState<'overview' | 'network' | 'incidents' | 'tasks' | 'performance' | 'opportunities'>('overview');
   const [incidents, setIncidents] = useState<OperationalIncident[]>([]);
   const [operationalTasks, setOperationalTasks] = useState<OperationalTaskSummary[]>([]);
   const [operationalGoals, setOperationalGoals] = useState<OperationalGoalSummary[]>([]);
@@ -156,7 +157,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         throw new Error(
           typeof apiData?.error === 'string'
             ? apiData.error
-            : `Não foi possível carregar a Sala de Guerra (HTTP ${res.status}).`
+            : `Não foi possível carregar a Centro de Operações (HTTP ${res.status}).`
         );
       }
 
@@ -235,7 +236,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
       setIsOnline(true);
       setDataError(null);
     } catch (err: unknown) {
-      console.warn('[Sala de Guerra] Falha ao sincronizar dados administrativos.');
+      console.warn('[Centro de Operações] Falha ao sincronizar dados administrativos.');
       setIsOnline(false);
       setDataError('Não foi possível sincronizar os dados administrativos. Tente novamente.');
     } finally {
@@ -400,7 +401,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
                 {isOnline ? 'Sistema operacional · sincronização activa' : 'Ligação indisponível · a aguardar sincronização'}
               </div>
               <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.32em] text-[#e4c76f]">DIAMANTE D’OURO / INTELLIGENCE</p>
-              <h1 className="max-w-2xl text-3xl font-semibold leading-[1.08] tracking-[-0.045em] text-white sm:text-4xl lg:text-[3.35rem]">Centro de <span className="bg-gradient-to-r from-[#f7e6a9] via-[#d8b85d] to-[#a98432] bg-clip-text text-transparent">comando</span></h1>
+              <h1 className="max-w-2xl text-3xl font-semibold leading-[1.08] tracking-[-0.045em] text-white sm:text-4xl lg:text-[3.35rem]">Centro de <span className="bg-gradient-to-r from-[#f7e6a9] via-[#d8b85d] to-[#a98432] bg-clip-text text-transparent">Operações</span></h1>
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-300/80 sm:text-[15px]">Visão global da operação, actividade da rede e controlo administrativo num único espaço inteligente.</p>
               <div className="mt-7 flex flex-wrap gap-2.5">
                 <button onClick={() => onNavigate('/admin/transacoes')} className="group inline-flex items-center gap-2 rounded-xl border border-[#e7ca78]/40 bg-gradient-to-r from-[#d4af37] to-[#a9822d] px-4 py-3 text-xs font-extrabold text-[#101827] shadow-[0_10px_28px_-12px_rgba(212,175,55,.65)] transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_35px_-12px_rgba(212,175,55,.65)]"><ReceiptText className="h-4 w-4" /> Explorar transacções <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" /></button>
@@ -418,7 +419,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         {/* Estados explícitos da API administrativa */}
         {dataError && (
           <div role="alert" className="p-4 rounded-xl bg-rose-950/40 border border-rose-600/40 text-rose-200 text-xs">
-            <strong className="block mb-1">Não foi possível carregar a Sala de Guerra</strong>
+            <strong className="block mb-1">Não foi possível carregar a Centro de Operações</strong>
             <span>{dataError}</span>
           </div>
         )}
@@ -434,6 +435,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           </div>
         )}
 
+
+        <nav aria-label="Áreas do Centro de Operações" className="sticky top-0 z-20 -mx-1 flex gap-2 overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#091525]/95 p-2 shadow-xl backdrop-blur-xl sm:mx-0">
+          {([
+            ['overview', 'Visão geral', 'Indicadores'],
+            ['network', 'Rede', 'Lojas e actividade'],
+            ['incidents', 'Ocorrências', 'Alertas e incidentes'],
+            ['tasks', 'Tarefas', 'Execução'],
+            ['performance', 'Desempenho', 'Objectivos'],
+            ['opportunities', 'Oportunidades', 'Expansão'],
+          ] as const).map(([id, label, hint]) => (
+            <button key={id} type="button" onClick={() => setActiveOperationsTab(id)} aria-pressed={activeOperationsTab === id}
+              className={`min-w-[112px] flex-1 rounded-xl px-3 py-3 text-left transition-all active:scale-[.98] ${activeOperationsTab === id ? 'border border-[#D4AF37]/35 bg-[#D4AF37]/[0.13] text-[#f3d77f]' : 'border border-transparent text-slate-400 hover:bg-white/[0.04]'}`}>
+              <span className="block text-xs font-bold sm:text-sm">{label}</span><span className="mt-1 block text-[10px] opacity-70">{hint}</span>
+            </button>
+          ))}
+        </nav>
+
+        {activeOperationsTab === 'overview' && (
+        <>
         {/* REQUISITO 2.B: KPIS GLOBAIS (Grid 4 cols) */}
         <section aria-label="KPIs Globais da Rede" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Inteligência operacional</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Indicadores da rede</h2></div><div className="flex items-center gap-2 text-[10px] font-medium text-slate-500"><Activity className="h-3.5 w-3.5 text-[#d8b85d]" /> Actualização automática · 30 segundos</div></div>
@@ -526,8 +546,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           </div>
         </section>
 
-        {/* REQUISITO 2.C & 2.D: SALA DE GUERRA (HEAT MAP + REALTIME FEED) */}
-        <section aria-label="Sala de Guerra Operacional" className="space-y-4">
+        </>
+)}
+
+        {activeOperationsTab === 'network' && (
+        <>
+        {/* REQUISITO 2.C & 2.D: CENTRO DE OPERAÇÕES (HEAT MAP + REALTIME FEED) */}
+        <section aria-label="Centro de Operações Operacional" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Monitorização em directo</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Radar operacional</h2></div><span className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[10px] text-slate-400"><span className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-rose-400'}`} /> {isOnline ? 'Feed ligado' : 'Feed sem ligação'}</span></div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* MAPA CALOR LOJAS (7 Cols) */}
@@ -556,6 +581,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           </div>
         </section>
 
+        </>
+)}
+
+        {activeOperationsTab === 'incidents' && (
+        <>
         <section aria-label="Centro de ocorrências" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Acompanhamento interno</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Centro de ocorrências</h2><p className="mt-1 text-xs text-slate-500">Situações comunicadas pela equipa e respectivo estado.</p></div>
@@ -572,24 +602,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
           </div>
         </section>
 
+        </>
+)}
+
+        {activeOperationsTab === 'tasks' && (
+        <>
         <section aria-label="Gestão de tarefas" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Execução da rede</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Tarefas e responsabilidades</h2><p className="mt-1 text-xs text-slate-500">Acompanhamento do trabalho atribuído às equipas.</p></div><button onClick={() => onNavigate('/tasks')} className="inline-flex items-center gap-2 rounded-xl border border-[#d8b85d]/25 bg-[#d8b85d]/[0.07] px-3 py-2 text-xs font-semibold text-[#e7ca78] hover:bg-[#d8b85d]/[0.12]">Abrir tarefas <ArrowUpRight className="h-3.5 w-3.5"/></button></div>
           <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-white/[0.08] bg-[#101c2c]/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Por concluir</p><p className="mt-2 text-2xl font-semibold text-white tabular-nums">{operationalTasks.filter(t => t.status !== 'concluida').length}</p></div><div className="rounded-2xl border border-rose-400/20 bg-rose-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-rose-200/70">Prazos ultrapassados</p><p className="mt-2 text-2xl font-semibold text-rose-200 tabular-nums">{operationalTasks.filter(t => t.due_at && new Date(t.due_at) < new Date() && t.status !== 'concluida').length}</p></div><div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-emerald-200/70">Concluídas</p><p className="mt-2 text-2xl font-semibold text-emerald-200 tabular-nums">{operationalTasks.filter(t => t.status === 'concluida').length}</p></div></div>
           <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101c2c]/80">{operationalTasks.filter(t => t.status !== 'concluida').slice(0,5).map(task => <div key={task.id} className="flex items-center gap-3 border-b border-white/[0.05] p-4 last:border-0"><span className={'h-2 w-2 shrink-0 rounded-full '+(task.priority==='urgente'?'bg-rose-400':task.priority==='alta'?'bg-amber-300':'bg-slate-500')}/><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-100">{task.title}</span><span className="mt-1 block text-[10px] text-slate-500">{task.assignee?.nome_completo || 'Sem responsável'}</span></span><span className="shrink-0 text-right"><span className="block text-[10px] font-semibold text-slate-400">{task.priority.toUpperCase()}</span><span className="mt-1 block text-[10px] text-slate-500">{task.due_at ? new Date(task.due_at).toLocaleDateString('pt-PT') : 'Sem prazo'}</span></span></div>)}{operationalTasks.filter(t => t.status !== 'concluida').length === 0 && <p className="p-5 text-sm text-slate-500">Não existem tarefas activas.</p>}</div>
         </section>
 
+        </>
+)}
+
+        {activeOperationsTab === 'performance' && (
+        <>
         <section aria-label="Objectivos e desempenho" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Resultados mensuráveis</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Objectivos & desempenho</h2><p className="mt-1 text-xs text-slate-500">Evolução real das metas por loja e funcionário.</p></div><button onClick={() => onNavigate('/goals')} className="inline-flex items-center gap-2 rounded-xl border border-[#d8b85d]/25 bg-[#d8b85d]/[0.07] px-3 py-2 text-xs font-semibold text-[#e7ca78] hover:bg-[#d8b85d]/[0.12]">Abrir objectivos <ArrowUpRight className="h-3.5 w-3.5"/></button></div>
           <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-white/[0.08] bg-[#101c2c]/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Metas activas</p><p className="mt-2 text-2xl font-semibold text-white tabular-nums">{operationalGoals.filter(g => g.status === 'activa').length}</p></div><div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-emerald-200/70">Metas atingidas</p><p className="mt-2 text-2xl font-semibold text-emerald-200 tabular-nums">{operationalGoals.filter(g => g.status === 'activa' && g.progress?.achieved).length}</p></div><div className="rounded-2xl border border-rose-400/20 bg-rose-400/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-rose-200/70">Fora do prazo</p><p className="mt-2 text-2xl font-semibold text-rose-200 tabular-nums">{operationalGoals.filter(g => g.status === 'activa' && g.ends_on < new Date().toLocaleDateString('en-CA',{timeZone:'Europe/Lisbon'}) && !g.progress?.achieved).length}</p></div></div>
           <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101c2c]/80">{operationalGoals.filter(g => g.status === 'activa').slice(0,5).map(goal => <div key={goal.id} className="border-b border-white/[0.05] p-4 last:border-0"><div className="flex items-center justify-between gap-3"><span className="min-w-0 truncate text-sm font-medium text-slate-100">{goal.title}</span><span className="shrink-0 text-xs font-semibold text-[#e7ca78]">{goal.progress ? goal.progress.percentage.toFixed(1)+'%' : '—'}</span></div><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[.07]"><div className="h-full rounded-full bg-[#d4af37]" style={{width:Math.min(100,goal.progress?.percentage||0)+'%'}}/></div><p className="mt-1 text-[10px] text-slate-500">{goal.lojas?.nome || goal.funcionarios?.nome_completo || 'Destinatário'} · termina {new Date(goal.ends_on+'T12:00:00').toLocaleDateString('pt-PT')}</p></div>)}{operationalGoals.filter(g => g.status === 'activa').length === 0 && <p className="p-5 text-sm text-slate-500">Ainda não existem metas activas.</p>}</div>
         </section>
 
+        </>
+)}
+
+        {activeOperationsTab === 'opportunities' && (
+        <>
         <section aria-label="Pipeline comercial" className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Expansão e novas receitas</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Pipeline comercial</h2><p className="mt-1 text-xs text-slate-500">Parcerias, investidores, fornecedores e novas localizações.</p></div><button onClick={() => onNavigate('/opportunities')} className="inline-flex items-center gap-2 rounded-xl border border-[#d8b85d]/25 bg-[#d8b85d]/[0.07] px-3 py-2 text-xs font-semibold text-[#e7ca78] hover:bg-[#d8b85d]/[0.12]">Abrir oportunidades <ArrowUpRight className="h-3.5 w-3.5"/></button></div>
           <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-white/[0.08] bg-[#101c2c]/80 p-4"><p className="text-[10px] uppercase tracking-wider text-slate-500">Oportunidades activas</p><p className="mt-2 text-2xl font-semibold text-white tabular-nums">{commercialOpportunities.filter(o => !['ganha','perdida'].includes(o.stage)).length}</p></div><div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-amber-100/70">Valor potencial</p><p className="mt-2 text-2xl font-semibold text-amber-100 tabular-nums">{new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(commercialOpportunities.filter(o => !['ganha','perdida'].includes(o.stage)).reduce((sum,o)=>sum+(Number(o.expected_value)||0),0))}</p></div><div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.05] p-4"><p className="text-[10px] uppercase tracking-wider text-emerald-100/70">Negócios ganhos</p><p className="mt-2 text-2xl font-semibold text-emerald-100 tabular-nums">{commercialOpportunities.filter(o => o.stage === 'ganha').length}</p></div></div>
           <div className="overflow-hidden rounded-2xl border border-white/[0.08] bg-[#101c2c]/80">{commercialOpportunities.filter(o => !['ganha','perdida'].includes(o.stage)).sort((a,b)=>Number(b.expected_value||0)-Number(a.expected_value||0)).slice(0,4).map(o=><div key={o.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.05] p-4 last:border-0"><div className="min-w-0"><p className="truncate text-sm font-medium text-slate-100">{o.title}</p><p className="mt-1 text-[10px] text-slate-500">{o.assignee?.nome_completo || 'Sem responsável'} · {o.next_action_at ? new Date(o.next_action_at).toLocaleDateString('pt-PT') : 'Sem próxima data'}</p></div><span className="text-xs font-semibold text-[#e7ca78]">{o.expected_value == null ? 'Valor por definir' : new Intl.NumberFormat('pt-PT',{style:'currency',currency:'EUR',maximumFractionDigits:0}).format(o.expected_value)}</span></div>)}{commercialOpportunities.filter(o=>!['ganha','perdida'].includes(o.stage)).length===0&&<p className="p-5 text-sm text-slate-500">Ainda não existem oportunidades comerciais registadas.</p>}</div>
         </section>
 
+        </>
+)}
+
+        {activeOperationsTab === 'network' && (
+        <>
         {/* REQUISITO 2.E: TABELA GESTÃO LOJAS */}
         <section aria-label="Tabela de Gestão de Lojas" className="space-y-4">
           <div><p className="text-[10px] font-bold uppercase tracking-[0.25em] text-[#d8b85d]">Controlo da rede</p><h2 className="mt-1 text-xl font-semibold tracking-tight text-white">Lojas e desempenho</h2></div>
@@ -599,7 +649,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
             onSelectLoja={handleOpenLojaDetails}
           />
         </section>
-      </main>
+        </>
+)}
+
+              </main>
 
       {/* Drawer: Store Details */}
       <StoreDetailDrawer

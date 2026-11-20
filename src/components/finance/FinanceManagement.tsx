@@ -191,6 +191,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
     createPayment,
   } = useFinanceTransactions();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activeFinanceTab, setActiveFinanceTab] = useState<'overview' | 'payments' | 'expenses' | 'treasury'>('overview');
   const { data: stores, error: storesError } = useStores();
   const storeOptions = stores.map((store) => ({ id: store.id, nome: store.nome }));
 
@@ -461,7 +462,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                       onClick={() => onNavigate('/dashboard-admin')}
                       className="text-xs text-slate-400 hover:text-[#D4AF37] flex items-center gap-1 transition-colors cursor-pointer font-mono"
                     >
-                      &larr; Sala de Guerra
+                      &larr; Centro de Operações
                     </button>
                     <span className="text-slate-600">&bull;</span>
                     <button
@@ -499,8 +500,33 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
           </button>
         </header>
 
-        <OperationalExpensesPanel stores={storeOptions} />
+        <nav aria-label="Secções de Financeiro e Tesouraria" className="sticky top-0 z-20 -mx-1 flex gap-2 overflow-x-auto rounded-2xl border border-slate-800 bg-[#101827]/95 p-2 shadow-xl backdrop-blur-xl sm:mx-0">
+          {([
+            ['overview', 'Visão geral', 'Resumo e indicadores'],
+            ['payments', 'Pagamentos', 'Aprovações e histórico'],
+            ['expenses', 'Despesas', 'Custos e fechos'],
+            ['treasury', 'Tesouraria', 'Contas e liquidez'],
+          ] as const).map(([id, label, description]) => (
+            <button key={id} type="button" onClick={() => setActiveFinanceTab(id)} aria-pressed={activeFinanceTab === id}
+              className={`min-w-[118px] flex-1 rounded-xl px-3 py-3 text-left transition-all active:scale-[.98] ${activeFinanceTab === id ? 'border border-[#D4AF37]/35 bg-[#D4AF37]/[0.13] text-[#f3d77f]' : 'border border-transparent text-slate-400 hover:bg-white/[0.04]'}`}>
+              <span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-[10px] opacity-70">{description}</span>
+            </button>
+          ))}
+        </nav>
+        {activeFinanceTab === 'expenses' && <OperationalExpensesPanel stores={storeOptions} />}
+        {activeFinanceTab === 'treasury' && (
+          <section aria-label="Área de tesouraria" className="space-y-4 rounded-2xl border border-slate-800 bg-[#151b2b] p-5 sm:p-7">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 text-[#D4AF37]"><CreditCard className="h-6 w-6" /></div>
+            <div><h2 className="text-lg font-bold text-white">Contas bancárias e liquidez</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">A gestão das contas de tesouraria e dos dados bancários é feita nas Configurações. Os saldos só serão apresentados quando existir uma fonte bancária ou registo validado; não são estimados.</p></div>
+            <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-4"><p className="text-xs font-semibold text-amber-200">Saldo bancário não disponível</p><p className="mt-1 text-xs text-slate-400">Não existe actualmente uma integração bancária que permita consultar saldos em tempo real.</p></div>
+            {onNavigate && <button type="button" onClick={() => onNavigate('/settings')} className="min-h-11 rounded-xl bg-[#D4AF37] px-5 py-3 text-sm font-bold text-slate-950 active:scale-[.98]">Abrir configuração de contas</button>}
+          </section>
+        )}
 
+
+
+{activeFinanceTab === 'overview' && (
+        <>
         {/* =========================================================
             2. STATS CARDS FINANCEIROS (Topo)
            ========================================================= */}
@@ -566,6 +592,11 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
           </div>
         </section>
 
+        </>
+)}
+
+{activeFinanceTab === 'payments' && (
+        <>
         {/* =========================================================
             3. BARRA DE PESQUISA & FILTROS RÁPIDOS
            ========================================================= */}
@@ -876,6 +907,9 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
             </>
           )}
         </section>
+
+        </>
+)}
 
         {/* =========================================================
             5. MODAL DE DETALHES DO PAGAMENTO & COMPROVATIVO

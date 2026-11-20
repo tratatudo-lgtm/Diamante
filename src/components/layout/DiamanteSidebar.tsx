@@ -12,7 +12,7 @@ interface SidebarProps {
 }
 
 const menuItems = [
-  { id: 'warroom', label: 'Sala de Guerra', icon: LayoutDashboard, path: '/admin/warroom' },
+  { id: 'warroom', label: 'Centro de Operações', icon: LayoutDashboard, path: '/admin/warroom' },
   { id: 'stores', label: 'Gestão de Lojas', icon: Store, path: '/admin/stores' },
   { id: 'employees', label: 'Equipa & Funcionários', icon: Users, path: '/admin/employees' },
   { id: 'clients', label: 'Clientes & Fornecedores', icon: UserCheck, path: '/admin/clients' },

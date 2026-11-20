@@ -310,7 +310,7 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                       onClick={() => onNavigate('/dashboard-admin')}
                       className="text-xs text-slate-400 hover:text-[#D4AF37] flex items-center gap-1 transition-colors cursor-pointer font-mono"
                     >
-                      &larr; Sala de Guerra
+                      &larr; Centro de Operações
                     </button>
                     <span className="text-slate-600">&bull;</span>
                     <button

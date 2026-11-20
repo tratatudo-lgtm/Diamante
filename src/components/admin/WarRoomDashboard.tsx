@@ -151,7 +151,7 @@ export const WarRoomDashboard = () => {
     return (
       <div className="min-h-screen bg-[#0b0f19] flex flex-col items-center justify-center p-6 text-center space-y-4">
         <AlertTriangle className="w-16 h-16 text-amber-500" />
-        <h2 className="text-2xl font-bold text-[#D4AF37]">Sala de Guerra Indisponível</h2>
+        <h2 className="text-2xl font-bold text-[#D4AF37]">Centro de Operações Indisponível</h2>
         <p className="text-slate-400 max-w-md text-sm break-words">{error}</p>
         {debugMsg && <p className="text-xs font-mono text-slate-500 bg-black/30 p-2 rounded">{debugMsg}</p>}
         <button onClick={fetchKpis} disabled={isLoading} className="px-6 py-3 bg-[#D4AF37] text-black font-bold rounded-lg hover:bg-amber-400 disabled:opacity-50">
@@ -168,7 +168,7 @@ export const WarRoomDashboard = () => {
         <div>
           <h1 className="text-2xl font-bold text-[#D4AF37] flex items-center gap-3">
             <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
-            SALA DE GUERRA • TEMPO REAL
+            CENTRO DE OPERAÇÕES • TEMPO REAL
           </h1>
           <p className="text-sm text-slate-500 mt-1">
             Última atualização: {lastUpdate.toLocaleTimeString('pt-PT')}

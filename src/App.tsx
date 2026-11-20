@@ -268,7 +268,7 @@ function AppRouter() {
     if (currentPath === '/admin/logs' || currentPath === '/logs' || currentPath === '/auditoria') {
       return <LogAuditPage onNavigate={navigate} />;
     }
-    // Rota padrão admin: Sala de Guerra
+    // Rota padrão admin: Centro de Operações
     return <AdminDashboard onNavigate={navigate} />;
   }
 

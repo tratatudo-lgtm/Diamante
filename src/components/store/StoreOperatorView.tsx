@@ -155,7 +155,7 @@ export const StoreOperatorView: React.FC<StoreOperatorViewProps> = ({ onNavigate
                 className="px-3 py-1.5 bg-gray-800 hover:bg-[#D4AF37] text-gray-300 hover:text-gray-950 font-medium text-xs rounded-lg border border-gray-700 transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Sala de Guerra</span>
+                <span className="hidden sm:inline">Centro de Operações</span>
               </button>
             )}
 
