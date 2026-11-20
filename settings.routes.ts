@@ -3,6 +3,16 @@ import { supabaseAdmin } from './auth.service';
 import { verifyAdmin } from './middleware/verifyAdmin';
 
 const router = Router();
+// Public read-only endpoint exposes only the selected visual theme.
+router.get('/public-theme', async (_req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabaseAdmin.from('configuracoes_sistema').select('valor').eq('chave', 'geral_sistema').maybeSingle();
+    if (error) return res.status(503).json({ success: false });
+    const theme = (data?.valor as any)?.festiveTheme;
+    return res.json({ success: true, theme: theme ?? { mode: 'automatic', festival: 'auto' } });
+  } catch { return res.status(500).json({ success: false }); }
+});
+
 router.use(verifyAdmin);
 
 router.get('/', async (_req: Request, res: Response) => {

@@ -45,6 +45,22 @@ interface AdminDashboardProps {
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) => {
   const { userSession, logout } = useAuth();
+  const [seasonalTheme, setSeasonalTheme] = useState<{mode?:string;festival?:string}>({mode:'automatic'});
+  useEffect(() => { fetch('/api/admin/settings/public-theme').then(r=>r.ok?r.json():null).then(v=>{if(v?.theme)setSeasonalTheme(v.theme)}).catch(()=>{}); }, []);
+  const seasonalFestival = seasonalTheme.mode==='normal' ? '' : seasonalTheme.mode==='manual' ? seasonalTheme.festival : (() => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const year = today.getFullYear(), month = today.getMonth()+1, day = today.getDate();
+    // Gregorian Easter date (Meeus/Jones/Butcher algorithm).
+    const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),n=h+l-7*m+114;
+    const easter=new Date(year,Math.floor(n/31)-1,n%31+1);
+    const carnivalTuesday=new Date(easter); carnivalTuesday.setDate(easter.getDate()-47);
+    const carnivalStart=new Date(carnivalTuesday); carnivalStart.setDate(carnivalTuesday.getDate()-4);
+    const carnivalEnd=new Date(carnivalTuesday); carnivalEnd.setDate(carnivalTuesday.getDate()+1);
+    const easterStart=new Date(easter); easterStart.setDate(easter.getDate()-2);
+    const easterEnd=new Date(easter); easterEnd.setDate(easter.getDate()+1);
+    if(month===12&&day>=1)return 'natal'; if(month===1&&day<=7)return 'ano-novo';
+    if(today>=carnivalStart&&today<=carnivalEnd)return 'carnaval'; if(today>=easterStart&&today<=easterEnd)return 'pascoa';
+    if(month===6&&day>=1&&day<=30)return 'santos-populares'; return ''; })();
 
   // State
   const [lojas, setLojas] = useState<LojaComKpi[]>([]);
@@ -293,6 +309,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
         <div className="absolute inset-0 opacity-[0.12] [background-image:linear-gradient(rgba(148,163,184,.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,.12)_1px,transparent_1px)] [background-size:64px_64px] [mask-image:linear-gradient(to_bottom,black,transparent_78%)]" />
       </div>
       <DiamanteSidebar currentPath="/dashboard-admin" onNavigate={onNavigate} />
+      {seasonalFestival && <div aria-hidden="true" className="pointer-events-none fixed top-0 left-0 right-0 z-[60] h-1 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent opacity-80"/>}
+      {seasonalFestival==='natal' && <div aria-hidden="true" className="pointer-events-none fixed inset-x-0 top-0 z-[39] h-24 opacity-30 bg-gradient-to-b from-emerald-900/30 to-transparent"><div className="absolute right-4 top-2 text-2xl">❄️ ✨ 🎄</div></div>}
+      {seasonalFestival==='ano-novo' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">✨ 🎆</div>}
+      {seasonalFestival==='santos-populares' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🎉 🌿</div>}
+      {seasonalFestival==='carnaval' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🎭 🎉</div>}
+      {seasonalFestival==='pascoa' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🐣 🌷</div>}
+      {seasonalFestival==='halloween' && <div aria-hidden="true" className="pointer-events-none fixed right-4 top-20 z-[39] text-xl opacity-40">🎃 👻</div>}
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
