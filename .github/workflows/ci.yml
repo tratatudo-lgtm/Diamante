@@ -7,6 +7,7 @@ on:
       - rebuild/diamante-douro-secure
       - feat/admin-store-operations-20261117
       - integration/pr8-pr10-pr5-20261118
+      - feat/festive-global-themes
   pull_request:
     branches:
       - main
