@@ -191,6 +191,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
     createPayment,
   } = useFinanceTransactions();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [activeFinanceTab, setActiveFinanceTab] = useState<'overview' | 'payments' | 'expenses' | 'treasury'>('overview');
   const { data: stores, error: storesError } = useStores();
   const storeOptions = stores.map((store) => ({ id: store.id, nome: store.nome }));
 
@@ -461,7 +462,7 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                       onClick={() => onNavigate('/dashboard-admin')}
                       className="text-xs text-slate-400 hover:text-[#D4AF37] flex items-center gap-1 transition-colors cursor-pointer font-mono"
                     >
-                      &larr; Sala de Guerra
+                      &larr; Centro de Operações
                     </button>
                     <span className="text-slate-600">&bull;</span>
                     <button
@@ -499,8 +500,33 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
           </button>
         </header>
 
-        <OperationalExpensesPanel stores={storeOptions} />
+        <nav aria-label="Secções de Financeiro e Tesouraria" className="sticky top-0 z-20 -mx-1 flex gap-2 overflow-x-auto rounded-2xl border border-slate-800 bg-[#101827]/95 p-2 shadow-xl backdrop-blur-xl sm:mx-0">
+          {([
+            ['overview', 'Visão geral', 'Resumo e indicadores'],
+            ['payments', 'Pagamentos', 'Aprovações e histórico'],
+            ['expenses', 'Despesas', 'Custos e fechos'],
+            ['treasury', 'Tesouraria', 'Contas e liquidez'],
+          ] as const).map(([id, label, description]) => (
+            <button key={id} type="button" onClick={() => setActiveFinanceTab(id)} aria-pressed={activeFinanceTab === id}
+              className={`min-w-[118px] flex-1 rounded-xl px-3 py-3 text-left transition-all active:scale-[.98] ${activeFinanceTab === id ? 'border border-[#D4AF37]/35 bg-[#D4AF37]/[0.13] text-[#f3d77f]' : 'border border-transparent text-slate-400 hover:bg-white/[0.04]'}`}>
+              <span className="block text-sm font-bold">{label}</span><span className="mt-1 block text-[10px] opacity-70">{description}</span>
+            </button>
+          ))}
+        </nav>
+        {activeFinanceTab === 'expenses' && <OperationalExpensesPanel stores={storeOptions} />}
+        {activeFinanceTab === 'treasury' && (
+          <section aria-label="Área de tesouraria" className="space-y-4 rounded-2xl border border-slate-800 bg-[#151b2b] p-5 sm:p-7">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 text-[#D4AF37]"><CreditCard className="h-6 w-6" /></div>
+            <div><h2 className="text-lg font-bold text-white">Contas bancárias e liquidez</h2><p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">A gestão das contas de tesouraria e dos dados bancários é feita nas Configurações. Os saldos só serão apresentados quando existir uma fonte bancária ou registo validado; não são estimados.</p></div>
+            <div className="rounded-xl border border-amber-400/20 bg-amber-400/[0.06] p-4"><p className="text-xs font-semibold text-amber-200">Saldo bancário não disponível</p><p className="mt-1 text-xs text-slate-400">Não existe actualmente uma integração bancária que permita consultar saldos em tempo real.</p></div>
+            {onNavigate && <button type="button" onClick={() => onNavigate('/settings')} className="min-h-11 rounded-xl bg-[#D4AF37] px-5 py-3 text-sm font-bold text-slate-950 active:scale-[.98]">Abrir configuração de contas</button>}
+          </section>
+        )}
 
+
+
+{activeFinanceTab === 'overview' && (
+        <>
         {/* =========================================================
             2. STATS CARDS FINANCEIROS (Topo)
            ========================================================= */}
@@ -566,6 +592,11 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
           </div>
         </section>
 
+        </>
+)}
+
+{activeFinanceTab === 'payments' && (
+        <>
         {/* =========================================================
             3. BARRA DE PESQUISA & FILTROS RÁPIDOS
            ========================================================= */}
@@ -877,6 +908,9 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
           )}
         </section>
 
+        </>
+)}
+
         {/* =========================================================
             5. MODAL DE DETALHES DO PAGAMENTO & COMPROVATIVO
            ========================================================= */}
@@ -1081,263 +1115,4 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
             >
               <div className="flex items-start justify-between border-b pb-3">
                 <div>
-                  <h4 className="font-extrabold text-base tracking-wider uppercase">
-                    Diamante D'ouro
-                  </h4>
-                  <p className="text-[10px] text-slate-500 font-mono">
-                    Dados fiscais e de Contrastaria não configurados.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsReceiptModalOpen(false)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-slate-800"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="text-center py-2">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500">
-                  Registo Interno de Pagamento
-                </span>
-                <p className="text-2xl font-black text-slate-900 font-mono mt-1">
-                  {formatEUR(selectedTx.valor)}
-                </p>
-                <p className={`text-xs font-bold uppercase mt-1 ${selectedTx.estado === 'pago' ? 'text-amber-700' : selectedTx.estado === 'rejeitado' ? 'text-rose-700' : 'text-slate-600'}`}>
-                  {selectedTx.estado === 'pago'
-                    ? 'Marcado como pago no sistema — sem confirmação bancária integrada'
-                    : selectedTx.estado === 'rejeitado'
-                      ? 'Pagamento rejeitado'
-                      : 'Pagamento pendente'}
-                </p>
-              </div>
-
-              <div className="text-xs space-y-2 border-y py-3 border-dashed">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Ref. Operação:</span>
-                  <span className="font-mono font-bold">{selectedTx.referencia}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Data e Hora:</span>
-                  <span className="font-mono">
-                    {selectedTx.data} às {selectedTx.hora}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Beneficiário:</span>
-                  <span className="font-bold">{selectedTx.beneficiarioNome}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">NIF Beneficiário:</span>
-                  <span className="font-mono">{selectedTx.beneficiarioNif}</span>
-                </div>
-                {selectedTx.beneficiarioIban && (
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">IBAN Destino:</span>
-                    <span className="font-mono text-[10px]">{selectedTx.beneficiarioIban}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Balcão de Origem:</span>
-                  <span className="font-medium">{selectedTx.lojaNome}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Referência indicada:</span>
-                  <span className="font-mono text-[10px]">
-                    {selectedTx.comprovativoRef || 'Não fornecido'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-[10px] text-slate-400 text-center leading-relaxed">
-                Este documento é apenas um registo interno dos dados introduzidos no sistema.
-                Não constitui comprovativo bancário, confirmação SEPA ou prova de liquidação.
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  onClick={() => window.print()}
-                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimir</span>
-                </button>
-                <button
-                  onClick={() => setIsReceiptModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-200 text-slate-800 font-semibold text-xs"
-                >
-                  Fechar
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* =========================================================
-            7. MODAL: NOVO PAGAMENTO (Formulário)
-           ========================================================= */}
-        {isCreateModalOpen && (
-          <div
-            className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in"
-            onClick={() => setIsCreateModalOpen(false)}
-          >
-            <div
-              className="bg-[#151b2b] border border-slate-800 rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative my-8"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-5 border-b border-slate-800 bg-[#0b0f19] flex items-center justify-between">
-                <h3 className="text-base font-bold text-white flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-[#D4AF37]" />
-                  <span>Registar Nova Ordem de Pagamento</span>
-                </h3>
-                <button
-                  onClick={() => setIsCreateModalOpen(false)}
-                  className="text-slate-400 hover:text-white"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <form onSubmit={handleCreatePayment} className="p-6 space-y-4 text-xs">
-                {/* Balcão */}
-                <div>
-                  <label className="block text-slate-400 mb-1">Balcão de Origem da Compra *</label>
-                  <select
-                    value={newPayment.lojaId}
-                    onChange={(e) => setNewPayment({ ...newPayment, lojaId: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
-                  >
-                    {storeOptions.map((st) => (
-                      <option key={st.id} value={st.id}>
-                        {st.nome}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Nome do Beneficiário */}
-                  <div>
-                    <label className="block text-slate-400 mb-1">Nome do Cliente / Beneficiário *</label>
-                    <input
-                      type="text"
-                      required
-                      value={newPayment.beneficiarioNome}
-                      onChange={(e) =>
-                        setNewPayment({ ...newPayment, beneficiarioNome: e.target.value })
-                      }
-                      placeholder="Ex: Maria Santos"
-                      className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]"
-                    />
-                  </div>
-
-                  {/* NIF */}
-                  <div>
-                    <label className="block text-slate-400 mb-1">NIF do Cliente *</label>
-                    <input
-                      type="text"
-                      required
-                      maxLength={9}
-                      value={newPayment.beneficiarioNif}
-                      onChange={(e) =>
-                        setNewPayment({ ...newPayment, beneficiarioNif: e.target.value })
-                      }
-                      placeholder="213456789"
-                      className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono focus:outline-hidden focus:border-[#D4AF37]"
-                    />
-                  </div>
-                </div>
-
-                {/* IBAN */}
-                <div>
-                  <label className="block text-slate-400 mb-1">IBAN de Destino (SEPA) *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newPayment.beneficiarioIban}
-                    onChange={(e) =>
-                      setNewPayment({ ...newPayment, beneficiarioIban: e.target.value })
-                    }
-                    placeholder="IBAN do beneficiário"
-                    className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono uppercase focus:outline-hidden focus:border-[#D4AF37]"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Valor (€) */}
-                  <div>
-                    <label className="block text-slate-400 mb-1">Valor a Liquidar (€) *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={newPayment.valor}
-                      onChange={(e) =>
-                        setNewPayment({
-                          ...newPayment,
-                          valor: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white font-mono font-bold text-sm focus:outline-hidden focus:border-[#D4AF37]"
-                    />
-                  </div>
-
-                  {/* Método */}
-                  <div>
-                    <label className="block text-slate-400 mb-1">Método de Liquidação</label>
-                    <select
-                      value={newPayment.metodo}
-                      onChange={(e) =>
-                        setNewPayment({
-                          ...newPayment,
-                          metodo: e.target.value as PaymentMethod,
-                        })
-                      }
-                      className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37] cursor-pointer"
-                    >
-                      <option value="Transferência Imediata">Transferência Imediata</option>
-                      <option value="Transferência SEPA">Transferência SEPA</option>
-                      <option value="Numerário Balcão">Numerário Balcão</option>
-                      <option value="Cheque Bancário">Cheque Bancário</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Descrição */}
-                <div>
-                  <label className="block text-slate-400 mb-1">Descrição / Lote de Ouro</label>
-                  <input
-                    type="text"
-                    value={newPayment.descricao}
-                    onChange={(e) => setNewPayment({ ...newPayment, descricao: e.target.value })}
-                    placeholder="Ex: Compra de Ouro 19.2k (34.5g)"
-                    className="w-full px-3 py-2 bg-[#0b0f19] border border-slate-700 rounded-xl text-white focus:outline-hidden focus:border-[#D4AF37]"
-                  />
-                </div>
-
-                {/* Botões do Rodapé */}
-                <div className="pt-4 border-t border-slate-800 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsCreateModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-[#D4AF37] hover:bg-amber-400 text-slate-950 font-bold"
-                  >
-                    Submeter Pagamento
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export default FinanceManagement;
+                  <h4 className="font-extrabold text-bas
