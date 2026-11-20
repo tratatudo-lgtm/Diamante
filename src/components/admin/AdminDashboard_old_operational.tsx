@@ -47,7 +47,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onNavigate }) =>
   const { userSession, logout } = useAuth();
   const [seasonalTheme, setSeasonalTheme] = useState<{mode?:string;festival?:string}>({mode:'automatic'});
   useEffect(() => { fetch('/api/admin/settings/public-theme').then(r=>r.ok?r.json():null).then(v=>{if(v?.theme)setSeasonalTheme(v.theme)}).catch(()=>{}); }, []);
-  const seasonalFestival = seasonalTheme.mode==='normal' ? '' : seasonalTheme.mode==='manual' ? seasonalTheme.festival : (()=>{ const m=new Date().getMonth()+1,d=new Date().getDate(); if(m===12&&d>=1)return 'natal'; if(m===1&&d<=7)return 'ano-novo'; if(m===6&&d>=1&&d<=30)return 'santos-populares'; return ''; })();
+  const seasonalFestival = seasonalTheme.mode==='normal' ? '' : seasonalTheme.mode==='manual' ? seasonalTheme.festival : (() => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const year = today.getFullYear(), month = today.getMonth()+1, day = today.getDate();
+    // Gregorian Easter date (Meeus/Jones/Butcher algorithm).
+    const a=year%19,b=Math.floor(year/100),c=year%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),n=h+l-7*m+114;
+    const easter=new Date(year,Math.floor(n/31)-1,n%31+1);
+    const carnivalTuesday=new Date(easter); carnivalTuesday.setDate(easter.getDate()-47);
+    const carnivalStart=new Date(carnivalTuesday); carnivalStart.setDate(carnivalTuesday.getDate()-4);
+    const carnivalEnd=new Date(carnivalTuesday); carnivalEnd.setDate(carnivalTuesday.getDate()+1);
+    const easterStart=new Date(easter); easterStart.setDate(easter.getDate()-2);
+    const easterEnd=new Date(easter); easterEnd.setDate(easter.getDate()+1);
+    if(month===12&&day>=1)return 'natal'; if(month===1&&day<=7)return 'ano-novo';
+    if(today>=carnivalStart&&today<=carnivalEnd)return 'carnaval'; if(today>=easterStart&&today<=easterEnd)return 'pascoa';
+    if(month===6&&day>=1&&day<=30)return 'santos-populares'; return ''; })();
 
   // State
   const [lojas, setLojas] = useState<LojaComKpi[]>([]);
