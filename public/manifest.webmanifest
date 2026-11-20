@@ -1,0 +1,37 @@
+{
+  "id": "/",
+  "name": "Diamante OS — Gestão de Compra de Ouro",
+  "short_name": "Diamante OS",
+  "description": "Plataforma de gestão Diamante D'Ouro",
+  "lang": "pt-PT",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "background_color": "#070d18",
+  "theme_color": "#070d18",
+  "icons": [
+    {
+      "src": "/icons/diamante-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/diamante-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/diamante-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

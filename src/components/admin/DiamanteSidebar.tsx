@@ -103,25 +103,28 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsMobileOpen((open) => !open)}
-        className="lg:hidden fixed left-4 top-4 z-[60] flex h-11 w-11 items-center justify-center rounded-2xl border border-[#D4AF37]/30 bg-[#0a1221]/95 text-[#f3d982] shadow-[0_8px_32px_rgba(0,0,0,.45)] backdrop-blur-xl transition hover:border-[#D4AF37]/60 hover:bg-[#111d30]"
-        aria-label={isMobileOpen ? 'Fechar menu administrativo' : 'Abrir menu administrativo'}
-        aria-expanded={isMobileOpen}
-      >
-        {isMobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
-
+      <nav aria-label="Navegação principal da administração" className="diamante-mobile-nav fixed inset-x-0 bottom-0 z-[45] lg:hidden">
+        <div className="mx-auto grid h-[68px] max-w-xl grid-cols-5 items-center px-1">
+          {[menuItems[0], menuItems[1], menuItems[4], menuItems[3]].map((item) => {
+            const Icon = item.icon;
+            const active = isItemActive(item.path);
+            const shortLabel = item.id === 'war-room' ? 'Início' : item.id === 'stores' ? 'Lojas' : item.id === 'transactions' ? 'Compras' : 'Financeiro';
+            return (
+              <button key={item.id} type="button" onClick={() => handleNav(item.path)} aria-label={item.label} aria-current={active ? 'page' : undefined} className={`flex h-full min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold transition-colors ${active ? 'text-[#f0d27a]' : 'text-slate-400 active:text-white'}`}>
+                <span className={`flex h-8 w-10 items-center justify-center rounded-2xl transition-all ${active ? 'bg-[#D4AF37]/15 text-[#f0d27a]' : ''}`}><Icon className="h-[19px] w-[19px]" /></span>
+                <span className="max-w-full truncate">{shortLabel}</span>
+              </button>
+            );
+          })}
+          <button type="button" onClick={() => setIsMobileOpen(true)} aria-label="Abrir todos os módulos" aria-expanded={isMobileOpen} className="flex h-full flex-col items-center justify-center gap-1 text-[10px] font-semibold text-slate-400 active:text-white">
+            <span className="flex h-8 w-10 items-center justify-center rounded-2xl"><Menu className="h-[19px] w-[19px]" /></span>
+            <span>Mais</span>
+          </button>
+        </div>
+      </nav>
       {isMobileOpen && (
-        <button
-          type="button"
-          onClick={() => setIsMobileOpen(false)}
-          aria-label="Fechar menu"
-          className="lg:hidden fixed inset-0 z-40 bg-[#02050b]/75 backdrop-blur-sm"
-        />
+        <button type="button" onClick={() => setIsMobileOpen(false)} aria-label="Fechar menu" className="lg:hidden fixed inset-0 z-40 bg-[#02050b]/75 backdrop-blur-sm" />
       )}
-
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-[280px] flex-col overflow-hidden border-r border-white/[0.07] bg-[#080f1c]/95 text-slate-200 shadow-[18px_0_60px_rgba(0,0,0,.28)] backdrop-blur-2xl transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)] lg:translate-x-0 ${
           isMobileOpen ? 'translate-x-0' : '-translate-x-full'
