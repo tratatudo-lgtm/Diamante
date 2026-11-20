@@ -304,30 +304,6 @@ export const ClientManagement: React.FC<ClientManagementProps> = ({ onNavigate }
                 <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
                   Ficha de Identificação Legal, Rastreabilidade de Peças e Histórico de Confiança
                 </p>
-                {onNavigate && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => onNavigate('/dashboard-admin')}
-                      className="text-xs text-slate-400 hover:text-[#D4AF37] flex items-center gap-1 transition-colors cursor-pointer font-mono"
-                    >
-                      &larr; Centro de Operações
-                    </button>
-                    <span className="text-slate-600">&bull;</span>
-                    <button
-                      onClick={() => onNavigate('/stores')}
-                      className="text-xs text-slate-400 hover:text-[#D4AF37] transition-colors cursor-pointer font-mono"
-                    >
-                      Lojas
-                    </button>
-                    <span className="text-slate-600">&bull;</span>
-                    <button
-                      onClick={() => onNavigate('/finance')}
-                      className="text-xs text-slate-400 hover:text-[#D4AF37] transition-colors cursor-pointer font-mono"
-                    >
-                      Tesouraria
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>

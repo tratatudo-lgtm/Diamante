@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
+  ArrowLeft,
   Building2,
   Users,
   SlidersHorizontal,
@@ -101,8 +102,26 @@ export const DiamanteSidebar: React.FC<DiamanteSidebarProps> = ({ currentPath, o
     (path === '/opportunities' && currentPath === '/admin/opportunities') ||
     (path === '/expansion-sites' && currentPath === '/admin/expansion-sites');
 
+  const handleBack = () => {
+    if (window.history.state?.previousPath) {
+      window.history.back();
+      return;
+    }
+    onNavigate('/dashboard-admin');
+  };
+
   return (
     <>
+      <button
+        type="button"
+        onClick={handleBack}
+        aria-label="Voltar à página anterior"
+        title="Voltar à página anterior"
+        className="fixed bottom-[82px] right-3 z-[60] inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-[#0b1422]/95 px-3 text-xs font-semibold text-slate-200 shadow-lg backdrop-blur-xl transition hover:border-[#D4AF37]/40 hover:text-[#f0d27a] lg:bottom-auto lg:right-5 lg:top-4"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        <span>Voltar</span>
+      </button>
       <nav aria-label="Navegação principal da administração" className="diamante-mobile-nav fixed inset-x-0 bottom-0 z-[45] lg:hidden">
         <div className="mx-auto grid h-[68px] max-w-xl grid-cols-5 items-center px-1">
           {[menuItems[0], menuItems[1], menuItems[4], menuItems[3]].map((item) => {

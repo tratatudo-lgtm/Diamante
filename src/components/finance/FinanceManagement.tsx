@@ -456,37 +456,6 @@ export const FinanceManagement: React.FC<FinanceManagementProps> = ({ onNavigate
                 <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
                   Gestão Central de Liquidações, Transferências Imediatas e Pagamentos a Clientes
                 </p>
-                {onNavigate && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={() => onNavigate('/dashboard-admin')}
-                      className="text-xs text-slate-400 hover:text-[#D4AF37] flex items-center gap-1 transition-colors cursor-pointer font-mono"
-                    >
-                      &larr; Centro de Operações
-                    </button>
-                    <span className="text-slate-600">&bull;</span>
-                    <button
-                      onClick={() => onNavigate('/stores')}
-                      className="text-xs text-slate-400 hover:text-[#D4AF37] transition-colors cursor-pointer font-mono"
-                    >
-                      Gestão de Lojas
-                    </button>
-                    <span className="text-slate-600">&bull;</span>
-                    <button
-                      onClick={() => onNavigate('/employees')}
-                      className="text-xs text-slate-400 hover:text-[#D4AF37] transition-colors cursor-pointer font-mono"
-                    >
-                      Funcionários
-                    </button>
-                    <span className="text-slate-600">&bull;</span>
-                    <button
-                      onClick={() => onNavigate('/clients')}
-                      className="text-xs text-slate-400 hover:text-[#D4AF37] transition-colors cursor-pointer font-mono"
-                    >
-                      Clientes & Fornecedores
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
