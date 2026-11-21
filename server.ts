@@ -29,6 +29,7 @@ import { sendWhatsAppBirthdayGreeting } from './whatsapp.service';
 import { requiresSecondPurchaseApproval } from './store-purchase-validation';
 import { authorizePurchase } from './purchase-approval';
 import diamanteIntelligenceWebhook from './diamante-intelligence.webhook';
+import { configureDiamanteIntelligenceWebhook } from './diamante-intelligence.webhook-config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1360,6 +1361,7 @@ setupViteOrStatic().then(() => {
   const HOST = '0.0.0.0';
   httpServer.listen(PORT, HOST, () => {
     startBirthdayWhatsAppWorker();
+    void configureDiamanteIntelligenceWebhook();
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
     console.log(`Porta: ${PORT}`);
