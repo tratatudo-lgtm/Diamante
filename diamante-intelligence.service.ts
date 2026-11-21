@@ -81,7 +81,7 @@ export async function generateDiamanteIntelligenceReply(jid: string, message: st
   if (!apiKey) throw new Error('GROQ_NOT_CONFIGURED');
 
   const profile = await resolveProfile(jid);
-  const model = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+  const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
