@@ -1,4 +1,4 @@
-import { findUserInSupabaseByPhone } from './auth.service';
+import { findUserInSupabaseByPhone, supabaseAdmin } from './auth.service';
 
 type IntelligenceProfile =
   | { kind: 'public' }
