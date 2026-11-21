@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './components/landing/LandingPage';
+import { FestiveThemeOverlay } from './components/common/FestiveThemeOverlay';
 import { LoginPage } from './components/auth/LoginPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminDashboard as AdminWarRoomDashboard } from './components/admin/AdminDashboard_old_operational';
@@ -279,7 +280,10 @@ function AppRouter() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppRouter />
+      <>
+        <FestiveThemeOverlay />
+        <AppRouter />
+      </>
     </AuthProvider>
   );
 }
