@@ -4,8 +4,9 @@ export async function configureDiamanteIntelligenceWebhook(): Promise<void> {
   const apiKey = process.env.EVOLUTION_API_KEY || '';
   const instance = process.env.EVOLUTION_INSTANCE || 'diamante-os';
   const secret = process.env.EVOLUTION_WEBHOOK_SECRET || '';
+  const groqKey = process.env.GROQ_API_KEY || '';
   const publicBase = (process.env.PUBLIC_URL || process.env.APP_URL || process.env.FRONTEND_URL || '').replace(/\/+$/, '');
-  if (!baseUrl || !apiKey || !instance || !secret || !publicBase) {
+  if (!baseUrl || !apiKey || !instance || !secret || !publicBase || !groqKey) {
     console.warn('[Diamante Intelligence] Webhook Evolution não configurado: faltam variáveis obrigatórias.');
     return;
   }
