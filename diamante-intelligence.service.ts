@@ -2,7 +2,7 @@ import { findUserInSupabaseByPhone } from './auth.service';
 
 type IntelligenceProfile =
   | { kind: 'public' }
-  | { kind: 'employee'; role: string; name: string; storeName: string | null };
+  | { kind: 'employee'; role: string; name: string; storeName: string | null }\n  | { kind: 'client'; name: string };
 
 function normalizePhoneFromJid(jid: string): string {
   const raw = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
