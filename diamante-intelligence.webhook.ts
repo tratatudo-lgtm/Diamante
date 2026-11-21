@@ -72,7 +72,18 @@ router.post('/', async (req: Request, res: Response) => {
   if (!window || now >= window.resetAt) senderWindows.set(incoming.jid, { count: 1, resetAt: now + 60 * 1000 });
   else window.count += 1;
 
-  // Mark before processing to prevent webhook retries from generating duplicate replies.
+  const instanceName = process.env.EVOLUTION_INSTANCE || 'diamante-os';
+  const { data: eventRow, error: eventError } = await supabaseAdmin
+    .from('diamante_intelligence_webhook_events')
+    .insert({ instance_name: instanceName, message_id: incoming.id, status: 'processing' })
+    .select('id')
+    .maybeSingle();
+  if (eventError || !eventRow) {
+    if (eventError?.code === '23505') return res.status(200).json({ success: true, duplicate: true });
+    console.error('[Diamante Intelligence] Não foi possível registar o evento recebido.');
+    return res.status(503).json({ success: false });
+  }
+  // Secondary short-lived cache reduces duplicate work while the DB constraint remains authoritative.
   recentMessages.set(incoming.id, now);
   const number = incoming.jid.split('@')[0].split(':')[0].replace(/\D/g, '');
   if (!number || number.length < 8 || number.length > 15) return res.status(200).json({ success: true, ignored: true });
@@ -80,10 +91,14 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const reply = await generateDiamanteIntelligenceReply(incoming.jid, incoming.text);
     await sendEvolutionText(number, reply);
+    await supabaseAdmin.from('diamante_intelligence_webhook_events')
+      .update({ status: 'sent', processed_at: new Date().toISOString() }).eq('id', eventRow.id);
     return res.status(200).json({ success: true });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'UNKNOWN';
     console.error(`[Diamante Intelligence] Mensagem não processada: ${code}.`);
+    await supabaseAdmin.from('diamante_intelligence_webhook_events')
+      .update({ status: 'failed', error_code: code.slice(0, 80), processed_at: new Date().toISOString() }).eq('id', eventRow.id);
     return res.status(200).json({ success: true, processed: false });
   }
 });
