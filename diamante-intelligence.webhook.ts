@@ -4,26 +4,14 @@ import { supabaseAdmin } from './auth.service';
 import { generateDiamanteIntelligenceReply } from './diamante-intelligence.service';
 
 const router = Router();
-const recentMessages = new Map<string, number>();
 const senderWindows = new Map<string, { count: number; resetAt: number }>();
-const MESSAGE_CACHE_TTL_MS = 10 * 60 * 1000;
 const SENDER_WINDOW_MS = 60 * 1000;
 const MAX_MESSAGES_PER_SENDER = 8;
-const MAX_RECENT_MESSAGES = 5000;
 const MAX_TRACKED_SENDERS = 10000;
 
-function pruneMemoryState(now: number): void {
-  for (const [key, timestamp] of recentMessages) {
-    if (now - timestamp > MESSAGE_CACHE_TTL_MS) recentMessages.delete(key);
-  }
+function pruneSenderWindows(now: number): void {
   for (const [sender, window] of senderWindows) {
     if (now >= window.resetAt) senderWindows.delete(sender);
-  }
-  // Limites rígidos evitam crescimento ilimitado em processos de longa duração.
-  while (recentMessages.size > MAX_RECENT_MESSAGES) {
-    const oldest = recentMessages.keys().next().value;
-    if (oldest === undefined) break;
-    recentMessages.delete(oldest);
   }
   while (senderWindows.size > MAX_TRACKED_SENDERS) {
     const oldest = senderWindows.keys().next().value;
@@ -87,10 +75,8 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const now = Date.now();
-  pruneMemoryState(now);
+  pruneSenderWindows(now);
   const instanceName = process.env.EVOLUTION_INSTANCE || 'diamante-os';
-  const messageCacheKey = `${instanceName}:${incoming.id}`;
-
   const window = senderWindows.get(incoming.jid);
   if (window && now < window.resetAt && window.count >= MAX_MESSAGES_PER_SENDER) {
     return res.status(200).json({ success: true, rateLimited: true });
@@ -141,7 +127,6 @@ router.post('/', async (req: Request, res: Response) => {
     await sendEvolutionText(number, reply);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status: 'sent', processed_at: new Date().toISOString() }).eq('id', eventRow.id);
-    recentMessages.set(messageCacheKey, now);
     return res.status(200).json({ success: true });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'UNKNOWN';
