@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { supabaseAdmin } from './auth.service';
 import { generateDiamanteIntelligenceReply } from './diamante-intelligence.service';
-import { extractEvolutionTextMessage, normalizeEvolutionEventName } from './diamante-intelligence.webhook-utils';
+import { extractEvolutionTextMessage, getWebhookFailureStatus, normalizeEvolutionEventName } from './diamante-intelligence.webhook-utils';
 
 const router = Router();
 const senderWindows = new Map<string, { count: number; resetAt: number }>();
@@ -130,7 +130,7 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(200).json({ success: true });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'UNKNOWN';
-    const status = sendAttempted ? 'unknown' : 'failed';
+    const status = getWebhookFailureStatus(sendAttempted);
     console.error(`[Diamante Intelligence] Mensagem não processada: ${code}.`);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status, error_code: code.slice(0, 80), processed_at: new Date().toISOString() })
