@@ -47,6 +47,28 @@ router.get('/conversations', async (req: AdminRequest, res: Response) => {
   }
 });
 
+
+router.get('/audit', async (req: AdminRequest, res: Response) => {
+  const requested = Number(req.query.limit || 100);
+  const limit = Number.isInteger(requested) ? Math.min(200, Math.max(1, requested)) : 100;
+  const conversationId = req.query.conversationId;
+  if (conversationId !== undefined && !validUuid(conversationId)) {
+    return res.status(400).json({ success: false, message: 'Conversa inválida.' });
+  }
+  try {
+    let query = supabaseAdmin.from('whatsapp_admin_audit')
+      .select('id,conversation_id,admin_id,action,outcome,metadata,created_at')
+      .order('created_at', { ascending: false }).limit(limit);
+    if (typeof conversationId === 'string') query = query.eq('conversation_id', conversationId);
+    const { data, error } = await query;
+    if (error) throw error;
+    return res.json({ success: true, events: data || [] });
+  } catch {
+    console.error('[WhatsApp Admin] Falha ao carregar auditoria.');
+    return res.status(503).json({ success: false, message: 'Não foi possível carregar a auditoria.' });
+  }
+});
+
 router.get('/conversations/:id/messages', async (req: AdminRequest, res: Response) => {
   if (!validUuid(req.params.id)) return res.status(400).json({ success: false, message: 'Conversa inválida.' });
   try {
@@ -107,7 +129,13 @@ router.patch('/conversations/:id/status', async (req: AdminRequest, res: Respons
   if (!['unread', 'in_service', 'pending', 'resolved'].includes(status)) {
     return res.status(400).json({ success: false, message: 'Estado de conversa inválido.' });
   }
+  const adminId = req.adminUser?.id;
+  if (!adminId) return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
   try {
+    const { data: previous, error: previousError } = await supabaseAdmin.from('whatsapp_conversations')
+      .select('status').eq('id', req.params.id).maybeSingle();
+    if (previousError) throw previousError;
+    if (!previous) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
     const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', req.params.id)
@@ -115,6 +143,13 @@ router.patch('/conversations/:id/status', async (req: AdminRequest, res: Respons
       .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
+    if (previous.status !== status) {
+      const { error: auditError } = await supabaseAdmin.from('whatsapp_admin_audit').insert({
+        conversation_id: req.params.id, admin_id: adminId, action: 'conversation_status_changed',
+        outcome: 'success', metadata: { previous_status: previous.status, new_status: status },
+      });
+      if (auditError) throw auditError;
+    }
     return res.json({ success: true, conversation: data });
   } catch {
     console.error('[WhatsApp Admin] Falha ao alterar estado da conversa.');
