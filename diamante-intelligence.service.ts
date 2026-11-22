@@ -81,7 +81,9 @@ let modelCache: { ids: Set<string>; expiresAt: number } | null = null;
 async function selectEconomicalModel(apiKey: string): Promise<string> {
   const preferred = 'openai/gpt-oss-20b';
   const configured = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
-  if (!modelCache || Date.now() >= modelCache.expiresAt) {
+  const now = Date.now();
+  if (!modelCache || now >= modelCache.expiresAt) {
+    modelCache = null;
     try {
       const r = await fetch('https://api.groq.com/openai/v1/models', {
         headers: { Authorization: `Bearer ${apiKey}` },
@@ -90,16 +92,21 @@ async function selectEconomicalModel(apiKey: string): Promise<string> {
       if (r.ok) {
         const data = await r.json() as { data?: Array<{ id?: string }> };
         modelCache = { ids: new Set((data.data || []).map(x => x.id).filter((x): x is string => !!x)), expiresAt: Date.now() + 5 * 60 * 1000 };
+      } else {
+        console.error(`[Diamante Intelligence] Não foi possível validar modelos Groq (HTTP ${r.status}).`);
       }
-    } catch { /* discovery failure: use configured fallback */ }
+    } catch {
+      console.error('[Diamante Intelligence] Falha temporária ao validar modelos Groq.');
+    }
   }
-  if (modelCache?.ids.has(preferred)) return preferred;
-  if (modelCache?.ids.has('openai/gpt-oss-20b')) return 'openai/gpt-oss-20b';
-  if (modelCache?.ids.has('openai/gpt-oss-120b')) return 'openai/gpt-oss-120b';
-  if (modelCache?.ids.has(configured)) return configured;
-  // Listagem bem-sucedida mas sem modelo elegível: não enviar pedido a um modelo desconhecido/retirado.
-  if (modelCache && modelCache.expiresAt > Date.now()) throw new Error('GROQ_NO_SUPPORTED_MODEL');
-  // Falha de descoberta: utilizar o modelo configurado, sem ciclo de retries.
+  // Só confiar numa lista obtida com sucesso e ainda dentro do prazo de validade.
+  if (modelCache && modelCache.expiresAt > Date.now()) {
+    if (modelCache.ids.has(preferred)) return preferred;
+    if (modelCache.ids.has('openai/gpt-oss-120b')) return 'openai/gpt-oss-120b';
+    if (modelCache.ids.has(configured)) return configured;
+    throw new Error('GROQ_NO_SUPPORTED_MODEL');
+  }
+  // Sem validação disponível: usar apenas o modelo explicitamente configurado, sem retries.
   return configured;
 }
 
