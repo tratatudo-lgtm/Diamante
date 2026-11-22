@@ -102,8 +102,8 @@ router.post('/conversations/:id/reconcile-send', async (req: AdminRequest, res: 
   if (!validUuid(req.params.id)) return res.status(400).json({ success: false, message: 'Conversa inválida.' });
   const adminId = req.adminUser?.id;
   if (!adminId) return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
-  if (req.body?.confirmedNotDelivered !== true) {
-    return res.status(400).json({ success: false, message: 'É necessária confirmação explícita de que a mensagem não foi entregue.' });
+  if (req.body?.confirmedNotDelivered !== true || req.body?.workerStopped !== true) {
+    return res.status(400).json({ success: false, message: 'Confirme que verificou a não entrega e que o processo webhook foi parado antes de libertar a reserva.' });
   }
   try {
     const { data: conversation, error: readError } = await supabaseAdmin.from('whatsapp_conversations')
