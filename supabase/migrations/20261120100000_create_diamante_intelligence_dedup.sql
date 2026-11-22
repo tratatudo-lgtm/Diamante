@@ -4,7 +4,7 @@ create table if not exists public.diamante_intelligence_webhook_events (
   instance_name text not null,
   message_id text not null,
   status text not null default 'processing'
-    check (status in ('processing', 'sent', 'failed', 'ignored')),
+    check (status in ('processing', 'sending', 'sent', 'failed', 'unknown', 'ignored')),
   error_code text,
   retry_count integer not null default 0 check (retry_count between 0 and 1),
   received_at timestamptz not null default now(),
