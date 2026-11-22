@@ -9,10 +9,9 @@ function validUuid(value: unknown): value is string {
   return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-async function sendEvolutionText(number: string, text: string): Promise<void> {
+async function sendEvolutionText(number: string, text: string, instance: string): Promise<void> {
   const baseUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/+$/, '');
   const apiKey = process.env.EVOLUTION_API_KEY || '';
-  const instance = process.env.EVOLUTION_INSTANCE || 'diamante-os';
   if (!baseUrl || !apiKey || !instance) throw new Error('EVOLUTION_NOT_CONFIGURED');
   const response = await fetch(`${baseUrl}/message/sendText/${encodeURIComponent(instance)}`, {
     method: 'POST',
@@ -228,7 +227,7 @@ router.post('/conversations/:id/messages', async (req: AdminRequest, res: Respon
     }
 
     try {
-      await sendEvolutionText(conversation.contact_phone, body);
+      await sendEvolutionText(conversation.contact_phone, body, conversation.instance_name);
       const { error: sentError } = await supabaseAdmin.from('whatsapp_messages')
         .update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', pending.id).eq('status', 'sending');
       if (sentError) throw new Error('MESSAGE_STATUS_UPDATE_FAILED');
