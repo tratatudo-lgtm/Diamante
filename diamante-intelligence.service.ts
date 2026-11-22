@@ -80,7 +80,6 @@ function systemPrompt(profile: IntelligenceProfile): string {
 let modelCache: { ids: Set<string>; expiresAt: number } | null = null;
 async function selectEconomicalModel(apiKey: string): Promise<string> {
   const preferred = 'openai/gpt-oss-20b';
-  const configured = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
   const now = Date.now();
   if (!modelCache || now >= modelCache.expiresAt) {
     modelCache = null;
@@ -103,11 +102,10 @@ async function selectEconomicalModel(apiKey: string): Promise<string> {
   if (modelCache && modelCache.expiresAt > Date.now()) {
     if (modelCache.ids.has(preferred)) return preferred;
     if (modelCache.ids.has('openai/gpt-oss-120b')) return 'openai/gpt-oss-120b';
-    if (modelCache.ids.has(configured)) return configured;
     throw new Error('GROQ_NO_SUPPORTED_MODEL');
   }
-  // Sem validação disponível: usar apenas o modelo explicitamente configurado, sem retries.
-  return configured;
+  // Sem validação disponível, usar o modelo de produção mais económico documentado.
+  return preferred;
 }
 
 export async function generateDiamanteIntelligenceReply(jid: string, message: string): Promise<string> {
