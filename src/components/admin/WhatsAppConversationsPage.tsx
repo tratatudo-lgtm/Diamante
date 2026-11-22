@@ -16,6 +16,10 @@ export const WhatsAppConversationsPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
+  const [auditAction, setAuditAction] = useState('');
+  const [auditOutcome, setAuditOutcome] = useState('');
+  const [auditFrom, setAuditFrom] = useState('');
+  const [auditTo, setAuditTo] = useState('');
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -51,10 +55,15 @@ export const WhatsAppConversationsPage: React.FC = () => {
   const loadAudit = useCallback(async (id: string) => {
     if (!id) { setAuditEvents([]); return; }
     try {
-      const payload = await api('/audit?conversationId=' + encodeURIComponent(id) + '&limit=50');
+      const params = new URLSearchParams({ conversationId: id, limit: '100' });
+      if (auditAction) params.set('action', auditAction);
+      if (auditOutcome) params.set('outcome', auditOutcome);
+      if (auditFrom) params.set('from', auditFrom);
+      if (auditTo) params.set('to', auditTo);
+      const payload = await api('/audit?' + params.toString());
       setAuditEvents((payload.events || []) as AuditEvent[]);
     } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao carregar auditoria.'); }
-  }, [api]);
+  }, [api, auditAction, auditOutcome, auditFrom, auditTo]);
 
   const loadMessages = useCallback(async (id: string, quiet = false) => {
     if (!id) { setMessages([]); return; }
@@ -160,9 +169,15 @@ export const WhatsAppConversationsPage: React.FC = () => {
             </div>
 
             <div className="border-t border-white/10 bg-black/10 p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-[#e7c66c]">Auditoria desta conversa</h3>
-                <span className="text-[10px] text-slate-500">{auditEvents.length} eventos recentes</span>
+                <span className="text-[10px] text-slate-500">{auditEvents.length} eventos</span>
+              </div>
+              <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                <select value={auditAction} onChange={e => setAuditAction(e.target.value)} className="rounded-lg border border-white/10 bg-[#101b2c] px-2 py-2 text-[10px] text-slate-200"><option value="">Todas as intervenções</option><option value="control_taken">Assumir conversa</option><option value="control_released">Devolver ao Diamante</option><option value="admin_message_created">Resposta criada</option><option value="admin_message_sent">Resposta enviada</option><option value="admin_message_failed">Envio falhado</option><option value="admin_message_unknown">Envio incerto</option><option value="conversation_status_changed">Alteração de estado</option></select>
+                <select value={auditOutcome} onChange={e => setAuditOutcome(e.target.value)} className="rounded-lg border border-white/10 bg-[#101b2c] px-2 py-2 text-[10px] text-slate-200"><option value="">Todos os resultados</option><option value="success">Sucesso</option><option value="failed">Falhou</option><option value="unknown">Por confirmar</option></select>
+                <input type="date" aria-label="Data inicial da auditoria" value={auditFrom} onChange={e => setAuditFrom(e.target.value)} className="rounded-lg border border-white/10 bg-[#101b2c] px-2 py-2 text-[10px] text-slate-200" />
+                <input type="date" aria-label="Data final da auditoria" value={auditTo} onChange={e => setAuditTo(e.target.value)} className="rounded-lg border border-white/10 bg-[#101b2c] px-2 py-2 text-[10px] text-slate-200" />
               </div>
               <div className="max-h-40 space-y-2 overflow-y-auto">
                 {auditEvents.map(event => <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/[.06] bg-white/[.025] px-3 py-2">
