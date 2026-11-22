@@ -7,6 +7,7 @@ set -euo pipefail
 psql -v ON_ERROR_STOP=1 -c 'DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;'
 psql -v ON_ERROR_STOP=1 -c 'CREATE TABLE public.funcionarios (id uuid PRIMARY KEY);'
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122100000_create_whatsapp_admin_conversations.sql
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122120000_add_whatsapp_ai_send_claim.sql
 
 # Confirma os estados individuais de controlo IA/humano e as permissões mínimas.
 psql -v ON_ERROR_STOP=1 <<'SQL'
@@ -57,4 +58,19 @@ BEGIN
 END $$;
 SQL
 
-echo "PASS: schema de conversas, histórico, controlo IA/humano e RLS."
+
+# Concorrência real: reserva do envio Diamante e takeover humano disputam a mesma linha.
+conversation_id="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone) VALUES ('ci-race','351900000002@s.whatsapp.net','351900000002') RETURNING id;")"
+claim_token="$(psql -X -qAt -v ON_ERROR_STOP=1 -c 'SELECT gen_random_uuid();')"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+(psql -X -qAt -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_conversations SET ai_send_token='${claim_token}', ai_send_started_at=now() WHERE id='${conversation_id}' AND mode='ai' AND ai_send_token IS NULL RETURNING id;" >"$tmp/ai.out") &
+pid_ai=$!
+(psql -X -qAt -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_conversations SET mode='human', assigned_admin_id='00000000-0000-4000-8000-000000000001' WHERE id='${conversation_id}' AND mode='ai' AND ai_send_token IS NULL RETURNING id;" >"$tmp/human.out") &
+pid_human=$!
+wait "$pid_ai"
+wait "$pid_human"
+race_state="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "SELECT mode || ':' || (ai_send_token IS NOT NULL)::text FROM public.whatsapp_conversations WHERE id='${conversation_id}';")"
+[[ "$race_state" == "ai:true" || "$race_state" == "human:false" ]] || { echo "Race inconsistente: $race_state"; exit 1; }
+
+echo "PASS: schema, histórico, RLS e concorrência entre reserva Diamante e takeover humano."
