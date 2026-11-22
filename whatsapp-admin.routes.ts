@@ -27,7 +27,7 @@ router.get('/conversations', async (req: AdminRequest, res: Response) => {
   const limit = Number.isInteger(requested) ? Math.min(200, Math.max(1, requested)) : 100;
   try {
     const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
-      .select('id,instance_name,remote_jid,contact_phone,mode,status,assigned_admin_id,ai_send_token,last_message_at,created_at')
+      .select('id,instance_name,remote_jid,contact_phone,mode,status,assigned_admin_id,last_message_at,created_at')
       .order('last_message_at', { ascending: false }).limit(limit);
     if (error) throw error;
     const ids = (data || []).map((item: any) => item.id);
@@ -102,9 +102,9 @@ router.get('/conversations/:id/messages', async (req: AdminRequest, res: Respons
   try {
     const { data, error } = await supabaseAdmin.from('whatsapp_messages')
       .select('id,external_message_id,direction,sender_type,body,status,admin_id,created_at,sent_at')
-      .eq('conversation_id', req.params.id).order('created_at', { ascending: true }).limit(500);
+      .eq('conversation_id', req.params.id).order('created_at', { ascending: false }).limit(500);
     if (error) throw error;
-    return res.json({ success: true, messages: data || [] });
+    return res.json({ success: true, messages: (data || []).reverse() });
   } catch {
     console.error('[WhatsApp Admin] Falha ao carregar mensagens.');
     return res.status(503).json({ success: false, message: 'Não foi possível carregar o histórico.' });
