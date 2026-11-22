@@ -94,9 +94,12 @@ async function selectEconomicalModel(apiKey: string): Promise<string> {
     } catch { /* discovery failure: use configured fallback */ }
   }
   if (modelCache?.ids.has(preferred)) return preferred;
-  if (modelCache?.ids.has(configured)) return configured;
+  if (modelCache?.ids.has('openai/gpt-oss-20b')) return 'openai/gpt-oss-20b';
   if (modelCache?.ids.has('openai/gpt-oss-120b')) return 'openai/gpt-oss-120b';
-  // Se a listagem falhar, não bloqueia a operação nem inventa disponibilidade.
+  if (modelCache?.ids.has(configured)) return configured;
+  // Listagem bem-sucedida mas sem modelo elegível: não enviar pedido a um modelo desconhecido/retirado.
+  if (modelCache && modelCache.expiresAt > Date.now()) throw new Error('GROQ_NO_SUPPORTED_MODEL');
+  // Falha de descoberta: utilizar o modelo configurado, sem ciclo de retries.
   return configured;
 }
 
