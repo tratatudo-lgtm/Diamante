@@ -98,14 +98,13 @@ async function selectEconomicalModel(apiKey: string): Promise<string> {
       console.error('[Diamante Intelligence] Falha temporária ao validar modelos Groq.');
     }
   }
-  // Só confiar numa lista obtida com sucesso e ainda dentro do prazo de validade.
-  if (modelCache && modelCache.expiresAt > Date.now()) {
-    if (modelCache.ids.has(preferred)) return preferred;
-    if (modelCache.ids.has('openai/gpt-oss-120b')) return 'openai/gpt-oss-120b';
-    throw new Error('GROQ_NO_SUPPORTED_MODEL');
+  // Nunca chamar um modelo sem confirmação de que continua ativo na API Groq.
+  if (!modelCache || modelCache.expiresAt <= Date.now()) {
+    throw new Error('GROQ_MODEL_VALIDATION_UNAVAILABLE');
   }
-  // Sem validação disponível, usar o modelo de produção mais económico documentado.
-  return preferred;
+  // O Diamante usa exclusivamente o 20B para controlar custos e consumo.
+  if (modelCache.ids.has(preferred)) return preferred;
+  throw new Error('GROQ_NO_SUPPORTED_MODEL');
 }
 
 export async function generateDiamanteIntelligenceReply(jid: string, message: string): Promise<string> {
@@ -123,6 +122,7 @@ export async function generateDiamanteIntelligenceReply(jid: string, message: st
     body: JSON.stringify({
       model,
       temperature: 0.2,
+      reasoning_effort: 'low',
       max_tokens: 160,
       messages: [
         { role: 'system', content: systemPrompt(profile) },
