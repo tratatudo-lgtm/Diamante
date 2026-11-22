@@ -52,14 +52,30 @@ router.get('/audit', async (req: AdminRequest, res: Response) => {
   const requested = Number(req.query.limit || 100);
   const limit = Number.isInteger(requested) ? Math.min(200, Math.max(1, requested)) : 100;
   const conversationId = req.query.conversationId;
-  if (conversationId !== undefined && !validUuid(conversationId)) {
-    return res.status(400).json({ success: false, message: 'Conversa inválida.' });
-  }
+  const adminId = req.query.adminId;
+  const action = req.query.action;
+  const outcome = req.query.outcome;
+  const from = req.query.from;
+  const to = req.query.to;
+  const allowedActions = ['control_taken','control_released','admin_message_created','admin_message_sent','admin_message_failed','admin_message_unknown','conversation_status_changed'];
+  if (conversationId !== undefined && !validUuid(conversationId)) return res.status(400).json({ success: false, message: 'Conversa inválida.' });
+  if (adminId !== undefined && !validUuid(adminId)) return res.status(400).json({ success: false, message: 'Administrador inválido.' });
+  if (action !== undefined && (typeof action !== 'string' || !allowedActions.includes(action))) return res.status(400).json({ success: false, message: 'Tipo de intervenção inválido.' });
+  if (outcome !== undefined && !['success','failed','unknown'].includes(String(outcome))) return res.status(400).json({ success: false, message: 'Resultado inválido.' });
+  const validDate = (value: unknown) => typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z'));
+  if (from !== undefined && !validDate(from)) return res.status(400).json({ success: false, message: 'Data inicial inválida.' });
+  if (to !== undefined && !validDate(to)) return res.status(400).json({ success: false, message: 'Data final inválida.' });
+  if (typeof from === 'string' && typeof to === 'string' && from > to) return res.status(400).json({ success: false, message: 'O período indicado é inválido.' });
   try {
     let query = supabaseAdmin.from('whatsapp_admin_audit')
       .select('id,conversation_id,admin_id,action,outcome,metadata,created_at')
       .order('created_at', { ascending: false }).limit(limit);
     if (typeof conversationId === 'string') query = query.eq('conversation_id', conversationId);
+    if (typeof adminId === 'string') query = query.eq('admin_id', adminId);
+    if (typeof action === 'string') query = query.eq('action', action);
+    if (typeof outcome === 'string') query = query.eq('outcome', outcome);
+    if (typeof from === 'string') query = query.gte('created_at', from + 'T00:00:00.000Z');
+    if (typeof to === 'string') query = query.lt('created_at', new Date(Date.parse(to + 'T00:00:00.000Z') + 86400000).toISOString());
     const { data, error } = await query;
     if (error) throw error;
     return res.json({ success: true, events: data || [] });
