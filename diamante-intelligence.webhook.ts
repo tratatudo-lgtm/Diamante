@@ -90,7 +90,6 @@ router.post('/', async (req: Request, res: Response) => {
   pruneMemoryState(now);
   const instanceName = process.env.EVOLUTION_INSTANCE || 'diamante-os';
   const messageCacheKey = `${instanceName}:${incoming.id}`;
-  if (recentMessages.has(messageCacheKey)) return res.status(200).json({ success: true, duplicate: true });
 
   const window = senderWindows.get(incoming.jid);
   if (window && now < window.resetAt && window.count >= MAX_MESSAGES_PER_SENDER) {
@@ -98,18 +97,37 @@ router.post('/', async (req: Request, res: Response) => {
   }
   if (!window || now >= window.resetAt) senderWindows.set(incoming.jid, { count: 1, resetAt: now + SENDER_WINDOW_MS });
   else window.count += 1;
-  const { data: eventRow, error: eventError } = await supabaseAdmin
+  let { data: eventRow, error: eventError } = await supabaseAdmin
     .from('diamante_intelligence_webhook_events')
     .insert({ instance_name: instanceName, message_id: incoming.id, status: 'processing' })
     .select('id')
     .maybeSingle();
-  if (eventError || !eventRow) {
-    if (eventError?.code === '23505') return res.status(200).json({ success: true, duplicate: true });
+  if (eventError?.code === '23505') {
+    // Só é seguro repetir uma falha Groq: nesta fase ainda não foi tentado qualquer envio WhatsApp.
+    const { data: previous } = await supabaseAdmin
+      .from('diamante_intelligence_webhook_events')
+      .select('id,status,error_code,retry_count')
+      .eq('instance_name', instanceName)
+      .eq('message_id', incoming.id)
+      .maybeSingle();
+    if (previous?.status === 'failed' && typeof previous.error_code === 'string' && previous.error_code.startsWith('GROQ_') && previous.retry_count === 0) {
+      const claimed = await supabaseAdmin
+        .from('diamante_intelligence_webhook_events')
+        .update({ status: 'processing', error_code: null, processed_at: null, retry_count: 1 })
+        .eq('id', previous.id)
+        .eq('status', 'failed')
+        .eq('retry_count', 0)
+        .like('error_code', 'GROQ_%')
+        .select('id')
+        .maybeSingle();
+      eventRow = claimed.data;
+      eventError = claimed.error;
+    }
+    if (!eventRow || eventError) return res.status(200).json({ success: true, duplicate: true });
+  } else if (eventError || !eventRow) {
     console.error('[Diamante Intelligence] Não foi possível registar o evento recebido.');
     return res.status(503).json({ success: false });
   }
-  // Secondary short-lived cache reduces duplicate work while the DB constraint remains authoritative.
-  recentMessages.set(messageCacheKey, now);
   const number = incoming.jid.split('@')[0].split(':')[0].replace(/\D/g, '');
   if (!number || number.length < 8 || number.length > 15) {
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
@@ -123,6 +141,7 @@ router.post('/', async (req: Request, res: Response) => {
     await sendEvolutionText(number, reply);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status: 'sent', processed_at: new Date().toISOString() }).eq('id', eventRow.id);
+    recentMessages.set(messageCacheKey, now);
     return res.status(200).json({ success: true });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'UNKNOWN';
