@@ -3,7 +3,7 @@ export function normalizeEvolutionEventName(value: unknown): string {
   return String(value || '').trim().toLowerCase().replace(/[._-]/g, '_');
 }
 
-export type EvolutionTextMessage = { id: string; jid: string; text: string; fromMe: boolean };
+export type EvolutionTextMessage = { id: string; jid: string; phone: string | null; text: string; fromMe: boolean };
 
 /** Extract only supported text/caption payloads from Evolution message-upsert variants. */
 export function extractEvolutionTextMessage(body: any): EvolutionTextMessage | null {
@@ -11,7 +11,7 @@ export function extractEvolutionTextMessage(body: any): EvolutionTextMessage | n
   const item = payload?.messages?.[0];
   const key = payload?.key || item?.key;
   const message = payload?.message || item?.message;
-  const jid = typeof key?.remoteJid === 'string' ? key.remoteJid : '';
+  const jid = typeof key?.remoteJid === 'string' ? key.remoteJid : '';\n  const remoteJidAlt = typeof key?.remoteJidAlt === 'string' ? key.remoteJidAlt : '';\n  // WhatsApp LID is an opaque identifier, never a telephone number. Use the PN\n  // alternative only when Evolution supplies a valid @s.whatsapp.net JID.\n  const phoneJid = jid.endsWith('@lid') ? remoteJidAlt : jid;\n  const phoneDigits = phoneJid.endsWith('@s.whatsapp.net')\n    ? phoneJid.split('@')[0].split(':')[0].replace(/\\D/g, '')\n    : '';\n  const phone = phoneDigits.length >= 8 && phoneDigits.length <= 15 ? phoneDigits : null;
   const id = typeof key?.id === 'string' ? key.id : '';
   const candidates = [
     message?.conversation,
@@ -21,7 +21,7 @@ export function extractEvolutionTextMessage(body: any): EvolutionTextMessage | n
   ];
   const text = candidates.find((value) => typeof value === 'string' && value.trim());
   if (!id || !jid || typeof text !== 'string') return null;
-  return { id, jid, text: text.trim(), fromMe: key?.fromMe === true };
+  return { id, jid, phone, text: text.trim(), fromMe: key?.fromMe === true };
 }
 
 /** A failed AI step is safe to retry; an attempted external send has an ambiguous outcome. */
