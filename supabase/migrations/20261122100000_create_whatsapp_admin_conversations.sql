@@ -6,6 +6,8 @@ create table if not exists public.whatsapp_conversations (
   contact_phone text not null,
   mode text not null default 'ai' check (mode in ('ai', 'human')),
   assigned_admin_id uuid references public.funcionarios(id) on delete set null,
+  last_controlled_by uuid references public.funcionarios(id) on delete set null,
+  last_control_changed_at timestamptz,
   last_message_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
