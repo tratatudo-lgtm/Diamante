@@ -61,7 +61,7 @@ router.get('/audit', async (req: AdminRequest, res: Response) => {
   if (adminId !== undefined && !validUuid(adminId)) return res.status(400).json({ success: false, message: 'Administrador inválido.' });
   if (action !== undefined && (typeof action !== 'string' || !allowedActions.includes(action))) return res.status(400).json({ success: false, message: 'Tipo de intervenção inválido.' });
   if (outcome !== undefined && !['success','failed','unknown'].includes(String(outcome))) return res.status(400).json({ success: false, message: 'Resultado inválido.' });
-  const validDate = (value: unknown) => typeof value === 'string' && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z'));
+  const validDate = (value: unknown) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value + 'T00:00:00Z'));
   if (from !== undefined && !validDate(from)) return res.status(400).json({ success: false, message: 'Data inicial inválida.' });
   if (to !== undefined && !validDate(to)) return res.status(400).json({ success: false, message: 'Data final inválida.' });
   if (typeof from === 'string' && typeof to === 'string' && from > to) return res.status(400).json({ success: false, message: 'O período indicado é inválido.' });
