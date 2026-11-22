@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getWebhookFailureStatus, normalizeEvolutionEventName } from '../diamante-intelligence.webhook-utils';
+import { getWebhookFailureStatus, isSupportedEvolutionEvent, normalizeEvolutionEventName } from '../diamante-intelligence.webhook-utils';
 
 test('normaliza MESSAGES_UPSERT da Evolution API', () => {
   assert.equal(normalizeEvolutionEventName('MESSAGES_UPSERT'), 'messages_upsert');
@@ -50,4 +50,13 @@ test('falha antes do envio fica failed e pode ser repetida segundo a política',
 
 test('falha depois de iniciar envio fica unknown e nunca deve ser repetida automaticamente', () => {
   assert.equal(getWebhookFailureStatus(true), 'unknown');
+});
+
+
+test('exige evento MESSAGES_UPSERT explícito antes de processar payload', () => {
+  assert.equal(isSupportedEvolutionEvent('MESSAGES_UPSERT'), true);
+  assert.equal(isSupportedEvolutionEvent('messages.upsert'), true);
+  assert.equal(isSupportedEvolutionEvent(undefined), false);
+  assert.equal(isSupportedEvolutionEvent(''), false);
+  assert.equal(isSupportedEvolutionEvent('CONNECTION_UPDATE'), false);
 });
