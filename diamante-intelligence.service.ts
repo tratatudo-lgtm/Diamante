@@ -123,7 +123,8 @@ export async function generateDiamanteIntelligenceReply(jid: string, message: st
       model,
       temperature: 0.2,
       reasoning_effort: 'low',
-      max_tokens: 160,
+      include_reasoning: false,
+      max_completion_tokens: 256,
       messages: [
         { role: 'system', content: systemPrompt(profile) },
         { role: 'user', content: message.slice(0, 1500) },
