@@ -137,7 +137,7 @@ router.post('/conversations/:id/messages', async (req: AdminRequest, res: Respon
     if (conversationError) throw conversationError;
     if (!conversation) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
     if (conversation.mode !== 'human') return res.status(409).json({ success: false, message: 'Assuma primeiro esta conversa para suspender o Assistente Diamante.' });
-    if (!conversation.contact_phone || !/^\\d{8,15}$/.test(conversation.contact_phone)) {
+    if (!conversation.contact_phone || !/^\d{8,15}$/.test(conversation.contact_phone)) {
       return res.status(409).json({ success: false, message: 'Não é possível enviar: o número de WhatsApp deste contacto ainda não está identificado.' });
     }
 
