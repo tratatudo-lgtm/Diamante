@@ -68,13 +68,19 @@ router.patch('/conversations/:id/control', async (req: AdminRequest, res: Respon
   const adminId = req.adminUser?.id;
   if (!adminId) return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
   try {
-    const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
+    let claim = supabaseAdmin.from('whatsapp_conversations')
       .update({ mode, assigned_admin_id: mode === 'human' ? adminId : null, last_controlled_by: adminId, last_control_changed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', req.params.id)
+      .eq('id', req.params.id);
+    // Um único administrador pode deter o controlo humano. Evita que dois operadores
+    // assumam simultaneamente a mesma conversa ou que um liberte a sessão do outro.
+    claim = mode === 'human'
+      ? claim.or(`mode.eq.ai,assigned_admin_id.eq.${adminId}`)
+      : claim.eq('mode', 'human').eq('assigned_admin_id', adminId);
+    const { data, error } = await claim
       .select('id,mode,assigned_admin_id,updated_at')
       .maybeSingle();
     if (error) throw error;
-    if (!data) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
+    if (!data) return res.status(409).json({ success: false, message: 'A conversa já está atribuída a outro administrador ou já não está sob o seu controlo.' });
     return res.json({ success: true, conversation: data });
   } catch {
     console.error('[WhatsApp Admin] Falha ao alterar controlo da conversa.');
@@ -128,8 +134,8 @@ router.post('/conversations/:id/messages', async (req: AdminRequest, res: Respon
 
     try {
       const { data: latestConversation, error: latestError } = await supabaseAdmin.from('whatsapp_conversations')
-        .select('mode').eq('id', conversation.id).maybeSingle();
-      if (latestError || latestConversation?.mode !== 'human') {
+        .select('mode,assigned_admin_id').eq('id', conversation.id).maybeSingle();
+      if (latestError || latestConversation?.mode !== 'human' || latestConversation?.assigned_admin_id !== adminId) {
         await supabaseAdmin.from('whatsapp_messages').update({ status: 'failed' }).eq('id', pending.id).eq('status', 'sending');
         return res.status(409).json({ success: false, message: 'O controlo humano já não está ativo nesta conversa.' });
       }
