@@ -129,8 +129,25 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   let sendAttempted = false;
+  let aiMessageId: string | null = null;
   try {
     const reply = await generateDiamanteIntelligenceReply(incoming.jid, incoming.text);
+    // Revalidar o controlo depois da geração: uma tomada humana entretanto iniciada
+    // impede a resposta automática desta mensagem.
+    const { data: currentConversation, error: modeError } = await supabaseAdmin.from('whatsapp_conversations')
+      .select('mode').eq('id', conversation.id).maybeSingle();
+    if (modeError || !currentConversation) throw new Error('WHATSAPP_CONVERSATION_STATE_UNAVAILABLE');
+    if (currentConversation.mode !== 'ai') {
+      await supabaseAdmin.from('diamante_intelligence_webhook_events')
+        .update({ status: 'ignored', error_code: 'HUMAN_TAKEOVER', processed_at: new Date().toISOString() })
+        .eq('id', eventRow.id);
+      return res.status(200).json({ success: true, humanTakeover: true });
+    }
+    const { data: aiMessage, error: aiInsertError } = await supabaseAdmin.from('whatsapp_messages')
+      .insert({ conversation_id: conversation.id, direction: 'outbound', sender_type: 'ai', body: reply, status: 'sending' })
+      .select('id').maybeSingle();
+    if (aiInsertError || !aiMessage) throw new Error('WHATSAPP_AI_MESSAGE_LOG_FAILED');
+    aiMessageId = aiMessage.id;
     // Persistir o estado antes do pedido externo. Se o processo cair durante o envio,
     // o evento fica em 'sending' e nunca é repetido automaticamente.
     const sending = await supabaseAdmin.from('diamante_intelligence_webhook_events')
@@ -142,6 +159,10 @@ router.post('/', async (req: Request, res: Response) => {
     if (sending.error || !sending.data) throw new Error('WEBHOOK_STATE_TRANSITION_FAILED');
     sendAttempted = true;
     await sendEvolutionText(number, reply);
+    await supabaseAdmin.from('whatsapp_messages')
+      .update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', aiMessageId).eq('status', 'sending');
+    await supabaseAdmin.from('whatsapp_conversations')
+      .update({ last_message_at: new Date().toISOString() }).eq('id', conversation.id);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status: 'sent', processed_at: new Date().toISOString() })
       .eq('id', eventRow.id)
@@ -151,6 +172,10 @@ router.post('/', async (req: Request, res: Response) => {
     const code = error instanceof Error ? error.message : 'UNKNOWN';
     const status = getWebhookFailureStatus(sendAttempted);
     console.error(`[Diamante Intelligence] Mensagem não processada: ${code}.`);
+    if (aiMessageId) {
+      await supabaseAdmin.from('whatsapp_messages')
+        .update({ status: sendAttempted ? 'unknown' : 'failed' }).eq('id', aiMessageId).eq('status', 'sending');
+    }
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status, error_code: code.slice(0, 80), processed_at: new Date().toISOString() })
       .eq('id', eventRow.id)
