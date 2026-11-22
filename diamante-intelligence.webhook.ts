@@ -132,16 +132,23 @@ router.post('/', async (req: Request, res: Response) => {
   let aiMessageId: string | null = null;
   try {
     const reply = await generateDiamanteIntelligenceReply(incoming.jid, incoming.text);
-    // Revalidar o controlo depois da geração: uma tomada humana entretanto iniciada
-    // impede a resposta automática desta mensagem.
-    const { data: currentConversation, error: modeError } = await supabaseAdmin.from('whatsapp_conversations')
-      .select('mode').eq('id', conversation.id).maybeSingle();
-    if (modeError || !currentConversation) throw new Error('WHATSAPP_CONVERSATION_STATE_UNAVAILABLE');
-    if (currentConversation.mode !== 'ai') {
+    // Reserva atómica da conversa: takeover e envio automático competem pela mesma linha.
+    // Uma reserva ativa impede o takeover; reservas com mais de 60s podem ser recuperadas,
+    // pois o pedido Evolution tem timeout máximo de 15s. O evento nunca é repetido cegamente.
+    const staleClaimBefore = new Date(Date.now() - 60_000).toISOString();
+    const { data: sendClaim, error: claimError } = await supabaseAdmin.from('whatsapp_conversations')
+      .update({ ai_send_token: eventRow.id, ai_send_started_at: new Date().toISOString() })
+      .eq('id', conversation.id)
+      .eq('mode', 'ai')
+      .or(`ai_send_token.is.null,ai_send_started_at.lt.${staleClaimBefore}`)
+      .select('id')
+      .maybeSingle();
+    if (claimError || !sendClaim) {
       await supabaseAdmin.from('diamante_intelligence_webhook_events')
-        .update({ status: 'ignored', error_code: 'HUMAN_TAKEOVER', processed_at: new Date().toISOString() })
-        .eq('id', eventRow.id);
-      return res.status(200).json({ success: true, humanTakeover: true });
+        .update({ status: 'ignored', error_code: 'HUMAN_TAKEOVER_OR_SEND_IN_PROGRESS', processed_at: new Date().toISOString() })
+        .eq('id', eventRow.id)
+        .eq('status', 'processing');
+      return res.status(200).json({ success: true, humanTakeover: true, sendInProgress: true });
     }
     const { data: aiMessage, error: aiInsertError } = await supabaseAdmin.from('whatsapp_messages')
       .insert({ conversation_id: conversation.id, direction: 'outbound', sender_type: 'ai', body: reply, status: 'sending' })
@@ -162,7 +169,9 @@ router.post('/', async (req: Request, res: Response) => {
     await supabaseAdmin.from('whatsapp_messages')
       .update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', aiMessageId).eq('status', 'sending');
     await supabaseAdmin.from('whatsapp_conversations')
-      .update({ last_message_at: new Date().toISOString() }).eq('id', conversation.id);
+      .update({ last_message_at: new Date().toISOString(), ai_send_token: null, ai_send_started_at: null })
+      .eq('id', conversation.id)
+      .eq('ai_send_token', eventRow.id);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status: 'sent', processed_at: new Date().toISOString() })
       .eq('id', eventRow.id)
@@ -176,6 +185,11 @@ router.post('/', async (req: Request, res: Response) => {
       await supabaseAdmin.from('whatsapp_messages')
         .update({ status: sendAttempted ? 'unknown' : 'failed' }).eq('id', aiMessageId).eq('status', 'sending');
     }
+    // Libertar apenas a reserva deste evento; não tocar numa reserva posterior.
+    await supabaseAdmin.from('whatsapp_conversations')
+      .update({ ai_send_token: null, ai_send_started_at: null })
+      .eq('id', conversation.id)
+      .eq('ai_send_token', eventRow.id);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status, error_code: code.slice(0, 80), processed_at: new Date().toISOString() })
       .eq('id', eventRow.id)
