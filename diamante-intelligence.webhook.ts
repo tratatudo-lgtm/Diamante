@@ -88,7 +88,11 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(200).json({ success: true, humanTakeover: true });
   }
 
-  if (!incoming.phone) {\n    return res.status(200).json({ success: true, unresolvedPhone: true });\n  }\n\n  let { data: eventRow, error: eventError } = await supabaseAdmin
+  if (!incoming.phone) {
+    return res.status(200).json({ success: true, unresolvedPhone: true });
+  }
+
+  let { data: eventRow, error: eventError } = await supabaseAdmin
     .from('diamante_intelligence_webhook_events')
     .insert({ instance_name: instanceName, message_id: incoming.id, status: 'processing' })
     .select('id')
