@@ -96,7 +96,7 @@ router.post('/conversations/:id/messages', async (req: AdminRequest, res: Respon
       .select('id,remote_jid,contact_phone,mode,instance_name').eq('id', req.params.id).maybeSingle();
     if (conversationError) throw conversationError;
     if (!conversation) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
-    if (conversation.mode !== 'human') return res.status(409).json({ success: false, message: 'Assuma primeiro esta conversa para suspender o Groq.' });
+    if (conversation.mode !== 'human') return res.status(409).json({ success: false, message: 'Assuma primeiro esta conversa para suspender o Assistente Diamante.' });
 
     const { data: pending, error: insertError } = await supabaseAdmin.from('whatsapp_messages')
       .insert({ conversation_id: conversation.id, client_message_id: clientMessageId, direction: 'outbound', sender_type: 'admin', body, status: 'sending', admin_id: adminId })
