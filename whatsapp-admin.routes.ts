@@ -114,7 +114,17 @@ router.post('/conversations/:id/reconcile-send', async (req: AdminRequest, res: 
     const { data: event, error: eventError } = await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .select('id,status').eq('id', conversation.ai_send_token).maybeSingle();
     if (eventError) throw eventError;
-    if (!event || !['sending', 'unknown'].includes(event.status)) {
+    let pendingManualMessage: { id: string; status: string } | null = null;
+    if (!event) {
+      const { data: manualMessage, error: manualError } = await supabaseAdmin.from('whatsapp_messages')
+        .select('id,status').eq('conversation_id', conversation.id)
+        .eq('client_message_id', conversation.ai_send_token).maybeSingle();
+      if (manualError) throw manualError;
+      pendingManualMessage = manualMessage;
+    }
+    const validWebhookState = !!event && ['sending', 'unknown'].includes(event.status);
+    const validManualState = !!pendingManualMessage && ['sending', 'unknown'].includes(pendingManualMessage.status);
+    if (!validWebhookState && !validManualState) {
       return res.status(409).json({ success: false, message: 'O estado do envio não permite esta reconciliação.' });
     }
     const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
@@ -173,23 +183,36 @@ router.post('/conversations/:id/messages', async (req: AdminRequest, res: Respon
     if (insertError?.code === '23505') return res.status(409).json({ success: false, message: 'Este envio já foi registado.' });
     if (insertError || !pending) throw insertError || new Error('MESSAGE_INSERT_FAILED');
 
+    // A reserva é atómica e usa a mesma coluna que bloqueia o envio do Diamante.
+    // Assim, devolver o controlo ou assumir a conversa não pode ultrapassar um envio manual.
+    const { data: manualClaim, error: claimError } = await supabaseAdmin.from('whatsapp_conversations')
+      .update({ ai_send_token: clientMessageId, ai_send_started_at: new Date().toISOString() })
+      .eq('id', conversation.id)
+      .eq('mode', 'human')
+      .eq('assigned_admin_id', adminId)
+      .is('ai_send_token', null)
+      .select('id')
+      .maybeSingle();
+    if (claimError || !manualClaim) {
+      await supabaseAdmin.from('whatsapp_messages').update({ status: 'failed' }).eq('id', pending.id).eq('status', 'sending');
+      if (claimError) throw claimError;
+      return res.status(409).json({ success: false, message: 'O controlo humano mudou ou existe outro envio em curso. A mensagem não foi enviada.' });
+    }
+
     try {
-      const { data: latestConversation, error: latestError } = await supabaseAdmin.from('whatsapp_conversations')
-        .select('mode,assigned_admin_id').eq('id', conversation.id).maybeSingle();
-      if (latestError || latestConversation?.mode !== 'human' || latestConversation?.assigned_admin_id !== adminId) {
-        await supabaseAdmin.from('whatsapp_messages').update({ status: 'failed' }).eq('id', pending.id).eq('status', 'sending');
-        return res.status(409).json({ success: false, message: 'O controlo humano já não está ativo nesta conversa.' });
-      }
       await sendEvolutionText(conversation.contact_phone, body);
       const { error: sentError } = await supabaseAdmin.from('whatsapp_messages')
         .update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', pending.id).eq('status', 'sending');
       if (sentError) throw new Error('MESSAGE_STATUS_UPDATE_FAILED');
-      await supabaseAdmin.from('whatsapp_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conversation.id);
+      await supabaseAdmin.from('whatsapp_conversations')
+        .update({ last_message_at: new Date().toISOString(), ai_send_token: null, ai_send_started_at: null })
+        .eq('id', conversation.id).eq('ai_send_token', clientMessageId);
       return res.json({ success: true, messageId: pending.id });
     } catch {
       await supabaseAdmin.from('whatsapp_messages')
         .update({ status: 'unknown' }).eq('id', pending.id).eq('status', 'sending');
-      return res.status(502).json({ success: false, delivery: 'unknown', message: 'O envio foi iniciado mas não foi possível confirmar o resultado. Não repita automaticamente; verifique a conversa no WhatsApp.' });
+      // Manter a reserva: o envio pode ter sido aceite pela Evolution apesar do timeout.
+      return res.status(502).json({ success: false, delivery: 'unknown', message: 'O envio foi iniciado mas não foi possível confirmar o resultado. A conversa fica bloqueada até reconciliação manual.' });
     }
   } catch {
     console.error('[WhatsApp Admin] Falha no envio manual.');
