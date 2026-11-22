@@ -28,3 +28,8 @@ export function extractEvolutionTextMessage(body: any): EvolutionTextMessage | n
 export function getWebhookFailureStatus(sendAttempted: boolean): 'failed' | 'unknown' {
   return sendAttempted ? 'unknown' : 'failed';
 }
+
+/** Only process explicitly identified Evolution message-upsert events. */
+export function isSupportedEvolutionEvent(value: unknown): boolean {
+  return normalizeEvolutionEventName(value) === 'messages_upsert';
+}
