@@ -1,10 +1,10 @@
 /** Configure the Evolution instance to deliver only incoming message events to Diamante OS. */
 export async function configureDiamanteIntelligenceWebhook(): Promise<void> {
-  const baseUrl = (process.env.EVOLUTION_API_URL || '').replace(/\\/+$/, '');
+  const baseUrl = (process.env.EVOLUTION_API_URL || '').replace(/\/+$/, '');
   const apiKey = process.env.EVOLUTION_API_KEY || '';
   const instance = process.env.EVOLUTION_INSTANCE || 'diamante-os';
   const secret = process.env.EVOLUTION_WEBHOOK_SECRET || '';
-  const publicBase = (process.env.PUBLIC_URL || process.env.APP_URL || '').replace(/\\/+$/, '');
+  const publicBase = (process.env.PUBLIC_URL || process.env.APP_URL || '').replace(/\/+$/, '');
   if (!baseUrl || !apiKey || !instance || !secret || !publicBase) {
     console.warn('[Diamante Intelligence] Webhook Evolution não configurado: faltam variáveis obrigatórias.');
     return;
