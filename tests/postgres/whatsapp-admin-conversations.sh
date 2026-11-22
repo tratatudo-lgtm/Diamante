@@ -60,6 +60,7 @@ SQL
 
 
 # Concorrência real: reserva do envio Diamante e takeover humano disputam a mesma linha.
+psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.funcionarios (id) VALUES ('00000000-0000-4000-8000-000000000001');"
 conversation_id="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone) VALUES ('ci-race','351900000002@s.whatsapp.net','351900000002') RETURNING id;")"
 claim_token="$(psql -X -qAt -v ON_ERROR_STOP=1 -c 'SELECT gen_random_uuid();')"
 tmp="$(mktemp -d)"
