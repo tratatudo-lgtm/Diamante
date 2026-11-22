@@ -111,8 +111,9 @@ if [ "$claim_count" != "0" ]; then
   exit 1
 fi
 
-# A auditoria é append-only.
-if psql -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_admin_audit SET outcome='failed' WHERE false;" >/dev/null 2>&1; then
+# A auditoria é append-only: criar uma linha e tentar alterá-la tem de falhar.
+psql -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_admin_audit (action, outcome) VALUES ('control_taken', 'success');"
+if psql -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_admin_audit SET outcome='failed' WHERE action='control_taken';" >/dev/null 2>&1; then
   echo "esperava que update na auditoria fosse recusado" >&2
   exit 1
 fi
