@@ -86,6 +86,18 @@ BEGIN
   SELECT mode INTO v_mode FROM public.whatsapp_conversations WHERE id = v_conversation;
   IF v_mode <> 'ai' THEN RAISE EXCEPTION 'retoma do Diamante não persistiu'; END IF;
 
+  UPDATE public.whatsapp_conversations
+  SET status = 'pending', last_controlled_by = '00000000-0000-4000-8000-000000000001'
+  WHERE id = v_conversation;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.whatsapp_admin_audit
+    WHERE conversation_id = v_conversation
+      AND action = 'conversation_status_changed'
+      AND admin_id = '00000000-0000-4000-8000-000000000001'
+  ) THEN
+    RAISE EXCEPTION 'alteração de estado não foi auditada na mesma transação';
+  END IF;
+
   SELECT relrowsecurity INTO v_rls FROM pg_class WHERE oid = 'public.whatsapp_conversations'::regclass;
   IF NOT v_rls THEN RAISE EXCEPTION 'RLS não está ativo'; END IF;
 
