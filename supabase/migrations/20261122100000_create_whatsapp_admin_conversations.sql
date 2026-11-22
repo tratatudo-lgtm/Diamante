@@ -49,7 +49,7 @@ alter table public.whatsapp_messages
 
 -- Colunas antigas continuam disponíveis para integrações históricas, mas deixam
 -- de ser obrigatórias para os novos registos do painel/webhook.
-do $
+do $legacy$
 begin
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'whatsapp_messages' and column_name = 'instance_name') then
     alter table public.whatsapp_messages alter column instance_name drop not null;
@@ -61,7 +61,7 @@ begin
     alter table public.whatsapp_messages alter column message_type drop not null;
   end if;
 end;
-$;
+$legacy$;
 
 -- Migrar o conteúdo antigo sem inventar direção ou autoria para mensagens históricas.
 do $$
