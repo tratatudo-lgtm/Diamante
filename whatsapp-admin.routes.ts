@@ -68,7 +68,6 @@ router.patch('/conversations/:id/control', async (req: AdminRequest, res: Respon
   const adminId = req.adminUser?.id;
   if (!adminId) return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
   try {
-    const staleClaimBefore = new Date(Date.now() - 60_000).toISOString();
     let claim = supabaseAdmin.from('whatsapp_conversations')
       .update({
         mode,
@@ -80,13 +79,12 @@ router.patch('/conversations/:id/control', async (req: AdminRequest, res: Respon
         ai_send_started_at: null,
       })
       .eq('id', req.params.id);
-    // Combinar as condições num único OR: chamar .or() duas vezes no PostgREST
-    // pode substituir o filtro anterior e remover a proteção da reserva de envio.
-    // Um único administrador pode deter o controlo humano.
+    // Uma reserva ativa, mesmo antiga, só pode ser libertada após revisão operacional.
+    // Não expirar automaticamente: um processo pausado pode ainda retomar o envio.
     claim = mode === 'human'
-      ? claim.or(`and(ai_send_token.is.null,or(mode.eq.ai,assigned_admin_id.eq.${adminId})),and(ai_send_started_at.lt.${staleClaimBefore},or(mode.eq.ai,assigned_admin_id.eq.${adminId}))`)
+      ? claim.is('ai_send_token', null).or(`mode.eq.ai,assigned_admin_id.eq.${adminId}`)
       : claim.eq('mode', 'human').eq('assigned_admin_id', adminId)
-          .or(`ai_send_token.is.null,ai_send_started_at.lt.${staleClaimBefore}`);
+          .is('ai_send_token', null);
     const { data, error } = await claim
       .select('id,mode,assigned_admin_id,updated_at')
       .maybeSingle();
