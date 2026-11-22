@@ -55,13 +55,22 @@ begin
       jsonb_build_object('previous_mode', old.mode, 'new_mode', new.mode)
     );
   end if;
+  if old.status is distinct from new.status then
+    insert into public.whatsapp_admin_audit (conversation_id, admin_id, action, metadata)
+    values (
+      new.id,
+      new.last_controlled_by,
+      'conversation_status_changed',
+      jsonb_build_object('previous_status', old.status, 'new_status', new.status)
+    );
+  end if;
   return new;
 end;
 $$;
 
 drop trigger if exists whatsapp_conversation_admin_audit on public.whatsapp_conversations;
 create trigger whatsapp_conversation_admin_audit
-after update of mode on public.whatsapp_conversations
+after update of mode, status on public.whatsapp_conversations
 for each row execute function public.audit_whatsapp_admin_conversation_change();
 
 create or replace function public.audit_whatsapp_admin_message()
