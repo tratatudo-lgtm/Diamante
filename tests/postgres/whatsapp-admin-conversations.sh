@@ -116,3 +116,13 @@ if psql -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_admin_audit SET outcome='f
   echo "esperava que update na auditoria fosse recusado" >&2
   exit 1
 fi
+
+# Segunda instalação limpa: a migração também tem de funcionar sem as colunas legadas.
+fresh_db="${PGDATABASE}_whatsapp_fresh"
+createdb "$fresh_db"
+PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -c 'CREATE TABLE public.funcionarios (id uuid PRIMARY KEY);'
+PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122100000_create_whatsapp_admin_conversations.sql
+PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122120000_add_whatsapp_ai_send_claim.sql
+PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122130000_allow_unresolved_whatsapp_lid_phone.sql
+PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122140000_create_whatsapp_admin_audit.sql
+dropdb "$fresh_db"
