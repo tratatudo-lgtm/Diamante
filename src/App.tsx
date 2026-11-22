@@ -9,7 +9,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { LandingPage } from './components/landing/LandingPage';
 import { FestiveThemeOverlay } from './components/common/FestiveThemeOverlay';
 import { LoginPage } from './components/auth/LoginPage';
-import { AdminDashboard } from './components/admin/AdminDashboard';
+import { AdminDashboard } from './components/admin/AdminDashboard';\nimport { WhatsAppConversationsPage } from './components/admin/WhatsAppConversationsPage';
 import { AdminDashboard as AdminWarRoomDashboard } from './components/admin/AdminDashboard_old_operational';
 import { AdminTransactionsPage } from './components/admin/AdminTransactionsPage';
 import { AdminPageLayout } from './components/admin/AdminPageLayout';
@@ -47,7 +47,7 @@ function AppRouter() {
     if (typeof window !== 'undefined') {
       const p = window.location.pathname;
       if (
-        p === '/dashboard-admin' ||
+        p === '/dashboard-admin' ||\n        p === '/admin/whatsapp' ||
         p === '/admin/lojas' ||
         p === '/admin/funcionarios' ||
         p === '/admin/config' ||
