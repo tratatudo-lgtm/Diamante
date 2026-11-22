@@ -8,6 +8,10 @@ psql -v ON_ERROR_STOP=1 -c 'DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN
 psql -v ON_ERROR_STOP=1 -c 'CREATE TABLE public.funcionarios (id uuid PRIMARY KEY);'
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122100000_create_whatsapp_admin_conversations.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122120000_add_whatsapp_ai_send_claim.sql
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122130000_allow_unresolved_whatsapp_lid_phone.sql
+
+# LID sem mapeamento telefónico deve poder ser guardado sem inventar um número.
+psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name, remote_jid, contact_phone) VALUES ('ci-lid', 'opaque-lid@lid', NULL) RETURNING id;" >/dev/null
 
 # Confirma os estados individuais de controlo IA/humano e as permissões mínimas.
 psql -v ON_ERROR_STOP=1 <<'SQL'
