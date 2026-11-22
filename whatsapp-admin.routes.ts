@@ -68,9 +68,20 @@ router.patch('/conversations/:id/control', async (req: AdminRequest, res: Respon
   const adminId = req.adminUser?.id;
   if (!adminId) return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
   try {
+    const staleClaimBefore = new Date(Date.now() - 60_000).toISOString();
     let claim = supabaseAdmin.from('whatsapp_conversations')
-      .update({ mode, assigned_admin_id: mode === 'human' ? adminId : null, last_controlled_by: adminId, last_control_changed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', req.params.id);
+      .update({
+        mode,
+        assigned_admin_id: mode === 'human' ? adminId : null,
+        last_controlled_by: adminId,
+        last_control_changed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        ai_send_token: null,
+        ai_send_started_at: null,
+      })
+      .eq('id', req.params.id)
+      // Não assumir uma conversa enquanto o envio automático está efetivamente em curso.
+      .or(`ai_send_token.is.null,ai_send_started_at.lt.${staleClaimBefore}`);
     // Um único administrador pode deter o controlo humano. Evita que dois operadores
     // assumam simultaneamente a mesma conversa ou que um liberte a sessão do outro.
     claim = mode === 'human'
