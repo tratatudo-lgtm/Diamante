@@ -85,20 +85,6 @@ export const WhatsAppConversationsPage: React.FC = () => {
     finally { setWorking(false); }
   };
 
-  const reconcileUncertainSend = async () => {
-    if (!selected?.ai_send_token) return;
-    const confirmed = window.confirm('Confirma os DOIS pontos? 1) Verificou no WhatsApp que a mensagem NÃO foi entregue. 2) O processo backend/webhook foi parado e não pode retomar este envio. Só depois pode libertar a reserva. O evento original não será reenviado.');
-    if (!confirmed) return;
-    setWorking(true); setError('');
-    try {
-      await api('/conversations/' + selected.id + '/reconcile-send', {
-        method: 'POST', body: JSON.stringify({ confirmedNotDelivered: true, workerStopped: true }),
-      });
-      await loadConversations(true);
-    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível reconciliar o envio.'); }
-    finally { setWorking(false); }
-  };
-
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selected || !draft.trim() || sending) return;
@@ -148,7 +134,7 @@ export const WhatsAppConversationsPage: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-4">
               <div><h2 className="font-bold text-white">{selected.contact_phone}</h2><p className="mt-1 text-xs text-slate-500">Conversa individual · histórico sincronizado</p><label className="mt-2 flex items-center gap-2 text-xs text-slate-400">Estado <select value={selected.status} disabled={working} onChange={e => void setStatus(e.target.value as Conversation['status'])} className="rounded-lg border border-white/10 bg-[#101b2c] px-2 py-1 text-xs text-slate-100"><option value="unread">Não lida</option><option value="in_service">Em atendimento</option><option value="pending">Pendente</option><option value="resolved">Resolvida</option></select></label></div>
               {selected.mode === 'ai' ? <button disabled={working} onClick={() => void setMode('human')} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-xs font-bold text-slate-950 disabled:opacity-50"><UserRound className="h-4 w-4" /> Assumir conversa</button> : <button disabled={working} onClick={() => void setMode('ai')} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-400 px-4 text-xs font-bold text-slate-950 disabled:opacity-50"><Bot className="h-4 w-4" /> Devolver ao Diamante</button>}
-              {selected.ai_send_token && <button disabled={working} onClick={() => void reconcileUncertainSend()} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-rose-400/40 px-3 text-xs font-bold text-rose-200 disabled:opacity-50">Confirmar envio não entregue</button>}
+              {selected.ai_send_token && <span role="status" className="rounded-xl border border-rose-400/40 px-3 py-2 text-xs font-semibold text-rose-200">Envio incerto · requer reconciliação operacional</span>}
             </div>
             <div className="flex items-center gap-2 border-b border-white/[.06] bg-black/10 px-4 py-2 text-[11px] text-slate-400"><ShieldCheck className="h-4 w-4 text-[#D4AF37]" /> {selected.mode === 'human' ? 'Modo humano: Assistente Diamante suspenso apenas nesta conversa.' : 'Modo automático: Assistente Diamante ativo nesta conversa.'}</div>
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
