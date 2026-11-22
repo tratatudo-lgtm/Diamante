@@ -98,57 +98,8 @@ router.patch('/conversations/:id/control', async (req: AdminRequest, res: Respon
 });
 
 
-router.post('/conversations/:id/reconcile-send', async (req: AdminRequest, res: Response) => {
-  if (!validUuid(req.params.id)) return res.status(400).json({ success: false, message: 'Conversa inválida.' });
-  const adminId = req.adminUser?.id;
-  if (!adminId) return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
-  if (req.body?.confirmedNotDelivered !== true || req.body?.workerStopped !== true) {
-    return res.status(400).json({ success: false, message: 'Confirme que verificou a não entrega e que o processo webhook foi parado antes de libertar a reserva.' });
-  }
-  try {
-    const { data: conversation, error: readError } = await supabaseAdmin.from('whatsapp_conversations')
-      .select('id,ai_send_token,mode').eq('id', req.params.id).maybeSingle();
-    if (readError) throw readError;
-    if (!conversation) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
-    if (!conversation.ai_send_token) return res.status(409).json({ success: false, message: 'Não existe envio pendente de reconciliação.' });
-    const { data: event, error: eventError } = await supabaseAdmin.from('diamante_intelligence_webhook_events')
-      .select('id,status').eq('id', conversation.ai_send_token).maybeSingle();
-    if (eventError) throw eventError;
-    let pendingManualMessage: { id: string; status: string } | null = null;
-    if (!event) {
-      const { data: manualMessage, error: manualError } = await supabaseAdmin.from('whatsapp_messages')
-        .select('id,status').eq('conversation_id', conversation.id)
-        .eq('client_message_id', conversation.ai_send_token).maybeSingle();
-      if (manualError) throw manualError;
-      pendingManualMessage = manualMessage;
-    }
-    const validWebhookState = !!event && ['sending', 'unknown'].includes(event.status);
-    const validManualState = !!pendingManualMessage && ['sending', 'unknown'].includes(pendingManualMessage.status);
-    if (!validWebhookState && !validManualState) {
-      return res.status(409).json({ success: false, message: 'O estado do envio não permite esta reconciliação.' });
-    }
-    const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
-      .update({ ai_send_token: null, ai_send_started_at: null, last_controlled_by: adminId, last_control_changed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', conversation.id).eq('ai_send_token', conversation.ai_send_token)
-      .select('id').maybeSingle();
-    if (error) throw error;
-    if (!data) return res.status(409).json({ success: false, message: 'A reserva foi alterada por outro processo.' });
-    if (pendingManualMessage) {
-      const { error: messageUpdateError } = await supabaseAdmin.from('whatsapp_messages')
-        .update({ status: 'failed' })
-        .eq('id', pendingManualMessage.id)
-        .in('status', ['sending', 'unknown']);
-      if (messageUpdateError) {
-        console.error('[WhatsApp Admin] Reserva libertada, mas não foi possível atualizar o estado da mensagem manual.');
-        return res.status(503).json({ success: false, message: 'A reserva foi libertada, mas o histórico requer verificação administrativa.' });
-      }
-    }
-    return res.json({ success: true, reconciled: true, note: 'A reserva foi libertada. O evento original não será reenviado automaticamente.' });
-  } catch {
-    console.error('[WhatsApp Admin] Falha ao reconciliar envio incerto.');
-    return res.status(503).json({ success: false, message: 'Não foi possível reconciliar o envio.' });
-  }
-});
+// Envios incertos não são libertados pela API: exigem paragem operacional
+// de todos os workers e reconciliação controlada na base de dados.
 
 router.patch('/conversations/:id/status', async (req: AdminRequest, res: Response) => {
   if (!validUuid(req.params.id)) return res.status(400).json({ success: false, message: 'Conversa inválida.' });
