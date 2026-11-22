@@ -66,8 +66,10 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(401).json({ success: false });
   }
 
-  const event = String(req.body?.event || '').toLowerCase();
-  if (event && event !== 'messages.upsert') return res.status(200).json({ success: true, ignored: true });
+  // Evolution API envia o nome do evento como MESSAGES_UPSERT (underscore).
+  // Aceitar também a forma messages.upsert para compatibilidade entre versões.
+  const event = String(req.body?.event || '').trim().toLowerCase().replace(/[._-]/g, '_');
+  if (event && event !== 'messages_upsert') return res.status(200).json({ success: true, ignored: true });
 
   const incoming = extractMessage(req.body);
   if (!incoming || incoming.fromMe || incoming.jid.endsWith('@g.us') || incoming.jid === 'status@broadcast') {
