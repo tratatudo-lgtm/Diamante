@@ -185,11 +185,16 @@ router.post('/', async (req: Request, res: Response) => {
       await supabaseAdmin.from('whatsapp_messages')
         .update({ status: sendAttempted ? 'unknown' : 'failed' }).eq('id', aiMessageId).eq('status', 'sending');
     }
-    // Libertar apenas a reserva deste evento; não tocar numa reserva posterior.
-    await supabaseAdmin.from('whatsapp_conversations')
-      .update({ ai_send_token: null, ai_send_started_at: null })
-      .eq('id', conversation.id)
-      .eq('ai_send_token', eventRow.id);
+    // Antes de qualquer pedido externo, a reserva pode ser libertada.
+    // Depois de iniciar o envio, o resultado pode ser ambíguo: manter a reserva
+    // bloqueada até reconciliação explícita evita takeover enquanto a mensagem
+    // ainda pode estar a ser entregue no WhatsApp.
+    if (!sendAttempted) {
+      await supabaseAdmin.from('whatsapp_conversations')
+        .update({ ai_send_token: null, ai_send_started_at: null })
+        .eq('id', conversation.id)
+        .eq('ai_send_token', eventRow.id);
+    }
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status, error_code: code.slice(0, 80), processed_at: new Date().toISOString() })
       .eq('id', eventRow.id)
