@@ -71,7 +71,7 @@ router.post('/', async (req: Request, res: Response) => {
   else window.count += 1;
   const { data: conversation, error: conversationError } = await supabaseAdmin
     .from('whatsapp_conversations')
-    .upsert({ instance_name: instanceName, remote_jid: incoming.jid, contact_phone: incoming.jid.split('@')[0].split(':')[0].replace(/\D/g, ''), last_message_at: new Date().toISOString() }, { onConflict: 'instance_name,remote_jid' })
+    .upsert({ instance_name: instanceName, remote_jid: incoming.jid, contact_phone: incoming.phone, last_message_at: new Date().toISOString() }, { onConflict: 'instance_name,remote_jid' })
     .select('id,mode')
     .single();
   if (conversationError || !conversation) {
@@ -88,7 +88,7 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(200).json({ success: true, humanTakeover: true });
   }
 
-  let { data: eventRow, error: eventError } = await supabaseAdmin
+  if (!incoming.phone) {\n    return res.status(200).json({ success: true, unresolvedPhone: true });\n  }\n\n  let { data: eventRow, error: eventError } = await supabaseAdmin
     .from('diamante_intelligence_webhook_events')
     .insert({ instance_name: instanceName, message_id: incoming.id, status: 'processing' })
     .select('id')
@@ -119,7 +119,7 @@ router.post('/', async (req: Request, res: Response) => {
     console.error('[Diamante Intelligence] Não foi possível registar o evento recebido.');
     return res.status(503).json({ success: false });
   }
-  const number = incoming.jid.split('@')[0].split(':')[0].replace(/\D/g, '');
+  const number = incoming.phone;
   if (!number || number.length < 8 || number.length > 15) {
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status: 'ignored', error_code: 'INVALID_SENDER_NUMBER', processed_at: new Date().toISOString() })
