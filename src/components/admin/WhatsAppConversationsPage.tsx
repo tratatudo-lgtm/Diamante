@@ -5,6 +5,7 @@ type Conversation = {
   id: string; contact_phone: string | null; remote_jid: string; mode: 'ai' | 'human'; status: 'unread' | 'in_service' | 'pending' | 'resolved'; assigned_admin_id: string | null;
   last_message_at: string; ai_send_token: string | null; last_message: { body: string; direction: string; sender_type: string; created_at: string } | null;
 };
+type AuditEvent = { id: string; admin_id: string | null; action: string; outcome: string; metadata: Record<string, unknown>; created_at: string };
 type Message = {
   id: string; direction: 'inbound' | 'outbound'; sender_type: 'customer' | 'ai' | 'admin';
   body: string; status: string; created_at: string; sent_at: string | null;
@@ -14,6 +15,7 @@ export const WhatsAppConversationsPage: React.FC = () => {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -46,6 +48,14 @@ export const WhatsAppConversationsPage: React.FC = () => {
     finally { if (!quiet) setLoading(false); }
   }, [api]);
 
+  const loadAudit = useCallback(async (id: string) => {
+    if (!id) { setAuditEvents([]); return; }
+    try {
+      const payload = await api('/audit?conversationId=' + encodeURIComponent(id) + '&limit=50');
+      setAuditEvents((payload.events || []) as AuditEvent[]);
+    } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao carregar auditoria.'); }
+  }, [api]);
+
   const loadMessages = useCallback(async (id: string, quiet = false) => {
     if (!id) { setMessages([]); return; }
     try {
@@ -58,9 +68,10 @@ export const WhatsAppConversationsPage: React.FC = () => {
   useEffect(() => {
     if (!selectedId) { setMessages([]); return; }
     void loadMessages(selectedId);
+    void loadAudit(selectedId);
     const timer = window.setInterval(() => { void loadMessages(selectedId, true); void loadConversations(true); }, 5000);
     return () => window.clearInterval(timer);
-  }, [selectedId, loadMessages, loadConversations]);
+  }, [selectedId, loadMessages, loadConversations, loadAudit]);
 
   const selected = useMemo(() => conversations.find(item => item.id === selectedId) || null, [conversations, selectedId]);
   const filtered = useMemo(() => conversations.filter(item => (item.contact_phone || item.remote_jid || '').toLowerCase().includes(search.trim().toLowerCase())), [conversations, search]);
@@ -146,6 +157,31 @@ export const WhatsAppConversationsPage: React.FC = () => {
                 </div>
               </div>)}
               {messages.length === 0 && <p className="py-10 text-center text-sm text-slate-500">Sem mensagens registadas.</p>}
+            </div>
+
+            <div className="border-t border-white/10 bg-black/10 p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-[#e7c66c]">Auditoria desta conversa</h3>
+                <span className="text-[10px] text-slate-500">{auditEvents.length} eventos recentes</span>
+              </div>
+              <div className="max-h-40 space-y-2 overflow-y-auto">
+                {auditEvents.map(event => <div key={event.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/[.06] bg-white/[.025] px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-slate-200">{({
+                      control_taken: 'Administrador assumiu a conversa',
+                      control_released: 'Controlo devolvido ao Assistente Diamante',
+                      admin_message_created: 'Resposta manual criada',
+                      admin_message_sent: 'Resposta manual enviada',
+                      admin_message_failed: 'Falha no envio manual',
+                      admin_message_unknown: 'Resultado do envio por confirmar',
+                      conversation_status_changed: 'Estado da conversa alterado',
+                    } as Record<string, string>)[event.action] || event.action}</p>
+                    <p className="text-[9px] text-slate-500">Admin: {event.admin_id || 'Sistema'} · {event.outcome}</p>
+                  </div>
+                  <time className="text-[9px] text-slate-500">{new Date(event.created_at).toLocaleString('pt-PT')}</time>
+                </div>)}
+                {auditEvents.length === 0 && <p className="text-xs text-slate-500">Ainda não existem intervenções registadas.</p>}
+              </div>
             </div>
             {selected.mode === 'human' ? <form onSubmit={send} className="flex gap-2 border-t border-white/10 p-3"><input value={draft} onChange={e => setDraft(e.target.value)} maxLength={4000} placeholder="Escrever resposta manual..." className="min-h-11 min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 text-sm outline-none focus:border-[#D4AF37]/40" /><button disabled={sending || !draft.trim()} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#D4AF37] px-4 text-sm font-bold text-slate-950 disabled:opacity-50"><Send className="h-4 w-4" /> Enviar</button></form> : <div className="border-t border-white/10 p-4 text-center text-xs text-slate-500">Assuma esta conversa para responder manualmente. O Assistente Diamante continua ativo nas outras conversas.</div>}
           </> : <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-slate-500"><MessageCircle className="mb-3 h-9 w-9" /><p>Selecione uma conversa para consultar o histórico.</p></div>}
