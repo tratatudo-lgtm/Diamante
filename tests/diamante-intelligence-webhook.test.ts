@@ -27,14 +27,14 @@ test('extrai mensagem de texto no payload data.key/data.message', async () => {
   assert.deepEqual(extractEvolutionTextMessage({
     event: 'MESSAGES_UPSERT',
     data: { key: { id: 'abc', remoteJid: '351910000000@s.whatsapp.net', fromMe: false }, message: { conversation: ' Olá ' } },
-  }), { id: 'abc', jid: '351910000000@s.whatsapp.net', text: 'Olá', fromMe: false });
+  }), { id: 'abc', jid: '351910000000@s.whatsapp.net', phone: '351910000000', text: 'Olá', fromMe: false });
 });
 
 test('extrai extendedTextMessage da variante messages[0]', async () => {
   const { extractEvolutionTextMessage } = await import('../diamante-intelligence.webhook-utils');
   assert.deepEqual(extractEvolutionTextMessage({
     data: { messages: [{ key: { id: 'def', remoteJid: '351910000000@s.whatsapp.net' }, message: { extendedTextMessage: { text: 'Preciso de ajuda' } } }] },
-  }), { id: 'def', jid: '351910000000@s.whatsapp.net', text: 'Preciso de ajuda', fromMe: false });
+  }), { id: 'def', jid: '351910000000@s.whatsapp.net', phone: '351910000000', text: 'Preciso de ajuda', fromMe: false });
 });
 
 test('ignora payloads sem identificador, remetente ou texto suportado', async () => {
@@ -59,4 +59,33 @@ test('exige evento MESSAGES_UPSERT explícito antes de processar payload', () =>
   assert.equal(isSupportedEvolutionEvent(undefined), false);
   assert.equal(isSupportedEvolutionEvent(''), false);
   assert.equal(isSupportedEvolutionEvent('CONNECTION_UPDATE'), false);
+});
+
+test('resolve telefone a partir de remoteJidAlt quando o remetente usa @lid', async () => {
+  const { extractEvolutionTextMessage } = await import('../diamante-intelligence.webhook-utils');
+  assert.deepEqual(extractEvolutionTextMessage({
+    event: 'MESSAGES_UPSERT',
+    data: { key: {
+      id: 'lid-1',
+      remoteJid: '123456789012345@lid',
+      remoteJidAlt: '351910000000@s.whatsapp.net',
+      fromMe: false,
+      addressingMode: 'lid',
+    }, message: { conversation: 'Bom dia' } },
+  }), {
+    id: 'lid-1',
+    jid: '123456789012345@lid',
+    phone: '351910000000',
+    text: 'Bom dia',
+    fromMe: false,
+  });
+});
+
+test('não interpreta dígitos de @lid como número quando não existe remoteJidAlt', async () => {
+  const { extractEvolutionTextMessage } = await import('../diamante-intelligence.webhook-utils');
+  const result = extractEvolutionTextMessage({
+    data: { key: { id: 'lid-2', remoteJid: '123456789012345@lid' }, message: { conversation: 'Olá' } },
+  });
+  assert.equal(result?.jid, '123456789012345@lid');
+  assert.equal(result?.phone, null);
 });
