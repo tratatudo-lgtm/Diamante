@@ -28,7 +28,7 @@ router.get('/conversations', async (req: AdminRequest, res: Response) => {
   const limit = Number.isInteger(requested) ? Math.min(200, Math.max(1, requested)) : 100;
   try {
     const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
-      .select('id,instance_name,remote_jid,contact_phone,mode,assigned_admin_id,last_message_at,created_at')
+      .select('id,instance_name,remote_jid,contact_phone,mode,status,assigned_admin_id,last_message_at,created_at')
       .order('last_message_at', { ascending: false }).limit(limit);
     if (error) throw error;
     const ids = (data || []).map((item: any) => item.id);
@@ -79,6 +79,28 @@ router.patch('/conversations/:id/control', async (req: AdminRequest, res: Respon
   } catch {
     console.error('[WhatsApp Admin] Falha ao alterar controlo da conversa.');
     return res.status(503).json({ success: false, message: 'Não foi possível alterar o controlo.' });
+  }
+});
+
+
+router.patch('/conversations/:id/status', async (req: AdminRequest, res: Response) => {
+  if (!validUuid(req.params.id)) return res.status(400).json({ success: false, message: 'Conversa inválida.' });
+  const status = req.body?.status;
+  if (!['unread', 'in_service', 'pending', 'resolved'].includes(status)) {
+    return res.status(400).json({ success: false, message: 'Estado de conversa inválido.' });
+  }
+  try {
+    const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', req.params.id)
+      .select('id,status,updated_at')
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
+    return res.json({ success: true, conversation: data });
+  } catch {
+    console.error('[WhatsApp Admin] Falha ao alterar estado da conversa.');
+    return res.status(503).json({ success: false, message: 'Não foi possível alterar o estado.' });
   }
 });
 
