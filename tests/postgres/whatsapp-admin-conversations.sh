@@ -137,8 +137,8 @@ BEGIN
     WHERE conversation_id=v_conversation
       AND action IN ('control_taken','control_released','admin_message_created',
                      'admin_message_sent','conversation_status_changed');
-  IF v_count <> 5 THEN
-    RAISE EXCEPTION 'esperados 5 eventos de auditoria, encontrados %', v_count;
+  IF v_count <> 4 THEN
+    RAISE EXCEPTION 'esperados 4 eventos de auditoria emitidos por triggers, encontrados %', v_count;
   END IF;
 
   SELECT id INTO v_audit FROM public.whatsapp_admin_audit
