@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { supabaseAdmin } from './auth.service';
 import { generateDiamanteIntelligenceReply } from './diamante-intelligence.service';
-import { normalizeEvolutionEventName } from './diamante-intelligence.webhook-utils';
+import { extractEvolutionTextMessage, normalizeEvolutionEventName } from './diamante-intelligence.webhook-utils';
 
 const router = Router();
 const senderWindows = new Map<string, { count: number; resetAt: number }>();
@@ -25,22 +25,6 @@ function safeSecretMatch(received: string, expected: string): boolean {
   const left = Buffer.from(received);
   const right = Buffer.from(expected);
   return left.length === right.length && timingSafeEqual(left, right);
-}
-
-function extractMessage(body: any): { id: string; jid: string; text: string; fromMe: boolean } | null {
-  const payload = body?.data || body;
-  const key = payload?.key || payload?.messages?.[0]?.key;
-  const message = payload?.message || payload?.messages?.[0]?.message;
-  const jid = typeof key?.remoteJid === 'string' ? key.remoteJid : '';
-  const id = typeof key?.id === 'string' ? key.id : '';
-  const text = [
-    message?.conversation,
-    message?.extendedTextMessage?.text,
-    message?.imageMessage?.caption,
-    message?.videoMessage?.caption,
-  ].find((value) => typeof value === 'string' && value.trim()) || '';
-  if (!id || !jid || !text || typeof text !== 'string') return null;
-  return { id, jid, text: text.trim(), fromMe: key?.fromMe === true };
 }
 
 async function sendEvolutionText(number: string, text: string): Promise<void> {
@@ -72,7 +56,7 @@ router.post('/', async (req: Request, res: Response) => {
   const event = normalizeEvolutionEventName(req.body?.event);
   if (event && event !== 'messages_upsert') return res.status(200).json({ success: true, ignored: true });
 
-  const incoming = extractMessage(req.body);
+  const incoming = extractEvolutionTextMessage(req.body);
   if (!incoming || incoming.fromMe || incoming.jid.endsWith('@g.us') || incoming.jid === 'status@broadcast') {
     return res.status(200).json({ success: true, ignored: true });
   }
