@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { normalizeEvolutionEventName } from '../diamante-intelligence.webhook-utils';
+import { getWebhookFailureStatus, normalizeEvolutionEventName } from '../diamante-intelligence.webhook-utils';
 
 test('normaliza MESSAGES_UPSERT da Evolution API', () => {
   assert.equal(normalizeEvolutionEventName('MESSAGES_UPSERT'), 'messages_upsert');
@@ -44,11 +44,10 @@ test('ignora payloads sem identificador, remetente ou texto suportado', async ()
   assert.equal(extractEvolutionTextMessage({ data: { key: { id: 'x', remoteJid: 'x' }, message: { audioMessage: {} } } }), null);
 });
 
-test('estados de envio distinguem falha anterior ao envio de entrega incerta', () => {
-  const preSendFailure = { status: 'failed', retryable: true };
-  const uncertainDelivery = { status: 'unknown', retryable: false };
-  assert.equal(preSendFailure.status, 'failed');
-  assert.equal(preSendFailure.retryable, true);
-  assert.equal(uncertainDelivery.status, 'unknown');
-  assert.equal(uncertainDelivery.retryable, false);
+test('falha antes do envio fica failed e pode ser repetida segundo a política', () => {
+  assert.equal(getWebhookFailureStatus(false), 'failed');
+});
+
+test('falha depois de iniciar envio fica unknown e nunca deve ser repetida automaticamente', () => {
+  assert.equal(getWebhookFailureStatus(true), 'unknown');
 });
