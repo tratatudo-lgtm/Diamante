@@ -79,14 +79,14 @@ router.patch('/conversations/:id/control', async (req: AdminRequest, res: Respon
         ai_send_token: null,
         ai_send_started_at: null,
       })
-      .eq('id', req.params.id)
-      // Não assumir uma conversa enquanto o envio automático está efetivamente em curso.
-      .or(`ai_send_token.is.null,ai_send_started_at.lt.${staleClaimBefore}`);
-    // Um único administrador pode deter o controlo humano. Evita que dois operadores
-    // assumam simultaneamente a mesma conversa ou que um liberte a sessão do outro.
+      .eq('id', req.params.id);
+    // Combinar as condições num único OR: chamar .or() duas vezes no PostgREST
+    // pode substituir o filtro anterior e remover a proteção da reserva de envio.
+    // Um único administrador pode deter o controlo humano.
     claim = mode === 'human'
-      ? claim.or(`mode.eq.ai,assigned_admin_id.eq.${adminId}`)
-      : claim.eq('mode', 'human').eq('assigned_admin_id', adminId);
+      ? claim.or(`and(ai_send_token.is.null,or(mode.eq.ai,assigned_admin_id.eq.${adminId})),and(ai_send_started_at.lt.${staleClaimBefore},or(mode.eq.ai,assigned_admin_id.eq.${adminId}))`)
+      : claim.eq('mode', 'human').eq('assigned_admin_id', adminId)
+          .or(`ai_send_token.is.null,ai_send_started_at.lt.${staleClaimBefore}`);
     const { data, error } = await claim
       .select('id,mode,assigned_admin_id,updated_at')
       .maybeSingle();
