@@ -23,3 +23,8 @@ export function extractEvolutionTextMessage(body: any): EvolutionTextMessage | n
   if (!id || !jid || typeof text !== 'string') return null;
   return { id, jid, text: text.trim(), fromMe: key?.fromMe === true };
 }
+
+/** A failed AI step is safe to retry; an attempted external send has an ambiguous outcome. */
+export function getWebhookFailureStatus(sendAttempted: boolean): 'failed' | 'unknown' {
+  return sendAttempted ? 'unknown' : 'failed';
+}
