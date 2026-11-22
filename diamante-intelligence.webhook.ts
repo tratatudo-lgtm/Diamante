@@ -133,14 +133,14 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const reply = await generateDiamanteIntelligenceReply(incoming.jid, incoming.text);
     // Reserva atómica da conversa: takeover e envio automático competem pela mesma linha.
-    // Uma reserva ativa impede o takeover; reservas com mais de 60s podem ser recuperadas,
-    // pois o pedido Evolution tem timeout máximo de 15s. O evento nunca é repetido cegamente.
-    const staleClaimBefore = new Date(Date.now() - 60_000).toISOString();
+    // A reserva não expira automaticamente: uma execução antiga nunca pode ser
+    // ultrapassada por takeover nem concorrer com um segundo envio após pausa/crash.
+    // Reservas abandonadas exigem revisão operacional antes de serem libertadas.
     const { data: sendClaim, error: claimError } = await supabaseAdmin.from('whatsapp_conversations')
       .update({ ai_send_token: eventRow.id, ai_send_started_at: new Date().toISOString() })
       .eq('id', conversation.id)
       .eq('mode', 'ai')
-      .or(`ai_send_token.is.null,ai_send_started_at.lt.${staleClaimBefore}`)
+      .is('ai_send_token', null)
       .select('id')
       .maybeSingle();
     if (claimError || !sendClaim) {
