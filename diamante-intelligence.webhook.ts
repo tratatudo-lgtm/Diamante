@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { supabaseAdmin } from './auth.service';
 import { generateDiamanteIntelligenceReply } from './diamante-intelligence.service';
-import { extractEvolutionTextMessage, getWebhookFailureStatus, normalizeEvolutionEventName } from './diamante-intelligence.webhook-utils';
+import { extractEvolutionTextMessage, getWebhookFailureStatus, isSupportedEvolutionEvent } from './diamante-intelligence.webhook-utils';
 
 const router = Router();
 const senderWindows = new Map<string, { count: number; resetAt: number }>();
@@ -53,8 +53,7 @@ router.post('/', async (req: Request, res: Response) => {
 
   // Evolution API envia o nome do evento como MESSAGES_UPSERT (underscore).
   // Aceitar também a forma messages.upsert para compatibilidade entre versões.
-  const event = normalizeEvolutionEventName(req.body?.event);
-  if (event && event !== 'messages_upsert') return res.status(200).json({ success: true, ignored: true });
+  if (!isSupportedEvolutionEvent(req.body?.event)) return res.status(200).json({ success: true, ignored: true });
 
   const incoming = extractEvolutionTextMessage(req.body);
   if (!incoming || incoming.fromMe || incoming.jid.endsWith('@g.us') || incoming.jid === 'status@broadcast') {
