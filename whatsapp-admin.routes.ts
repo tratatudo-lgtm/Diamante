@@ -133,6 +133,16 @@ router.post('/conversations/:id/reconcile-send', async (req: AdminRequest, res: 
       .select('id').maybeSingle();
     if (error) throw error;
     if (!data) return res.status(409).json({ success: false, message: 'A reserva foi alterada por outro processo.' });
+    if (pendingManualMessage) {
+      const { error: messageUpdateError } = await supabaseAdmin.from('whatsapp_messages')
+        .update({ status: 'failed' })
+        .eq('id', pendingManualMessage.id)
+        .in('status', ['sending', 'unknown']);
+      if (messageUpdateError) {
+        console.error('[WhatsApp Admin] Reserva libertada, mas não foi possível atualizar o estado da mensagem manual.');
+        return res.status(503).json({ success: false, message: 'A reserva foi libertada, mas o histórico requer verificação administrativa.' });
+      }
+    }
     return res.json({ success: true, reconciled: true, note: 'A reserva foi libertada. O evento original não será reenviado automaticamente.' });
   } catch {
     console.error('[WhatsApp Admin] Falha ao reconciliar envio incerto.');
