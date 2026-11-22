@@ -70,6 +70,25 @@ router.post('/', async (req: Request, res: Response) => {
   }
   if (!window || now >= window.resetAt) senderWindows.set(incoming.jid, { count: 1, resetAt: now + SENDER_WINDOW_MS });
   else window.count += 1;
+  const { data: conversation, error: conversationError } = await supabaseAdmin
+    .from('whatsapp_conversations')
+    .upsert({ instance_name: instanceName, remote_jid: incoming.jid, contact_phone: incoming.jid.split('@')[0].split(':')[0].replace(/\\D/g, ''), last_message_at: new Date().toISOString() }, { onConflict: 'instance_name,remote_jid' })
+    .select('id,mode')
+    .single();
+  if (conversationError || !conversation) {
+    console.error('[Diamante Intelligence] Não foi possível registar a conversa.');
+    return res.status(503).json({ success: false });
+  }
+  const { error: inboundMessageError } = await supabaseAdmin.from('whatsapp_messages')
+    .insert({ conversation_id: conversation.id, external_message_id: incoming.id, direction: 'inbound', sender_type: 'customer', body: incoming.text, status: 'received' });
+  if (inboundMessageError && inboundMessageError.code !== '23505') {
+    console.error('[Diamante Intelligence] Não foi possível guardar a mensagem recebida.');
+    return res.status(503).json({ success: false });
+  }
+  if (conversation.mode === 'human') {
+    return res.status(200).json({ success: true, humanTakeover: true });
+  }
+
   let { data: eventRow, error: eventError } = await supabaseAdmin
     .from('diamante_intelligence_webhook_events')
     .insert({ instance_name: instanceName, message_id: incoming.id, status: 'processing' })
