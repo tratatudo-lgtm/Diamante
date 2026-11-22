@@ -74,4 +74,16 @@ wait "$pid_human"
 race_state="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "SELECT mode || ':' || (ai_send_token IS NOT NULL)::text FROM public.whatsapp_conversations WHERE id='${conversation_id}';")"
 [[ "$race_state" == "ai:true" || "$race_state" == "human:false" ]] || { echo "Race inconsistente: $race_state"; exit 1; }
 
-echo "PASS: schema, histórico, RLS e concorrência entre reserva Diamante e takeover humano."
+# Testa a mesma reserva para respostas manuais: devolver o controlo é bloqueado
+# enquanto o envio manual estiver reservado.
+manual_conversation_id="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone,mode,assigned_admin_id) VALUES ('ci-manual','351900000003@s.whatsapp.net','351900000003','human','00000000-0000-4000-8000-000000000001') RETURNING id;")"
+manual_token="$(psql -X -qAt -v ON_ERROR_STOP=1 -c 'SELECT gen_random_uuid();')"
+manual_claim="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_conversations SET ai_send_token='${manual_token}', ai_send_started_at=now() WHERE id='${manual_conversation_id}' AND mode='human' AND assigned_admin_id='00000000-0000-4000-8000-000000000001' AND ai_send_token IS NULL RETURNING id;")"
+[[ -n "$manual_claim" ]] || { echo "Reserva manual não foi adquirida"; exit 1; }
+takeover_release="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_conversations SET mode='ai',assigned_admin_id=NULL,ai_send_token=NULL WHERE id='${manual_conversation_id}' AND mode='human' AND assigned_admin_id='00000000-0000-4000-8000-000000000001' AND ai_send_token IS NULL RETURNING id;")"
+[[ -z "$takeover_release" ]] || { echo "Devolução ao Diamante ultrapassou envio manual reservado"; exit 1; }
+psql -X -qAt -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_conversations SET ai_send_token=NULL,ai_send_started_at=NULL WHERE id='${manual_conversation_id}' AND ai_send_token='${manual_token}';" >/dev/null
+takeover_release="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_conversations SET mode='ai',assigned_admin_id=NULL WHERE id='${manual_conversation_id}' AND mode='human' AND assigned_admin_id='00000000-0000-4000-8000-000000000001' AND ai_send_token IS NULL RETURNING id;")"
+[[ -n "$takeover_release" ]] || { echo "Devolução ao Diamante falhou após libertação da reserva"; exit 1; }
+
+echo "PASS: schema, histórico, RLS, concorrência IA/humano e reserva de resposta manual."
