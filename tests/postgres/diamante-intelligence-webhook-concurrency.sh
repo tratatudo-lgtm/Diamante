@@ -16,9 +16,9 @@ trap 'rm -rf "$tmp"' EXIT
 
 # Duas sessões PostgreSQL tentam inserir a mesma chave ao mesmo tempo.
 insert_sql="INSERT INTO public.diamante_intelligence_webhook_events (instance_name,message_id,status) VALUES ('ci-concurrency','${message_id}','processing');"
-(psql -X -q -v ON_ERROR_STOP=1 -c "$insert_sql" >"$tmp/insert-a.out" 2>"$tmp/insert-a.err"; echo $? >"$tmp/insert-a.rc") &
+(if psql -X -q -v ON_ERROR_STOP=1 -c "$insert_sql" >"$tmp/insert-a.out" 2>"$tmp/insert-a.err"; then echo 0; else echo $?; fi) >"$tmp/insert-a.rc" &
 pid_a=$!
-(psql -X -q -v ON_ERROR_STOP=1 -c "$insert_sql" >"$tmp/insert-b.out" 2>"$tmp/insert-b.err"; echo $? >"$tmp/insert-b.rc") &
+(if psql -X -q -v ON_ERROR_STOP=1 -c "$insert_sql" >"$tmp/insert-b.out" 2>"$tmp/insert-b.err"; then echo 0; else echo $?; fi) >"$tmp/insert-b.rc" &
 pid_b=$!
 wait "$pid_a" || true
 wait "$pid_b" || true
