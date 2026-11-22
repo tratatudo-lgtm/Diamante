@@ -69,7 +69,7 @@ router.patch('/conversations/:id/control', async (req: AdminRequest, res: Respon
   if (!adminId) return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
   try {
     const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
-      .update({ mode, assigned_admin_id: mode === 'human' ? adminId : null, updated_at: new Date().toISOString() })
+      .update({ mode, assigned_admin_id: mode === 'human' ? adminId : null, last_controlled_by: adminId, last_control_changed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', req.params.id)
       .select('id,mode,assigned_admin_id,updated_at')
       .maybeSingle();
@@ -105,6 +105,12 @@ router.post('/conversations/:id/messages', async (req: AdminRequest, res: Respon
     if (insertError || !pending) throw insertError || new Error('MESSAGE_INSERT_FAILED');
 
     try {
+      const { data: latestConversation, error: latestError } = await supabaseAdmin.from('whatsapp_conversations')
+        .select('mode').eq('id', conversation.id).maybeSingle();
+      if (latestError || latestConversation?.mode !== 'human') {
+        await supabaseAdmin.from('whatsapp_messages').update({ status: 'failed' }).eq('id', pending.id).eq('status', 'sending');
+        return res.status(409).json({ success: false, message: 'O controlo humano já não está ativo nesta conversa.' });
+      }
       await sendEvolutionText(conversation.contact_phone, body);
       const { error: sentError } = await supabaseAdmin.from('whatsapp_messages')
         .update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', pending.id).eq('status', 'sending');
