@@ -130,7 +130,7 @@ router.post('/', async (req: Request, res: Response) => {
   let sendAttempted = false;
   let aiMessageId: string | null = null;
   try {
-    const reply = await generateDiamanteIntelligenceReply(incoming.jid, incoming.text);
+    const reply = await generateDiamanteIntelligenceReply(`${number}@s.whatsapp.net`, incoming.text);
     // Reserva atómica da conversa: takeover e envio automático competem pela mesma linha.
     // A reserva não expira automaticamente: uma execução antiga nunca pode ser
     // ultrapassada por takeover nem concorrer com um segundo envio após pausa/crash.
