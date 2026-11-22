@@ -6,6 +6,31 @@ import { generateDiamanteIntelligenceReply } from './diamante-intelligence.servi
 const router = Router();
 const recentMessages = new Map<string, number>();
 const senderWindows = new Map<string, { count: number; resetAt: number }>();
+const MESSAGE_CACHE_TTL_MS = 10 * 60 * 1000;
+const SENDER_WINDOW_MS = 60 * 1000;
+const MAX_MESSAGES_PER_SENDER = 8;
+const MAX_RECENT_MESSAGES = 5000;
+const MAX_TRACKED_SENDERS = 10000;
+
+function pruneMemoryState(now: number): void {
+  for (const [key, timestamp] of recentMessages) {
+    if (now - timestamp > MESSAGE_CACHE_TTL_MS) recentMessages.delete(key);
+  }
+  for (const [sender, window] of senderWindows) {
+    if (now >= window.resetAt) senderWindows.delete(sender);
+  }
+  // Limites rígidos evitam crescimento ilimitado em processos de longa duração.
+  while (recentMessages.size > MAX_RECENT_MESSAGES) {
+    const oldest = recentMessages.keys().next().value;
+    if (oldest === undefined) break;
+    recentMessages.delete(oldest);
+  }
+  while (senderWindows.size > MAX_TRACKED_SENDERS) {
+    const oldest = senderWindows.keys().next().value;
+    if (oldest === undefined) break;
+    senderWindows.delete(oldest);
+  }
+}
 
 function safeSecretMatch(received: string, expected: string): boolean {
   const left = Buffer.from(received);
@@ -62,17 +87,17 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const now = Date.now();
-  for (const [id, timestamp] of recentMessages) if (now - timestamp > 10 * 60 * 1000) recentMessages.delete(id);
-  if (recentMessages.has(incoming.id)) return res.status(200).json({ success: true, duplicate: true });
+  pruneMemoryState(now);
+  const instanceName = process.env.EVOLUTION_INSTANCE || 'diamante-os';
+  const messageCacheKey = `${instanceName}:${incoming.id}`;
+  if (recentMessages.has(messageCacheKey)) return res.status(200).json({ success: true, duplicate: true });
 
   const window = senderWindows.get(incoming.jid);
-  if (window && now < window.resetAt && window.count >= 8) {
+  if (window && now < window.resetAt && window.count >= MAX_MESSAGES_PER_SENDER) {
     return res.status(200).json({ success: true, rateLimited: true });
   }
-  if (!window || now >= window.resetAt) senderWindows.set(incoming.jid, { count: 1, resetAt: now + 60 * 1000 });
+  if (!window || now >= window.resetAt) senderWindows.set(incoming.jid, { count: 1, resetAt: now + SENDER_WINDOW_MS });
   else window.count += 1;
-
-  const instanceName = process.env.EVOLUTION_INSTANCE || 'diamante-os';
   const { data: eventRow, error: eventError } = await supabaseAdmin
     .from('diamante_intelligence_webhook_events')
     .insert({ instance_name: instanceName, message_id: incoming.id, status: 'processing' })
@@ -84,9 +109,14 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(503).json({ success: false });
   }
   // Secondary short-lived cache reduces duplicate work while the DB constraint remains authoritative.
-  recentMessages.set(incoming.id, now);
+  recentMessages.set(messageCacheKey, now);
   const number = incoming.jid.split('@')[0].split(':')[0].replace(/\D/g, '');
-  if (!number || number.length < 8 || number.length > 15) return res.status(200).json({ success: true, ignored: true });
+  if (!number || number.length < 8 || number.length > 15) {
+    await supabaseAdmin.from('diamante_intelligence_webhook_events')
+      .update({ status: 'ignored', error_code: 'INVALID_SENDER_NUMBER', processed_at: new Date().toISOString() })
+      .eq('id', eventRow.id);
+    return res.status(200).json({ success: true, ignored: true });
+  }
 
   try {
     const reply = await generateDiamanteIntelligenceReply(incoming.jid, incoming.text);
