@@ -109,18 +109,34 @@ router.post('/', async (req: Request, res: Response) => {
     return res.status(200).json({ success: true, ignored: true });
   }
 
+  let sendAttempted = false;
   try {
     const reply = await generateDiamanteIntelligenceReply(incoming.jid, incoming.text);
+    // Persistir o estado antes do pedido externo. Se o processo cair durante o envio,
+    // o evento fica em 'sending' e nunca é repetido automaticamente.
+    const sending = await supabaseAdmin.from('diamante_intelligence_webhook_events')
+      .update({ status: 'sending', error_code: null })
+      .eq('id', eventRow.id)
+      .eq('status', 'processing')
+      .select('id')
+      .maybeSingle();
+    if (sending.error || !sending.data) throw new Error('WEBHOOK_STATE_TRANSITION_FAILED');
+    sendAttempted = true;
     await sendEvolutionText(number, reply);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
-      .update({ status: 'sent', processed_at: new Date().toISOString() }).eq('id', eventRow.id);
+      .update({ status: 'sent', processed_at: new Date().toISOString() })
+      .eq('id', eventRow.id)
+      .eq('status', 'sending');
     return res.status(200).json({ success: true });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'UNKNOWN';
+    const status = sendAttempted ? 'unknown' : 'failed';
     console.error(`[Diamante Intelligence] Mensagem não processada: ${code}.`);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
-      .update({ status: 'failed', error_code: code.slice(0, 80), processed_at: new Date().toISOString() }).eq('id', eventRow.id);
-    return res.status(200).json({ success: true, processed: false });
+      .update({ status, error_code: code.slice(0, 80), processed_at: new Date().toISOString() })
+      .eq('id', eventRow.id)
+      .in('status', sendAttempted ? ['sending'] : ['processing']);
+    return res.status(200).json({ success: true, processed: false, delivery: sendAttempted ? 'unknown' : 'not_sent' });
   }
 });
 
