@@ -28,7 +28,7 @@ import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { sendWhatsAppBirthdayGreeting } from './whatsapp.service';
 import { requiresSecondPurchaseApproval } from './store-purchase-validation';
 import { authorizePurchase } from './purchase-approval';
-import diamanteIntelligenceWebhook from './diamante-intelligence.webhook';
+import diamanteIntelligenceWebhook from './diamante-intelligence.webhook';\nimport whatsappAdminRouter from './whatsapp-admin.routes';
 import { configureDiamanteIntelligenceWebhook } from './diamante-intelligence.webhook-config';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -73,7 +73,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Webhook WhatsApp protegido por segredo próprio; não passa por autenticação de utilizador.
-app.use('/api/webhooks/evolution/diamante-intelligence', diamanteIntelligenceWebhook);
+app.use('/api/webhooks/evolution/diamante-intelligence', diamanteIntelligenceWebhook);\napp.use('/api/admin/whatsapp', whatsappAdminRouter);
 
 // =========================================================================
 // 2. PROTEÇÃO BÁSICA CONTRA BRUTE-FORCE
