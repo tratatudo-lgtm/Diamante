@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { MessageCircle, RefreshCw, Send, Bot, UserRound, Search, Loader2, ShieldCheck } from 'lucide-react';
 
 type Conversation = {
-  id: string; contact_phone: string; mode: 'ai' | 'human'; status: 'unread' | 'in_service' | 'pending' | 'resolved'; assigned_admin_id: string | null;
+  id: string; contact_phone: string | null; remote_jid: string; mode: 'ai' | 'human'; status: 'unread' | 'in_service' | 'pending' | 'resolved'; assigned_admin_id: string | null;
   last_message_at: string; ai_send_token: string | null; last_message: { body: string; direction: string; sender_type: string; created_at: string } | null;
 };
 type Message = {
@@ -63,7 +63,7 @@ export const WhatsAppConversationsPage: React.FC = () => {
   }, [selectedId, loadMessages, loadConversations]);
 
   const selected = useMemo(() => conversations.find(item => item.id === selectedId) || null, [conversations, selectedId]);
-  const filtered = useMemo(() => conversations.filter(item => item.contact_phone.includes(search.trim())), [conversations, search]);
+  const filtered = useMemo(() => conversations.filter(item => (item.contact_phone || item.remote_jid || '').toLowerCase().includes(search.trim().toLowerCase())), [conversations, search]);
 
   const setStatus = async (status: Conversation['status']) => {
     if (!selected) return;
@@ -120,7 +120,7 @@ export const WhatsAppConversationsPage: React.FC = () => {
           <div className="max-h-[650px] overflow-y-auto">
             {loading ? <div className="flex justify-center p-8"><Loader2 className="h-5 w-5 animate-spin text-[#D4AF37]" /></div> : filtered.map(item => (
               <button key={item.id} onClick={() => setSelectedId(item.id)} className={`w-full border-b border-white/[.06] p-4 text-left transition hover:bg-white/[.04] ${selectedId === item.id ? 'bg-[#D4AF37]/[.08]' : ''}`}>
-                <div className="flex items-center justify-between gap-2"><span className="font-semibold text-white">{item.contact_phone}</span><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${item.mode === 'human' ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300'}`}>{item.mode === 'human' ? 'HUMANO' : 'DIAMANTE'}</span></div>
+                <div className="flex items-center justify-between gap-2"><span className="font-semibold text-white">{item.contact_phone || item.remote_jid || 'Contacto sem número identificado'}</span><span className={`rounded-full px-2 py-1 text-[9px] font-bold ${item.mode === 'human' ? 'bg-amber-400/10 text-amber-300' : 'bg-emerald-400/10 text-emerald-300'}`}>{item.mode === 'human' ? 'HUMANO' : 'DIAMANTE'}</span></div>
                 <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[#e7c66c]">{({ unread: 'NÃO LIDA', in_service: 'EM ATENDIMENTO', pending: 'PENDENTE', resolved: 'RESOLVIDA' } as const)[item.status]}</p>
                 <p className="mt-2 truncate text-xs text-slate-400">{item.last_message?.body || 'Sem mensagens'}</p>
                 <p className="mt-1 text-[10px] text-slate-600">{new Date(item.last_message_at).toLocaleString('pt-PT')}</p>
@@ -132,7 +132,7 @@ export const WhatsAppConversationsPage: React.FC = () => {
         <section className="flex min-h-[650px] min-w-0 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0c1422]">
           {selected ? <>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-4">
-              <div><h2 className="font-bold text-white">{selected.contact_phone}</h2><p className="mt-1 text-xs text-slate-500">Conversa individual · histórico sincronizado</p><label className="mt-2 flex items-center gap-2 text-xs text-slate-400">Estado <select value={selected.status} disabled={working} onChange={e => void setStatus(e.target.value as Conversation['status'])} className="rounded-lg border border-white/10 bg-[#101b2c] px-2 py-1 text-xs text-slate-100"><option value="unread">Não lida</option><option value="in_service">Em atendimento</option><option value="pending">Pendente</option><option value="resolved">Resolvida</option></select></label></div>
+              <div><h2 className="font-bold text-white">{selected.contact_phone || selected.remote_jid || 'Contacto sem número identificado'}</h2><p className="mt-1 text-xs text-slate-500">Conversa individual · histórico sincronizado</p><label className="mt-2 flex items-center gap-2 text-xs text-slate-400">Estado <select value={selected.status} disabled={working} onChange={e => void setStatus(e.target.value as Conversation['status'])} className="rounded-lg border border-white/10 bg-[#101b2c] px-2 py-1 text-xs text-slate-100"><option value="unread">Não lida</option><option value="in_service">Em atendimento</option><option value="pending">Pendente</option><option value="resolved">Resolvida</option></select></label></div>
               {selected.mode === 'ai' ? <button disabled={working} onClick={() => void setMode('human')} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-amber-400 px-4 text-xs font-bold text-slate-950 disabled:opacity-50"><UserRound className="h-4 w-4" /> Assumir conversa</button> : <button disabled={working} onClick={() => void setMode('ai')} className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-emerald-400 px-4 text-xs font-bold text-slate-950 disabled:opacity-50"><Bot className="h-4 w-4" /> Devolver ao Diamante</button>}
               {selected.ai_send_token && <span role="status" className="rounded-xl border border-rose-400/40 px-3 py-2 text-xs font-semibold text-rose-200">Envio incerto · requer reconciliação operacional</span>}
             </div>
