@@ -164,25 +164,14 @@ router.patch('/conversations/:id/status', async (req: AdminRequest, res: Respons
   const adminId = req.adminUser?.id;
   if (!adminId) return res.status(401).json({ success: false, message: 'Sessão administrativa inválida.' });
   try {
-    const { data: previous, error: previousError } = await supabaseAdmin.from('whatsapp_conversations')
-      .select('status').eq('id', req.params.id).maybeSingle();
-    if (previousError) throw previousError;
-    if (!previous) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
-    const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
-      .update({ status, updated_at: new Date().toISOString() })
+    const { data: conversation, error: updateError } = await supabaseAdmin.from('whatsapp_conversations')
+      .update({ status, last_controlled_by: adminId, updated_at: new Date().toISOString() })
       .eq('id', req.params.id)
       .select('id,status,updated_at')
       .maybeSingle();
-    if (error) throw error;
-    if (!data) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
-    if (previous.status !== status) {
-      const { error: auditError } = await supabaseAdmin.from('whatsapp_admin_audit').insert({
-        conversation_id: req.params.id, admin_id: adminId, action: 'conversation_status_changed',
-        outcome: 'success', metadata: { previous_status: previous.status, new_status: status },
-      });
-      if (auditError) throw auditError;
-    }
-    return res.json({ success: true, conversation: data });
+    if (updateError) throw updateError;
+    if (!conversation) return res.status(404).json({ success: false, message: 'Conversa não encontrada.' });
+    return res.json({ success: true, conversation });
   } catch {
     console.error('[WhatsApp Admin] Falha ao alterar estado da conversa.');
     return res.status(503).json({ success: false, message: 'Não foi possível alterar o estado.' });
