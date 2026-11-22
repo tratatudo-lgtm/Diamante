@@ -67,12 +67,12 @@ test('configuração do webhook Evolution é segura e não bloqueia o arranque',
     const headers = new Headers(requests[0].init?.headers);
     assert.equal(headers.get('apikey'), 'api-key-test');
     const body = JSON.parse(String(requests[0].init?.body));
-    assert.deepEqual(body.events, ['MESSAGES_UPSERT']);
-    assert.equal(body.enabled, true);
-    assert.equal(body.webhookByEvents, false);
-    assert.equal(body.webhookBase64, false);
-    assert.equal(body.url, 'https://diamante.example/api/webhooks/evolution/diamante-intelligence');
-    assert.equal(body.headers['x-diamante-webhook-secret'], 'webhook-secret-test');
+    assert.deepEqual(body.webhook.events, ['MESSAGES_UPSERT']);
+    assert.equal(body.webhook.enabled, true);
+    assert.equal(body.webhook.byEvents, false);
+    assert.equal(body.webhook.base64, false);
+    assert.equal(body.webhook.url, 'https://diamante.example/api/webhooks/evolution/diamante-intelligence');
+    assert.equal(body.webhook.headers['x-diamante-webhook-secret'], 'webhook-secret-test');
     assert.ok(!logs.join(' ').includes('webhook-secret-test'));
     assert.ok(!logs.join(' ').includes('api-key-test'));
   });
