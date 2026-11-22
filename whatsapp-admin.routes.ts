@@ -28,7 +28,7 @@ router.get('/conversations', async (req: AdminRequest, res: Response) => {
   const limit = Number.isInteger(requested) ? Math.min(200, Math.max(1, requested)) : 100;
   try {
     const { data, error } = await supabaseAdmin.from('whatsapp_conversations')
-      .select('id,instance_name,remote_jid,contact_phone,mode,status,assigned_admin_id,last_message_at,created_at')
+      .select('id,instance_name,remote_jid,contact_phone,mode,status,assigned_admin_id,ai_send_token,last_message_at,created_at')
       .order('last_message_at', { ascending: false }).limit(limit);
     if (error) throw error;
     const ids = (data || []).map((item: any) => item.id);
