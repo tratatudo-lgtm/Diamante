@@ -59,6 +59,9 @@ END $$;
 SQL
 
 
+# O token é texto porque os IDs dos eventos webhook são BIGINT e os tokens manuais são UUID.
+psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone,ai_send_token) VALUES ('ci-token-type','351900000004@s.whatsapp.net','351900000004','123456789') RETURNING id;" >/dev/null
+
 # Concorrência real: reserva do envio Diamante e takeover humano disputam a mesma linha.
 psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.funcionarios (id) VALUES ('00000000-0000-4000-8000-000000000001');"
 conversation_id="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone) VALUES ('ci-race','351900000002@s.whatsapp.net','351900000002') RETURNING id;")"
