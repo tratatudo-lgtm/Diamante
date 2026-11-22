@@ -10,4 +10,4 @@ create index if not exists whatsapp_conversations_ai_send_started_idx
 comment on column public.whatsapp_conversations.ai_send_token is
   'Identificador do evento webhook que reservou temporariamente o envio automático.';
 comment on column public.whatsapp_conversations.ai_send_started_at is
-  'Início da reserva; após 60 segundos pode ser recuperada, sem repetir o evento.';
+  'Início da reserva; não expira automaticamente e exige revisão antes de libertação.';
