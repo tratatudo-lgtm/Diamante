@@ -74,7 +74,7 @@ declare
   v_action text;
   v_outcome text;
 begin
-  if new.sender_type <> 'admin' then
+  if new.sender_type is distinct from 'admin' then
     return new;
   end if;
 
