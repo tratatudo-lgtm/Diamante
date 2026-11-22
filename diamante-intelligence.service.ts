@@ -76,12 +76,36 @@ function systemPrompt(profile: IntelligenceProfile): string {
   return base.join('\n');
 }
 
+// Lista de modelos em cache para evitar chamadas de descoberta em cada mensagem.
+let modelCache: { ids: Set<string>; expiresAt: number } | null = null;
+async function selectEconomicalModel(apiKey: string): Promise<string> {
+  const preferred = 'openai/gpt-oss-20b';
+  const configured = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+  if (!modelCache || Date.now() >= modelCache.expiresAt) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (r.ok) {
+        const data = await r.json() as { data?: Array<{ id?: string }> };
+        modelCache = { ids: new Set((data.data || []).map(x => x.id).filter((x): x is string => !!x)), expiresAt: Date.now() + 5 * 60 * 1000 };
+      }
+    } catch { /* discovery failure: use configured fallback */ }
+  }
+  if (modelCache?.ids.has(preferred)) return preferred;
+  if (modelCache?.ids.has(configured)) return configured;
+  if (modelCache?.ids.has('openai/gpt-oss-120b')) return 'openai/gpt-oss-120b';
+  // Se a listagem falhar, não bloqueia a operação nem inventa disponibilidade.
+  return configured;
+}
+
 export async function generateDiamanteIntelligenceReply(jid: string, message: string): Promise<string> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('GROQ_NOT_CONFIGURED');
 
   const profile = await resolveProfile(jid);
-  const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+  const model = await selectEconomicalModel(apiKey);
   const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -91,22 +115,22 @@ export async function generateDiamanteIntelligenceReply(jid: string, message: st
     body: JSON.stringify({
       model,
       temperature: 0.2,
-      max_tokens: 350,
+      max_tokens: 160,
       messages: [
         { role: 'system', content: systemPrompt(profile) },
-        { role: 'user', content: message.slice(0, 4000) },
+        { role: 'user', content: message.slice(0, 1500) },
       ],
     }),
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) {
     console.error(`[Diamante Intelligence] Groq respondeu HTTP ${response.status}.`);
-    throw new Error('GROQ_REQUEST_FAILED');
+    throw new Error(response.status === 429 ? 'GROQ_RATE_LIMITED' : response.status === 403 ? 'GROQ_ACCESS_DENIED' : 'GROQ_REQUEST_FAILED');
   }
   const data = await response.json() as {
     choices?: Array<{ message?: { content?: string } }>;
   };
   const answer = data.choices?.[0]?.message?.content?.trim();
   if (!answer) throw new Error('GROQ_EMPTY_RESPONSE');
-  return answer.slice(0, 3500);
+  return answer.slice(0, 1600);
 }
