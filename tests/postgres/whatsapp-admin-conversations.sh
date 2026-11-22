@@ -20,6 +20,15 @@ BEGIN
   VALUES ('ci', '351900000001@s.whatsapp.net', '351900000001', 'ai')
   RETURNING id INTO v_conversation;
 
+  SELECT status INTO v_mode FROM public.whatsapp_conversations WHERE id = v_conversation;
+  IF v_mode <> 'unread' THEN RAISE EXCEPTION 'nova conversa deve iniciar como unread'; END IF;
+
+  UPDATE public.whatsapp_conversations SET status = 'in_service' WHERE id = v_conversation;
+  UPDATE public.whatsapp_conversations SET status = 'pending' WHERE id = v_conversation;
+  UPDATE public.whatsapp_conversations SET status = 'resolved' WHERE id = v_conversation;
+  SELECT status INTO v_mode FROM public.whatsapp_conversations WHERE id = v_conversation;
+  IF v_mode <> 'resolved' THEN RAISE EXCEPTION 'estado resolvida não persistiu'; END IF;
+
   UPDATE public.whatsapp_conversations SET mode = 'human'
   WHERE id = v_conversation AND mode = 'ai';
   SELECT mode INTO v_mode FROM public.whatsapp_conversations WHERE id = v_conversation;
