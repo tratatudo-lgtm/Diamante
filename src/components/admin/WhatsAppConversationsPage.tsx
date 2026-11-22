@@ -5,7 +5,7 @@ type Conversation = {
   id: string; contact_phone: string | null; remote_jid: string; mode: 'ai' | 'human'; status: 'unread' | 'in_service' | 'pending' | 'resolved'; assigned_admin_id: string | null;
   last_message_at: string; ai_send_token: string | null; last_message: { body: string; direction: string; sender_type: string; created_at: string } | null;
 };
-type AuditEvent = { id: string; admin_id: string | null; action: string; outcome: string; metadata: Record<string, unknown>; created_at: string };
+type AuditEvent = { id: string; admin_id: string | null; admin_name?: string | null; admin_email?: string | null; action: string; outcome: string; metadata: Record<string, unknown>; created_at: string };
 type Message = {
   id: string; direction: 'inbound' | 'outbound'; sender_type: 'customer' | 'ai' | 'admin';
   body: string; status: string; created_at: string; sent_at: string | null;
@@ -20,6 +20,7 @@ export const WhatsAppConversationsPage: React.FC = () => {
   const [auditOutcome, setAuditOutcome] = useState('');
   const [auditFrom, setAuditFrom] = useState('');
   const [auditTo, setAuditTo] = useState('');
+  const [auditScope, setAuditScope] = useState<'conversation' | 'global'>('conversation');
   const [draft, setDraft] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -55,7 +56,8 @@ export const WhatsAppConversationsPage: React.FC = () => {
   const loadAudit = useCallback(async (id: string) => {
     if (!id) { setAuditEvents([]); return; }
     try {
-      const params = new URLSearchParams({ conversationId: id, limit: '100' });
+      const params = new URLSearchParams({ limit: '100' });
+      if (auditScope === 'conversation') params.set('conversationId', id);
       if (auditAction) params.set('action', auditAction);
       if (auditOutcome) params.set('outcome', auditOutcome);
       if (auditFrom) params.set('from', auditFrom);
@@ -63,7 +65,7 @@ export const WhatsAppConversationsPage: React.FC = () => {
       const payload = await api('/audit?' + params.toString());
       setAuditEvents((payload.events || []) as AuditEvent[]);
     } catch (e) { setError(e instanceof Error ? e.message : 'Erro ao carregar auditoria.'); }
-  }, [api, auditAction, auditOutcome, auditFrom, auditTo]);
+  }, [api, auditAction, auditOutcome, auditFrom, auditTo, auditScope]);
 
   const loadMessages = useCallback(async (id: string, quiet = false) => {
     if (!id) { setMessages([]); return; }
@@ -170,7 +172,8 @@ export const WhatsAppConversationsPage: React.FC = () => {
 
             <div className="border-t border-white/10 bg-black/10 p-4">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-[#e7c66c]">Auditoria desta conversa</h3>
+                <div><h3 className="text-xs font-bold uppercase tracking-wider text-[#e7c66c]">{auditScope === 'conversation' ? 'Auditoria desta conversa' : 'Auditoria global WhatsApp'}</h3></div>
+                <select value={auditScope} onChange={e => setAuditScope(e.target.value as 'conversation' | 'global')} className="rounded-lg border border-white/10 bg-[#101b2c] px-2 py-1 text-[10px] text-slate-200"><option value="conversation">Esta conversa</option><option value="global">Todas as conversas</option></select>
                 <span className="text-[10px] text-slate-500">{auditEvents.length} eventos</span>
               </div>
               <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
@@ -191,7 +194,7 @@ export const WhatsAppConversationsPage: React.FC = () => {
                       admin_message_unknown: 'Resultado do envio por confirmar',
                       conversation_status_changed: 'Estado da conversa alterado',
                     } as Record<string, string>)[event.action] || event.action}</p>
-                    <p className="text-[9px] text-slate-500">Admin: {event.admin_id || 'Sistema'} · {event.outcome}</p>
+                    <p className="text-[9px] text-slate-500">Admin: {event.admin_name || (event.admin_id ? event.admin_id.slice(0, 8) : 'Sistema')}{event.admin_email ? ' · ' + event.admin_email : ''} · {event.outcome}</p>
                   </div>
                   <time className="text-[9px] text-slate-500">{new Date(event.created_at).toLocaleString('pt-PT')}</time>
                 </div>)}
