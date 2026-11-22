@@ -9,6 +9,7 @@ psql -v ON_ERROR_STOP=1 -c 'CREATE TABLE public.funcionarios (id uuid PRIMARY KE
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122100000_create_whatsapp_admin_conversations.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122120000_add_whatsapp_ai_send_claim.sql
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122130000_allow_unresolved_whatsapp_lid_phone.sql
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122140000_create_whatsapp_admin_audit.sql
 
 # LID sem mapeamento telefónico deve poder ser guardado sem inventar um número.
 psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name, remote_jid, contact_phone) VALUES ('ci-lid', 'opaque-lid@lid', NULL) RETURNING id;" >/dev/null
@@ -94,3 +95,59 @@ takeover_release="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_c
 [[ -n "$takeover_release" ]] || { echo "Devolução ao Diamante falhou após libertação da reserva"; exit 1; }
 
 echo "PASS: schema, histórico, RLS, concorrência IA/humano e reserva de resposta manual."
+
+# Auditoria append-only: takeover, devolução, estado e ciclo de mensagem manual.
+psql -v ON_ERROR_STOP=1 <<'SQL'
+DO $$
+DECLARE
+  v_conversation uuid;
+  v_message uuid;
+  v_count integer;
+  v_audit uuid;
+BEGIN
+  INSERT INTO public.whatsapp_conversations (
+    instance_name, remote_jid, contact_phone, mode, last_controlled_by
+  ) VALUES (
+    'ci-audit', '351900000005@s.whatsapp.net', '351900000005', 'ai',
+    '00000000-0000-4000-8000-000000000001'
+  ) RETURNING id INTO v_conversation;
+
+  UPDATE public.whatsapp_conversations
+    SET mode='human', assigned_admin_id='00000000-0000-4000-8000-000000000001',
+        last_controlled_by='00000000-0000-4000-8000-000000000001'
+    WHERE id=v_conversation;
+
+  UPDATE public.whatsapp_conversations SET status='in_service' WHERE id=v_conversation;
+
+  INSERT INTO public.whatsapp_messages (
+    conversation_id, direction, sender_type, body, status, admin_id
+  ) VALUES (
+    v_conversation, 'outbound', 'admin', 'Resposta de teste', 'sending',
+    '00000000-0000-4000-8000-000000000001'
+  ) RETURNING id INTO v_message;
+
+  UPDATE public.whatsapp_messages SET status='sent', sent_at=now() WHERE id=v_message;
+  UPDATE public.whatsapp_conversations
+    SET mode='ai', assigned_admin_id=null,
+        last_controlled_by='00000000-0000-4000-8000-000000000001'
+    WHERE id=v_conversation;
+
+  SELECT count(*) INTO v_count
+    FROM public.whatsapp_admin_audit
+    WHERE conversation_id=v_conversation
+      AND action IN ('control_taken','control_released','admin_message_created',
+                     'admin_message_sent','conversation_status_changed');
+  IF v_count <> 5 THEN
+    RAISE EXCEPTION 'esperados 5 eventos de auditoria, encontrados %', v_count;
+  END IF;
+
+  SELECT id INTO v_audit FROM public.whatsapp_admin_audit
+    WHERE conversation_id=v_conversation LIMIT 1;
+  BEGIN
+    UPDATE public.whatsapp_admin_audit SET outcome='failed' WHERE id=v_audit;
+    RAISE EXCEPTION 'auditoria permitiu UPDATE';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'auditoria permitiu UPDATE' THEN RAISE; END IF;
+  END;
+END $$;
+SQL
