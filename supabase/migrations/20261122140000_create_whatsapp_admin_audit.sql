@@ -119,27 +119,6 @@ after update of status on public.whatsapp_messages
 for each row execute function public.audit_whatsapp_admin_message();
 
 
-create or replace function public.audit_whatsapp_admin_status_change()
-returns trigger
-language plpgsql
-security definer
-set search_path = pg_catalog, public
-as $$
-begin
-  if old.status is distinct from new.status then
-    insert into public.whatsapp_admin_audit (conversation_id, admin_id, action, metadata)
-    values (
-      new.id,
-      new.last_controlled_by,
-      'conversation_status_changed',
-      jsonb_build_object('previous_status', old.status, 'new_status', new.status)
-    );
-  end if;
-  return new;
-end;
-$$;
-
+-- O estado é auditado pela rota administrativa para preservar o ID real do operador.
 drop trigger if exists whatsapp_conversation_status_audit on public.whatsapp_conversations;
-create trigger whatsapp_conversation_status_audit
-after update of status on public.whatsapp_conversations
-for each row execute function public.audit_whatsapp_admin_status_change();
+drop function if exists public.audit_whatsapp_admin_status_change();
