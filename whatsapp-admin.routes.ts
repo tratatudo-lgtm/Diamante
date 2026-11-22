@@ -78,7 +78,20 @@ router.get('/audit', async (req: AdminRequest, res: Response) => {
     if (typeof to === 'string') query = query.lt('created_at', new Date(Date.parse(to + 'T00:00:00.000Z') + 86400000).toISOString());
     const { data, error } = await query;
     if (error) throw error;
-    return res.json({ success: true, events: data || [] });
+    const adminIds = [...new Set((data || []).map((event: any) => event.admin_id).filter(Boolean))];
+    const { data: admins, error: adminsError } = adminIds.length
+      ? await supabaseAdmin.from('funcionarios').select('id,nome_completo,email').in('id', adminIds)
+      : { data: [], error: null };
+    if (adminsError) throw adminsError;
+    const adminById = new Map((admins || []).map((admin: any) => [admin.id, admin]));
+    return res.json({
+      success: true,
+      events: (data || []).map((event: any) => ({
+        ...event,
+        admin_name: adminById.get(event.admin_id)?.nome_completo || null,
+        admin_email: adminById.get(event.admin_id)?.email || null,
+      })),
+    });
   } catch {
     console.error('[WhatsApp Admin] Falha ao carregar auditoria.');
     return res.status(503).json({ success: false, message: 'Não foi possível carregar a auditoria.' });
