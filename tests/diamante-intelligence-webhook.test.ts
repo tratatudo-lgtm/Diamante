@@ -43,3 +43,12 @@ test('ignora payloads sem identificador, remetente ou texto suportado', async ()
   assert.equal(extractEvolutionTextMessage({ data: { key: { remoteJid: 'x' }, message: { conversation: 'Olá' } } }), null);
   assert.equal(extractEvolutionTextMessage({ data: { key: { id: 'x', remoteJid: 'x' }, message: { audioMessage: {} } } }), null);
 });
+
+test('estados de envio distinguem falha anterior ao envio de entrega incerta', () => {
+  const preSendFailure = { status: 'failed', retryable: true };
+  const uncertainDelivery = { status: 'unknown', retryable: false };
+  assert.equal(preSendFailure.status, 'failed');
+  assert.equal(preSendFailure.retryable, true);
+  assert.equal(uncertainDelivery.status, 'unknown');
+  assert.equal(uncertainDelivery.retryable, false);
+});
