@@ -136,8 +136,9 @@ router.post('/', async (req: Request, res: Response) => {
     // A reserva não expira automaticamente: uma execução antiga nunca pode ser
     // ultrapassada por takeover nem concorrer com um segundo envio após pausa/crash.
     // Reservas abandonadas exigem revisão operacional antes de serem libertadas.
+    const sendClaimToken = String(eventRow.id);
     const { data: sendClaim, error: claimError } = await supabaseAdmin.from('whatsapp_conversations')
-      .update({ ai_send_token: eventRow.id, ai_send_started_at: new Date().toISOString() })
+      .update({ ai_send_token: sendClaimToken, ai_send_started_at: new Date().toISOString() })
       .eq('id', conversation.id)
       .eq('mode', 'ai')
       .is('ai_send_token', null)
@@ -171,7 +172,7 @@ router.post('/', async (req: Request, res: Response) => {
     await supabaseAdmin.from('whatsapp_conversations')
       .update({ last_message_at: new Date().toISOString(), ai_send_token: null, ai_send_started_at: null })
       .eq('id', conversation.id)
-      .eq('ai_send_token', eventRow.id);
+      .eq('ai_send_token', sendClaimToken);
     await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status: 'sent', processed_at: new Date().toISOString() })
       .eq('id', eventRow.id)
