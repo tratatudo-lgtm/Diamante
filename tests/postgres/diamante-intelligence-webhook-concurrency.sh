@@ -5,7 +5,7 @@ set -euo pipefail
 : "${PGDATABASE:?PGDATABASE obrigatório}"
 : "${PGUSER:?PGUSER obrigatório}"
 
-psql -v ON_ERROR_STOP=1 -c "DO \\$\\$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \\$\\$; DO \\$\\$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \\$\\$; DO \\$\\$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \\$\\$;"
+psql -v ON_ERROR_STOP=1 -c 'DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;'
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261120100000_create_diamante_intelligence_dedup.sql
 
 suffix="ci-$(date +%s%N)"
