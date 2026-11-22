@@ -87,12 +87,12 @@ export const WhatsAppConversationsPage: React.FC = () => {
 
   const reconcileUncertainSend = async () => {
     if (!selected?.ai_send_token) return;
-    const confirmed = window.confirm('Confirma que verificou o WhatsApp e que a última mensagem do Assistente Diamante NÃO foi entregue? Só confirme depois de verificar. O evento original não será reenviado.');
+    const confirmed = window.confirm('Confirma os DOIS pontos? 1) Verificou no WhatsApp que a mensagem NÃO foi entregue. 2) O processo backend/webhook foi parado e não pode retomar este envio. Só depois pode libertar a reserva. O evento original não será reenviado.');
     if (!confirmed) return;
     setWorking(true); setError('');
     try {
       await api('/conversations/' + selected.id + '/reconcile-send', {
-        method: 'POST', body: JSON.stringify({ confirmedNotDelivered: true }),
+        method: 'POST', body: JSON.stringify({ confirmedNotDelivered: true, workerStopped: true }),
       });
       await loadConversations(true);
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível reconciliar o envio.'); }
