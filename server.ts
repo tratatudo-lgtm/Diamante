@@ -77,7 +77,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Webhook WhatsApp protegido por segredo próprio; não passa por autenticação de utilizador.
 app.use('/api/webhooks/evolution/diamante-intelligence', diamanteIntelligenceWebhook);
 app.use('/api/admin/whatsapp', whatsappAdminRouter);
-app.use('/api/client/auth', whatsappClientAuthRouter);
 
 // =========================================================================
 // 2. PROTEÇÃO BÁSICA CONTRA BRUTE-FORCE
@@ -150,6 +149,7 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
 }
 
 app.use(bruteForceProtection);
+app.use('/api/client/auth', whatsappClientAuthRouter);
 
 // =========================================================================
 // 3. ENDPOINTS DA API & ROTAS DE AUTENTICAÇÃO
