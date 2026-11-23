@@ -49,6 +49,9 @@ SQL
 # LID sem mapeamento telefónico deve poder ser guardado sem inventar um número.
 psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name, remote_jid, contact_phone) VALUES ('ci-lid', 'opaque-lid@lid', NULL) RETURNING id;" >/dev/null
 
+# Criar o administrador antes de testar a atribuição na auditoria (FK).
+psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.funcionarios (id) VALUES ('00000000-0000-4000-8000-000000000001');"
+
 # Confirma os estados individuais de controlo IA/humano e as permissões mínimas.
 psql -v ON_ERROR_STOP=1 <<'SQL'
 DO $$
@@ -114,7 +117,6 @@ SQL
 psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone,ai_send_token) VALUES ('ci-token-type','351900000004@s.whatsapp.net','351900000004','123456789') RETURNING id;" >/dev/null
 
 # Concorrência real: reserva do envio Diamante e takeover humano disputam a mesma linha.
-psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.funcionarios (id) VALUES ('00000000-0000-4000-8000-000000000001');"
 conversation_id="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone) VALUES ('ci-race','351900000002@s.whatsapp.net','351900000002') RETURNING id;")"
 psql -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_conversations SET ai_send_token='webhook-claim', ai_send_started_at=now() WHERE id='$conversation_id' AND mode='ai' AND ai_send_token IS NULL;"
 claim_count="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_conversations SET mode='human', assigned_admin_id='00000000-0000-4000-8000-000000000001' WHERE id='$conversation_id' AND mode='ai' AND ai_send_token IS NULL RETURNING id;" | wc -l | tr -d ' ')"
