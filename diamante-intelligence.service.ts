@@ -12,7 +12,7 @@ function normalizePhoneFromJid(jid: string): string {
 }
 
 export async function findWhatsAppClientByPhone(phone: string): Promise<{ id: string; name: string } | null> {
-  const digits = phone.replace(/\\D/g, '');
+  const digits = phone.replace(/\D/g, '');
   if (digits.length < 8 || digits.length > 15) return null;
   const variants = digits.startsWith('351')
     ? [digits, `+${digits}`, digits.slice(3), `+${digits.slice(3)}`]
