@@ -139,4 +139,91 @@ router.get('/me', verifyClientSession, (req: ClientRequest, res: Response) => {
   return res.status(200).json({ success: true, client: req.clientSession });
 });
 
+
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Histórico de compras: o identificador do cliente vem exclusivamente do JWT validado.
+router.get('/purchases', verifyClientSession, async (req: ClientRequest, res: Response) => {
+  const requestedLimit = Number(req.query.limit ?? 20);
+  const limit = Number.isInteger(requestedLimit) ? Math.min(50, Math.max(1, requestedLimit)) : 20;
+  const requestedOffset = Number(req.query.offset ?? 0);
+  const offset = Number.isInteger(requestedOffset) ? Math.max(0, Math.min(10000, requestedOffset)) : 0;
+  const clientId = req.clientSession?.id;
+  if (!clientId) return res.status(401).json({ success: false, message: 'Sessão de cliente obrigatória.' });
+
+  try {
+    const { data, error, count } = await supabaseAdmin.from('transacoes')
+      .select('id,created_at,tipo_peca,metal,peso_gramas,valor_final,estado,loja_id', { count: 'exact' })
+      .eq('cliente_id', clientId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) return res.status(503).json({ success: false, message: 'Não foi possível carregar as compras.' });
+
+    const purchases = data || [];
+    const transactionIds = purchases.map((item: any) => item.id);
+    const { data: receipts, error: receiptError } = transactionIds.length
+      ? await supabaseAdmin.from('recibos').select('id,transacao_id,gerado_em').in('transacao_id', transactionIds)
+      : { data: [], error: null };
+    if (receiptError) return res.status(503).json({ success: false, message: 'Não foi possível carregar os recibos.' });
+
+    const receiptByTransaction = new Map((receipts || []).map((item: any) => [item.transacao_id, {
+      id: item.id, generated_at: item.gerado_em,
+    }]));
+    return res.status(200).json({
+      success: true,
+      pagination: { limit, offset, total: count ?? purchases.length },
+      purchases: purchases.map((item: any) => ({
+        id: item.id,
+        date: item.created_at,
+        item_type: item.tipo_peca,
+        metal: item.metal,
+        weight_grams: item.peso_gramas,
+        amount: item.valor_final,
+        status: item.estado,
+        receipt: receiptByTransaction.get(item.id) ?? null,
+      })),
+    });
+  } catch {
+    return res.status(503).json({ success: false, message: 'Serviço de área de cliente temporariamente indisponível.' });
+  }
+});
+
+// Detalhe de compra: UUID e ownership são sempre verificados em conjunto.
+router.get('/purchases/:id', verifyClientSession, async (req: ClientRequest, res: Response) => {
+  const purchaseId = req.params.id;
+  const clientId = req.clientSession?.id;
+  if (!clientId) return res.status(401).json({ success: false, message: 'Sessão de cliente obrigatória.' });
+  if (!uuidPattern.test(purchaseId)) return res.status(400).json({ success: false, message: 'Identificador de compra inválido.' });
+
+  try {
+    const { data, error } = await supabaseAdmin.from('transacoes')
+      .select('id,created_at,tipo_peca,metal,peso_gramas,descricao,cotacao_dia,valor_sugerido,valor_final,margem_aplicada,estado')
+      .eq('id', purchaseId)
+      .eq('cliente_id', clientId)
+      .maybeSingle();
+    if (error) return res.status(503).json({ success: false, message: 'Não foi possível carregar a compra.' });
+    if (!data) return res.status(404).json({ success: false, message: 'Compra não encontrada.' });
+
+    const { data: receipt, error: receiptError } = await supabaseAdmin.from('recibos')
+      .select('id,gerado_em')
+      .eq('transacao_id', purchaseId)
+      .maybeSingle();
+    if (receiptError) return res.status(503).json({ success: false, message: 'Não foi possível carregar o recibo.' });
+
+    return res.status(200).json({
+      success: true,
+      purchase: {
+        id: data.id, date: data.created_at, item_type: data.tipo_peca,
+        metal: data.metal, weight_grams: data.peso_gramas,
+        description: data.descricao, daily_quote: data.cotacao_dia,
+        suggested_amount: data.valor_sugerido, final_amount: data.valor_final,
+        applied_margin: data.margem_aplicada, status: data.estado,
+        receipt: receipt ? { id: receipt.id, generated_at: receipt.gerado_em } : null,
+      },
+    });
+  } catch {
+    return res.status(503).json({ success: false, message: 'Serviço de área de cliente temporariamente indisponível.' });
+  }
+});
+
 export default router;
