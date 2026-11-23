@@ -63,6 +63,12 @@ router.post('/', async (req: Request, res: Response) => {
   const now = Date.now();
   pruneSenderWindows(now);
   const instanceName = process.env.EVOLUTION_INSTANCE || 'diamante-os';
+  const window = senderWindows.get(incoming.jid);
+  if (window && now < window.resetAt && window.count >= MAX_MESSAGES_PER_SENDER) {
+    return res.status(200).json({ success: true, rateLimited: true });
+  }
+  if (!window || now >= window.resetAt) senderWindows.set(incoming.jid, { count: 1, resetAt: now + SENDER_WINDOW_MS });
+  else window.count += 1;
   // Resolver o contacto contra o CRM antes de persistir a conversa.
   // Um número ambíguo/não encontrado nunca é associado a um cliente.
   let matchedClient: { id: string; name: string } | null = null;
@@ -72,15 +78,9 @@ router.post('/', async (req: Request, res: Response) => {
     console.error('[Diamante Intelligence] Falha na associação do contacto ao CRM.');
     return res.status(503).json({ success: false });
   }
-  const window = senderWindows.get(incoming.jid);
-  if (window && now < window.resetAt && window.count >= MAX_MESSAGES_PER_SENDER) {
-    return res.status(200).json({ success: true, rateLimited: true });
-  }
-  if (!window || now >= window.resetAt) senderWindows.set(incoming.jid, { count: 1, resetAt: now + SENDER_WINDOW_MS });
-  else window.count += 1;
   const { data: conversation, error: conversationError } = await supabaseAdmin
     .from('whatsapp_conversations')
-    .upsert({ instance_name: instanceName, remote_jid: incoming.jid, contact_phone: incoming.phone, client_id: matchedClient?.id ?? null, last_message_at: new Date().toISOString() }, { onConflict: 'instance_name,remote_jid' })
+    .upsert({ instance_name: instanceName, remote_jid: incoming.jid, contact_phone: incoming.phone, ...(matchedClient ? { client_id: matchedClient.id } : {}), last_message_at: new Date().toISOString() }, { onConflict: 'instance_name,remote_jid' })
     .select('id,mode')
     .single();
   if (conversationError || !conversation) {
