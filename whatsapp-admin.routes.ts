@@ -221,12 +221,15 @@ router.post('/conversations/:id/messages', async (req: AdminRequest, res: Respon
 
     try {
       await sendEvolutionText(conversation.contact_phone, body, conversation.instance_name);
-      const { error: sentError } = await supabaseAdmin.from('whatsapp_messages')
-        .update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', pending.id).eq('status', 'sending');
-      if (sentError) throw new Error('MESSAGE_STATUS_UPDATE_FAILED');
-      await supabaseAdmin.from('whatsapp_conversations')
+      const messageFinal = await supabaseAdmin.from('whatsapp_messages')
+        .update({ status: 'sent', sent_at: new Date().toISOString() })
+        .eq('id', pending.id).eq('status', 'sending').select('id').maybeSingle();
+      if (messageFinal.error || !messageFinal.data) throw new Error('MESSAGE_STATUS_UPDATE_FAILED');
+      const claimRelease = await supabaseAdmin.from('whatsapp_conversations')
         .update({ last_message_at: new Date().toISOString(), ai_send_token: null, ai_send_started_at: null })
-        .eq('id', conversation.id).eq('ai_send_token', clientMessageId);
+        .eq('id', conversation.id).eq('ai_send_token', clientMessageId)
+        .select('id').maybeSingle();
+      if (claimRelease.error || !claimRelease.data) throw new Error('MESSAGE_CLAIM_RELEASE_FAILED');
       return res.json({ success: true, messageId: pending.id });
     } catch {
       await supabaseAdmin.from('whatsapp_messages')
