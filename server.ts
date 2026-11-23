@@ -93,7 +93,7 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
   // Os routers de autenticação também estão montados em /admin e /api/admin.
   // Aplicar o limite por IP em todos os aliases dos mesmos endpoints sensíveis.
   const isSensitiveAuthEndpoint =
-    /^\/(?:auth|api\/auth|admin|api\/admin)\/(?:request-otp|send-otp|verify-otp|login|register|session)\/?$/.test(req.path);
+    /^\/(?:auth|api\/auth|admin|api\/admin|api\/client\/auth)\/(?:request-otp|send-otp|verify-otp|login|register|session)\/?$/.test(req.path);
 
   if (!isSensitiveAuthEndpoint) {
     return next();
