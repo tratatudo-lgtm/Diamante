@@ -189,6 +189,36 @@ router.get('/purchases', verifyClientSession, async (req: ClientRequest, res: Re
 });
 
 // Detalhe de compra: UUID e ownership são sempre verificados em conjunto.
+// Endpoint para download seguro de recibo (PDF) com verificação de ownership.
+router.get('/receipts/:id', verifyClientSession, async (req: ClientRequest, res: Response) => {
+  const receiptId = req.params.id;
+  const clientId = req.clientSession?.id;
+  if (!clientId) return res.status(401).json({ success: false, message: 'Sessão de cliente obrigatória.' });
+  if (!uuidPattern.test(receiptId)) return res.status(400).json({ success: false, message: 'Identificador de recibo inválido.' });
+
+  try {
+    const { data: receipt, error } = await supabaseAdmin.from('recibos')
+      .select('id,transacao_id,gerado_em')
+      .eq('id', receiptId)
+      .maybeSingle();
+    if (error) return res.status(503).json({ success: false, message: 'Não foi possível validar o recibo.' });
+    if (!receipt) return res.status(404).json({ success: false, message: 'Recibo não encontrado.' });
+
+    const { data: transaction, error: transactionError } = await supabaseAdmin.from('transacoes')
+      .select('id,cliente_id')
+      .eq('id', receipt.transacao_id)
+      .eq('cliente_id', clientId)
+      .maybeSingle();
+    if (transactionError) return res.status(503).json({ success: false, message: 'Não foi possível validar a compra.' });
+    if (!transaction) return res.status(404).json({ success: false, message: 'Recibo não encontrado.' });
+
+    // Não expor URLs/paths de armazenamento nesta API sem uma fonte validada.
+    return res.status(501).json({ success: false, message: 'Download do recibo ainda não disponível; a compra foi validada.' });
+  } catch {
+    return res.status(503).json({ success: false, message: 'Serviço de recibos temporariamente indisponível.' });
+  }
+});
+
 router.get('/purchases/:id', verifyClientSession, async (req: ClientRequest, res: Response) => {
   const purchaseId = req.params.id;
   const clientId = req.clientSession?.id;
