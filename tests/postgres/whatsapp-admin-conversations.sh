@@ -6,6 +6,7 @@ set -euo pipefail
 
 psql -v ON_ERROR_STOP=1 -c 'DO $$ BEGIN CREATE ROLE anon NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE authenticated NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$; DO $$ BEGIN CREATE ROLE service_role NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;'
 psql -v ON_ERROR_STOP=1 -c 'CREATE TABLE public.funcionarios (id uuid PRIMARY KEY);'
+psql -v ON_ERROR_STOP=1 -c 'CREATE TABLE public.clientes (id uuid PRIMARY KEY, nome text, telemovel text, codigo_cliente text);'
 
 # Reproduzir a estrutura que já existe no Supabase antes de executar a migração.
 psql -v ON_ERROR_STOP=1 <<'SQL'
@@ -45,6 +46,12 @@ BEGIN
   END IF;
 END $$;
 SQL
+
+# Conversas de clientes reconhecidos ficam associadas ao registo CRM correspondente.
+client_id="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.clientes (id,nome,telemovel,codigo_cliente) VALUES ('00000000-0000-4000-8000-000000000099','Cliente CI','351900000099','CLI-CI') RETURNING id;")"
+psql -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone,client_id) VALUES ('ci-client','351900000099@s.whatsapp.net','351900000099','$client_id');"
+linked_client="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "SELECT c.nome FROM public.whatsapp_conversations w JOIN public.clientes c ON c.id=w.client_id WHERE w.instance_name='ci-client';")"
+if [ "$linked_client" != "Cliente CI" ]; then echo "conversa WhatsApp não ficou ligada ao cliente CRM" >&2; exit 1; fi
 
 # LID sem mapeamento telefónico deve poder ser guardado sem inventar um número.
 psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name, remote_jid, contact_phone) VALUES ('ci-lid', 'opaque-lid@lid', NULL) RETURNING id;" >/dev/null
@@ -150,6 +157,7 @@ if [ "$winners" != "1" ]; then echo "esperava exatamente um administrador venced
 fresh_db="${PGDATABASE}_whatsapp_fresh"
 createdb "$fresh_db"
 PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -c 'CREATE TABLE public.funcionarios (id uuid PRIMARY KEY);'
+PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -c 'CREATE TABLE public.clientes (id uuid PRIMARY KEY, nome text, telemovel text, codigo_cliente text);'
 PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122100000_create_whatsapp_admin_conversations.sql
 PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122120000_add_whatsapp_ai_send_claim.sql
 PGDATABASE="$fresh_db" psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261122130000_allow_unresolved_whatsapp_lid_phone.sql
