@@ -14,17 +14,12 @@ function normalizePhoneFromJid(jid: string): string {
 export async function findWhatsAppClientByPhone(phone: string): Promise<{ id: string; name: string } | null> {
   const digits = phone.replace(/\D/g, '');
   if (digits.length < 8 || digits.length > 15) return null;
-  const variants = digits.startsWith('351')
-    ? [digits, `+${digits}`, digits.slice(3), `+${digits.slice(3)}`]
-    : [digits, `+${digits}`];
-  const { data, error } = await supabaseAdmin
-    .from('clientes')
-    .select('id,nome')
-    .in('telemovel', variants)
-    .limit(2);
+  const { data, error } = await supabaseAdmin.rpc('lookup_whatsapp_client_by_phone', {
+    p_phone: digits,
+  });
   if (error) throw new Error('SUPABASE_CLIENT_LOOKUP_FAILED');
   if (!Array.isArray(data) || data.length !== 1) return null;
-  const name = typeof data[0].nome === 'string' ? data[0].nome.trim() : '';
+  const name = typeof data[0].name === 'string' ? data[0].name.trim() : '';
   const id = typeof data[0].id === 'string' ? data[0].id : '';
   return id && name ? { id, name } : null;
 }
