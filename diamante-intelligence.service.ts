@@ -2,7 +2,7 @@ import { findUserInSupabaseByPhone, supabaseAdmin } from './auth.service';
 
 type IntelligenceProfile =
   | { kind: 'public' }
-  | { kind: 'client' }
+  | { kind: 'client'; name: string }
   | { kind: 'employee'; role: string; name: string; storeName: string | null };
 
 function normalizePhoneFromJid(jid: string): string {
@@ -31,10 +31,14 @@ async function resolveProfile(jid: string): Promise<IntelligenceProfile> {
     : [phone, `+${phone}`];
   const { data: clients, error } = await supabaseAdmin
     .from('clientes')
-    .select('id')
+    .select('id,nome')
     .in('telemovel', variants)
     .limit(2);
-  if (!error && Array.isArray(clients) && clients.length === 1) return { kind: 'client' };
+  if (error) throw new Error('SUPABASE_CLIENT_LOOKUP_FAILED');
+  if (Array.isArray(clients) && clients.length === 1) {
+    const clientName = typeof clients[0].nome === 'string' ? clients[0].nome.trim() : '';
+    if (clientName) return { kind: 'client', name: clientName };
+  }
   return { kind: 'public' };
 }
 
@@ -57,8 +61,9 @@ function systemPrompt(profile: IntelligenceProfile): string {
     );
   } else if (profile.kind === 'client') {
     base.push(
-      'Perfil reconhecido como contacto de cliente registado, mas não autenticado.',
-      'Não confirmes a existência de registos, compras, valores, documentos ou qualquer dado pessoal. Dá apenas informação geral e encaminha assuntos individuais para uma loja.',
+      `Perfil de contacto associado ao nome ${profile.name}, reconhecido pela correspondência do número no Supabase, mas NÃO autenticado. Trata-o cordialmente pelo primeiro nome, sem afirmar que a identidade foi validada.`,
+      'Responde apenas a assuntos da área de cliente Diamante D\'Ouro: processo de compra de ouro, atendimento, lojas, preparação para visita e apoio geral ao cliente. Recusa educadamente pedidos fora deste âmbito.',
+      'Não consultes nem reveles compras, histórico, avaliações, valores, pagamentos, recibos, documentos, NIF, morada, dados de contacto ou estado da conta. O número reconhecido não é autenticação. Para qualquer assunto pessoal sobre a conta, encaminha para validação de identidade através do canal seguro oficial; nunca peças códigos ou documentos no WhatsApp.',
     );
   } else {
     const role = profile.role.toLowerCase();
