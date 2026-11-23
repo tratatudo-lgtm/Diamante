@@ -170,16 +170,23 @@ router.post('/', async (req: Request, res: Response) => {
     if (sending.error || !sending.data) throw new Error('WEBHOOK_STATE_TRANSITION_FAILED');
     sendAttempted = true;
     await sendEvolutionText(number, reply);
-    await supabaseAdmin.from('whatsapp_messages')
-      .update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', aiMessageId).eq('status', 'sending');
-    await supabaseAdmin.from('whatsapp_conversations')
+    const messageFinal = await supabaseAdmin.from('whatsapp_messages')
+      .update({ status: 'sent', sent_at: new Date().toISOString() })
+      .eq('id', aiMessageId).eq('status', 'sending').select('id').maybeSingle();
+    if (messageFinal.error || !messageFinal.data) throw new Error('WHATSAPP_AI_MESSAGE_FINALIZE_FAILED');
+
+    // Só libertar a reserva depois de confirmar a persistência do resultado da mensagem.
+    const conversationFinal = await supabaseAdmin.from('whatsapp_conversations')
       .update({ last_message_at: new Date().toISOString(), ai_send_token: null, ai_send_started_at: null })
-      .eq('id', conversation.id)
-      .eq('ai_send_token', sendClaimToken);
-    await supabaseAdmin.from('diamante_intelligence_webhook_events')
+      .eq('id', conversation.id).eq('ai_send_token', sendClaimToken)
+      .select('id').maybeSingle();
+    if (conversationFinal.error || !conversationFinal.data) throw new Error('WHATSAPP_AI_CLAIM_RELEASE_FAILED');
+
+    const eventFinal = await supabaseAdmin.from('diamante_intelligence_webhook_events')
       .update({ status: 'sent', processed_at: new Date().toISOString() })
-      .eq('id', eventRow.id)
-      .eq('status', 'sending');
+      .eq('id', eventRow.id).eq('status', 'sending')
+      .select('id').maybeSingle();
+    if (eventFinal.error || !eventFinal.data) throw new Error('WEBHOOK_EVENT_FINALIZE_FAILED');
     return res.status(200).json({ success: true });
   } catch (error) {
     const code = error instanceof Error ? error.message : 'UNKNOWN';
