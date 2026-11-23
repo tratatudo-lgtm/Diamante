@@ -3,6 +3,7 @@ import { createHmac, randomInt } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { supabaseAdmin } from './auth.service';
 import { formatPortuguesePhone, sendWhatsAppOtp } from './whatsapp.service';
+import { ownsClientTransaction, parsePrivateReceiptPath } from './whatsapp-client-ownership';
 
 const router = Router();
 const jwtSecret = process.env.JWT_SECRET || '';
@@ -203,7 +204,7 @@ router.get('/receipts/:id', verifyClientSession, async (req: ClientRequest, res:
 
   try {
     const { data: receipt, error } = await supabaseAdmin.from('recibos')
-      .select('id,transacao_id,gerado_em')
+      .select('id,transacao_id,gerado_em,url_pdf')
       .eq('id', receiptId)
       .maybeSingle();
     if (error) return res.status(503).json({ success: false, message: 'Não foi possível validar o recibo.' });
@@ -215,10 +216,16 @@ router.get('/receipts/:id', verifyClientSession, async (req: ClientRequest, res:
       .eq('cliente_id', clientId)
       .maybeSingle();
     if (transactionError) return res.status(503).json({ success: false, message: 'Não foi possível validar a compra.' });
-    if (!transaction) return res.status(404).json({ success: false, message: 'Recibo não encontrado.' });
+    if (!ownsClientTransaction(clientId, transaction)) return res.status(404).json({ success: false, message: 'Recibo não encontrado.' });
 
-    // Não expor URLs/paths de armazenamento nesta API sem uma fonte validada.
-    return res.status(501).json({ success: false, message: 'Download do recibo ainda não disponível; a compra foi validada.' });
+    const bucket = process.env.CLIENT_RECEIPTS_PRIVATE_BUCKET || '';
+    const path = parsePrivateReceiptPath(receipt.url_pdf, bucket);
+    if (!path) return res.status(404).json({ success: false, message: 'Ficheiro do recibo indisponível.' });
+
+    const { data: signed, error: signError } = await supabaseAdmin.storage.from(bucket).createSignedUrl(path, 60);
+    if (signError || !signed?.signedUrl) return res.status(503).json({ success: false, message: 'Não foi possível disponibilizar o recibo.' });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ success: true, url: signed.signedUrl, expires_in: 60 });
   } catch {
     return res.status(503).json({ success: false, message: 'Serviço de recibos temporariamente indisponível.' });
   }
