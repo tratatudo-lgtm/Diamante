@@ -5,6 +5,7 @@ create table if not exists public.whatsapp_conversations (
   instance_name text not null,
   remote_jid text not null,
   contact_phone text,
+  client_id uuid,
   mode text not null default 'ai' check (mode in ('ai', 'human')),
   status text not null default 'unread' check (status in ('unread', 'in_service', 'pending', 'resolved')),
   assigned_admin_id uuid references public.funcionarios(id) on delete set null,
@@ -15,6 +16,20 @@ create table if not exists public.whatsapp_conversations (
   updated_at timestamptz not null default now(),
   constraint whatsapp_conversations_instance_jid_unique unique (instance_name, remote_jid)
 );
+
+do $
+begin
+  if to_regclass('public.clientes') is not null
+     and not exists (select 1 from pg_constraint where conname = 'whatsapp_conversations_client_id_fkey' and conrelid = 'public.whatsapp_conversations'::regclass) then
+    alter table public.whatsapp_conversations
+      add constraint whatsapp_conversations_client_id_fkey
+      foreign key (client_id) references public.clientes(id) on delete set null;
+  end if;
+end;
+$;
+
+create index if not exists whatsapp_conversations_client_id_idx
+  on public.whatsapp_conversations (client_id) where client_id is not null;
 
 create index if not exists whatsapp_conversations_last_message_idx
   on public.whatsapp_conversations (last_message_at desc);
