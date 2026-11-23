@@ -121,6 +121,7 @@ REVOKE ALL ON FUNCTION public.consume_whatsapp_client_otp_challenge(text,text) F
 REVOKE ALL ON FUNCTION public.revoke_whatsapp_client_otp_challenge(text,text) FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION public.create_whatsapp_client_otp_challenge(text,uuid,text,timestamptz) TO service_role;
 GRANT EXECUTE ON FUNCTION public.consume_whatsapp_client_otp_challenge(text,text) TO service_role;
+GRANT EXECUTE ON FUNCTION public.revoke_whatsapp_client_otp_challenge(text,text) TO service_role;
 
 COMMENT ON TABLE public.whatsapp_client_otp_challenges IS
   'Desafios OTP exclusivos de clientes; separados dos desafios de funcionários e acessíveis apenas por RPCs backend service_role.';
