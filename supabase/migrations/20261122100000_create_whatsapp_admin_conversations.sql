@@ -17,6 +17,8 @@ create table if not exists public.whatsapp_conversations (
   constraint whatsapp_conversations_instance_jid_unique unique (instance_name, remote_jid)
 );
 
+alter table public.whatsapp_conversations add column if not exists client_id uuid;
+
 do $
 begin
   if to_regclass('public.clientes') is not null
@@ -27,8 +29,6 @@ begin
   end if;
 end;
 $;
-
-alter table public.whatsapp_conversations add column if not exists client_id uuid;
 
 create index if not exists whatsapp_conversations_client_id_idx
   on public.whatsapp_conversations (client_id) where client_id is not null;
