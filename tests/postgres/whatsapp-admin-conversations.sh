@@ -132,6 +132,20 @@ if psql -v ON_ERROR_STOP=1 -c "UPDATE public.whatsapp_admin_audit SET outcome='f
   exit 1
 fi
 
+# Concorrência real entre dois administradores: apenas um deve assumir.
+psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.funcionarios (id) VALUES ('00000000-0000-4000-8000-000000000002') ON CONFLICT DO NOTHING;"
+race_id="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "INSERT INTO public.whatsapp_conversations (instance_name,remote_jid,contact_phone,mode) VALUES ('ci-admin-race','351900000003@s.whatsapp.net','351900000003','ai') RETURNING id;")"
+claim_one="UPDATE public.whatsapp_conversations SET mode='human',assigned_admin_id='00000000-0000-4000-8000-000000000001',last_controlled_by='00000000-0000-4000-8000-000000000001' WHERE id='$race_id' AND mode='ai' AND ai_send_token IS NULL RETURNING id;"
+claim_two="UPDATE public.whatsapp_conversations SET mode='human',assigned_admin_id='00000000-0000-4000-8000-000000000002',last_controlled_by='00000000-0000-4000-8000-000000000002' WHERE id='$race_id' AND mode='ai' AND ai_send_token IS NULL RETURNING id;"
+(psql -X -qAt -v ON_ERROR_STOP=1 -c "$claim_one" > /tmp/diamante-admin-race-1.out) &
+pid_one=$!
+(psql -X -qAt -v ON_ERROR_STOP=1 -c "$claim_two" > /tmp/diamante-admin-race-2.out) &
+pid_two=$!
+wait "$pid_one"
+wait "$pid_two"
+winners="$(cat /tmp/diamante-admin-race-1.out /tmp/diamante-admin-race-2.out | grep -c . || true)"
+rm -f /tmp/diamante-admin-race-1.out /tmp/diamante-admin-race-2.out
+if [ "$winners" != "1" ]; then echo "esperava exatamente um administrador vencedor, obtidos: $winners" >&2; exit 1; fi
 # Segunda instalação limpa: a migração também tem de funcionar sem as colunas legadas.
 fresh_db="${PGDATABASE}_whatsapp_fresh"
 createdb "$fresh_db"
