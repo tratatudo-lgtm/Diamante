@@ -31,6 +31,8 @@ $;
 create index if not exists whatsapp_conversations_client_id_idx
   on public.whatsapp_conversations (client_id) where client_id is not null;
 
+alter table public.whatsapp_conversations add column if not exists client_id uuid;
+
 create index if not exists whatsapp_conversations_last_message_idx
   on public.whatsapp_conversations (last_message_at desc);
 
