@@ -95,7 +95,7 @@ router.post('/verify-otp', async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, message: 'A conta não está elegível para autenticação.' });
     }
     if (jwtSecret.length < 32) return res.status(503).json({ success: false, message: 'Sessões indisponíveis.' });
-    const token = jwt.sign({ sub: client.id, token_type: 'client', role: 'client' }, jwtSecret, { algorithm: 'HS256', expiresIn: '30m', issuer: 'diamante-os', audience: 'diamante-client' });
+    const token = jwt.sign({ sub: client.id, token_type: 'client', role: 'client', phone_hash: phoneHash(phone) }, jwtSecret, { algorithm: 'HS256', expiresIn: '30m', issuer: 'diamante-os', audience: 'diamante-client' });
     return res.status(200).json({ success: true, token, user: { id: client.id, nome: client.nome } });
   } catch {
     return res.status(503).json({ success: false, message: 'Serviço de autenticação temporariamente indisponível.' });
@@ -114,18 +114,23 @@ export async function verifyClientSession(req: ClientRequest, res: Response, nex
     const claims = jwt.verify(header.slice(7).trim(), jwtSecret, {
       algorithms: ['HS256'], issuer: 'diamante-os', audience: 'diamante-client',
     }) as jwt.JwtPayload;
-    if (claims.token_type !== 'client' || claims.role !== 'client' || typeof claims.sub !== 'string') {
+    if (claims.token_type !== 'client' || claims.role !== 'client' || typeof claims.sub !== 'string' || typeof claims.phone_hash !== 'string') {
       res.status(403).json({ success: false, message: 'Sessão não pertence à área de cliente.' });
       return;
     }
     const { data, error } = await supabaseAdmin.from('clientes')
-      .select('id,nome,status').eq('id', claims.sub).maybeSingle();
+      .select('id,nome,telemovel,status').eq('id', claims.sub).maybeSingle();
     if (error) {
       res.status(503).json({ success: false, message: 'Não foi possível validar a sessão.' });
       return;
     }
     if (!data || data.status === 'bloqueado') {
       res.status(401).json({ success: false, message: 'Conta indisponível.' });
+      return;
+    }
+    const currentPhone = formatPortuguesePhone(String(data.telemovel || ''));
+    if (!currentPhone || phoneHash(currentPhone) !== claims.phone_hash) {
+      res.status(401).json({ success: false, message: 'Sessão revogada após alteração do número.' });
       return;
     }
     req.clientSession = { id: data.id, name: data.nome };
