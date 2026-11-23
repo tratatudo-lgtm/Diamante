@@ -80,7 +80,7 @@ router.post('/', async (req: Request, res: Response) => {
   }
   const { data: conversation, error: conversationError } = await supabaseAdmin
     .from('whatsapp_conversations')
-    .upsert({ instance_name: instanceName, remote_jid: incoming.jid, contact_phone: incoming.phone, ...(matchedClient ? { client_id: matchedClient.id } : {}), last_message_at: new Date().toISOString() }, { onConflict: 'instance_name,remote_jid' })
+    .upsert({ instance_name: instanceName, remote_jid: incoming.jid, contact_phone: incoming.phone, client_id: matchedClient?.id ?? null, last_message_at: new Date().toISOString() }, { onConflict: 'instance_name,remote_jid' })
     .select('id,mode')
     .single();
   if (conversationError || !conversation) {
