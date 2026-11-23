@@ -10,6 +10,7 @@ import { LandingPage } from './components/landing/LandingPage';
 import { FestiveThemeOverlay } from './components/common/FestiveThemeOverlay';
 import { LoginPage } from './components/auth/LoginPage';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { WhatsAppConversationsPage } from './components/admin/WhatsAppConversationsPage';
 import { AdminDashboard as AdminWarRoomDashboard } from './components/admin/AdminDashboard_old_operational';
 import { AdminTransactionsPage } from './components/admin/AdminTransactionsPage';
 import { AdminPageLayout } from './components/admin/AdminPageLayout';
@@ -48,6 +49,7 @@ function AppRouter() {
       const p = window.location.pathname;
       if (
         p === '/dashboard-admin' ||
+        p === '/admin/whatsapp' ||
         p === '/admin/lojas' ||
         p === '/admin/funcionarios' ||
         p === '/admin/config' ||
@@ -224,6 +226,10 @@ function AppRouter() {
 
   // 5. Rotas Administrativas (Apenas se AuthContext confirmar role='admin')
   if (isAdmin) {
+    if (currentPath === '/admin/whatsapp') {
+      return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><WhatsAppConversationsPage /></AdminPageLayout>;
+    }
+
     if (currentPath === '/admin/rentabilidade-ouro') {
       return <AdminPageLayout currentPath={currentPath} onNavigate={navigate}><RefiningProfitabilityPage /></AdminPageLayout>;
     }

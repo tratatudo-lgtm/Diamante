@@ -28,6 +28,10 @@ import { verifyAuth, AuthenticatedRequest } from './middleware/verifyAuth';
 import { sendWhatsAppBirthdayGreeting } from './whatsapp.service';
 import { requiresSecondPurchaseApproval } from './store-purchase-validation';
 import { authorizePurchase } from './purchase-approval';
+import diamanteIntelligenceWebhook from './diamante-intelligence.webhook';
+import whatsappAdminRouter from './whatsapp-admin.routes';
+import whatsappClientAuthRouter from './whatsapp-client-auth.routes';
+import { configureDiamanteIntelligenceWebhook } from './diamante-intelligence.webhook-config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,6 +74,10 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Webhook WhatsApp protegido por segredo próprio; não passa por autenticação de utilizador.
+app.use('/api/webhooks/evolution/diamante-intelligence', diamanteIntelligenceWebhook);
+app.use('/api/admin/whatsapp', whatsappAdminRouter);
+
 // =========================================================================
 // 2. PROTEÇÃO BÁSICA CONTRA BRUTE-FORCE
 // =========================================================================
@@ -84,7 +92,7 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
   // Os routers de autenticação também estão montados em /admin e /api/admin.
   // Aplicar o limite por IP em todos os aliases dos mesmos endpoints sensíveis.
   const isSensitiveAuthEndpoint =
-    /^\/(?:auth|api\/auth|admin|api\/admin)\/(?:request-otp|send-otp|verify-otp|login|register|session)\/?$/.test(req.path);
+    /^\/(?:auth|api\/auth|admin|api\/admin|api\/client\/auth)\/(?:request-otp|send-otp|verify-otp|login|register|session)\/?$/.test(req.path);
 
   if (!isSensitiveAuthEndpoint) {
     return next();
@@ -141,6 +149,7 @@ function bruteForceProtection(req: Request, res: Response, next: NextFunction): 
 }
 
 app.use(bruteForceProtection);
+app.use('/api/client/auth', whatsappClientAuthRouter);
 
 // =========================================================================
 // 3. ENDPOINTS DA API & ROTAS DE AUTENTICAÇÃO
@@ -1356,6 +1365,7 @@ setupViteOrStatic().then(() => {
   const HOST = '0.0.0.0';
   httpServer.listen(PORT, HOST, () => {
     startBirthdayWhatsAppWorker();
+    void configureDiamanteIntelligenceWebhook();
     console.log(`=========================================`);
     console.log(`💎 DIAMANTE OS v2 - SERVIDOR HTTP + WS ATIVO`);
     console.log(`Porta: ${PORT}`);
