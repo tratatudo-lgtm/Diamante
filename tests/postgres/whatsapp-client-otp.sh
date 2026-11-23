@@ -23,6 +23,7 @@ VALUES
 SQL
 
 psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261123100000_create_whatsapp_client_otp.sql
+psql -v ON_ERROR_STOP=1 -f supabase/migrations/20261123110000_create_whatsapp_client_phone_lookup.sql
 
 psql -v ON_ERROR_STOP=1 <<'SQL'
 DO $$
@@ -40,6 +41,24 @@ BEGIN
      OR has_table_privilege('authenticated','public.whatsapp_client_otp_challenges','SELECT') THEN
     RAISE EXCEPTION 'anon/authenticated não podem consultar desafios OTP';
   END IF;
+
+  -- Pesquisa de CRM normaliza espaços, prefixo internacional e número nacional.
+  INSERT INTO public.clientes (id,nome,telemovel)
+  VALUES ('00000000-0000-4000-8000-000000000103','Cliente Telefone Formatado','+351 912 026 204');
+  IF NOT EXISTS (
+    SELECT 1 FROM public.lookup_whatsapp_client_by_phone('351912026204')
+    WHERE id='00000000-0000-4000-8000-000000000103'::uuid
+      AND name='Cliente Telefone Formatado'
+  ) THEN RAISE EXCEPTION 'telefone formatado não foi reconhecido'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.lookup_whatsapp_client_by_phone('912026204')
+    WHERE id='00000000-0000-4000-8000-000000000103'::uuid
+  ) THEN RAISE EXCEPTION 'formato nacional não foi reconhecido'; END IF;
+  IF has_function_privilege('authenticated',
+    'public.lookup_whatsapp_client_by_phone(text)','EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated não pode consultar o CRM via RPC';
+  END IF;
+
   IF NOT has_function_privilege('service_role',
     'public.create_whatsapp_client_otp_challenge(text,uuid,text,timestamptz)','EXECUTE') THEN
     RAISE EXCEPTION 'service_role precisa de executar RPC de criação';
