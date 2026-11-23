@@ -19,7 +19,7 @@ create table if not exists public.whatsapp_conversations (
 
 alter table public.whatsapp_conversations add column if not exists client_id uuid;
 
-do $
+do $$
 begin
   if to_regclass('public.clientes') is not null
      and not exists (select 1 from pg_constraint where conname = 'whatsapp_conversations_client_id_fkey' and conrelid = 'public.whatsapp_conversations'::regclass) then
@@ -28,7 +28,7 @@ begin
       foreign key (client_id) references public.clientes(id) on delete set null;
   end if;
 end;
-$;
+$$;
 
 create index if not exists whatsapp_conversations_client_id_idx
   on public.whatsapp_conversations (client_id) where client_id is not null;
